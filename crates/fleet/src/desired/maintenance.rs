@@ -64,9 +64,10 @@ pub enum CleanupKind {
     Work,
     /// Old `Runner_*.log` and `Worker_*.log` files directly in `RUNNER/_diag`.
     Diag,
-    /// `RUNNER/bin.fleet-previous`, kept by the last upgrade.
+    /// `RUNNER/bin.VERSION` folders that `bin` doesn't point at: previous
+    /// versions kept by an upgrade or the runner's own self-update.
     PreviousBin,
-    /// `RUNNER/externals.fleet-previous`, kept by the last upgrade.
+    /// `RUNNER/externals.VERSION` folders that `externals` doesn't point at.
     PreviousExternals,
     /// macOS: the contents of `~/Library/Developer/Xcode/DerivedData`.
     XcodeDerivedData,
@@ -170,9 +171,10 @@ impl CleanupTarget {
                 self.files.len(),
                 options.diag_older_than_days
             ),
-            CleanupKind::PreviousBin | CleanupKind::PreviousExternals => {
-                format!("remove {path}, kept from the previous upgrade")
-            }
+            CleanupKind::PreviousBin | CleanupKind::PreviousExternals => format!(
+                "remove previous runner version folder(s) from {path}: {}",
+                self.files.join(", ")
+            ),
             CleanupKind::UnavailableSimulators => "run xcrun simctl delete unavailable".into(),
             CleanupKind::Docker => "run docker system prune -f (volumes are kept)".into(),
         }
@@ -284,6 +286,32 @@ pub fn check_service_change(name: &str, runner: &Runner, role: RunnerRole) -> Re
     Ok(())
 }
 
+/// Runners a cleanup must treat specially: drained ones (never stopped or
+/// started by it) and ones held stopped after a failed change (their
+/// previous versions, the rollback copy, are kept).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HeldRunners {
+    pub drained: BTreeSet<String>,
+    pub held: BTreeSet<String>,
+}
+
+/// What a cleanup or upgrade did to runner services, for the engine's holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChangeReport {
+    /// Runners the change left stopped on purpose (or couldn't start again).
+    pub left_stopped: Vec<String>,
+    /// Runners an upgrade finished, running the new version.
+    pub upgraded: Vec<String>,
+}
+
+/// Service states that mean the runner can't take a job.
+fn definitely_stopped(state: &str) -> bool {
+    matches!(
+        state,
+        "inactive" | "failed" | "stopped" | "disabled" | "uninstalled" | "missing"
+    )
+}
+
 /// The result of asking an idle runner's service to stop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StopOutcome {
@@ -316,18 +344,20 @@ impl Ops<'_> {
     /// A runner's service is stopped (refusing while a job runs) before its
     /// directories are cleaned, so it can't pick up a job mid-removal, and is
     /// started again afterwards if it was running. Machine-wide caches are
-    /// shared by every runner, so they are cleaned only with every inventory
-    /// runner on the host stopped. Runners in `held` (drained) are never
-    /// stopped or started here; a held runner that is still running keeps its
-    /// directories. A runner that can't be started again is added to
-    /// `left_stopped`.
+    /// shared by every runner, so they are cleaned only when every runner on
+    /// the host (legacy and decommission-pending ones too) is definitely
+    /// stopped, or is a declared runner this cleanup stops. Drained runners
+    /// are never stopped or started here; a held runner keeps its previous
+    /// versions (its rollback copy). If the host can't be reached during the
+    /// removal, the runners stopped for it stay stopped and are reported held:
+    /// the host may still be removing files.
     pub fn cleanup_host(
         &self,
         host_id: &str,
         options: &CleanupOptions,
         targets: &[CleanupTarget],
-        held: &BTreeSet<String>,
-        left_stopped: &mut Vec<String>,
+        held: &HeldRunners,
+        report: &mut ChangeReport,
     ) -> Result<Vec<String>> {
         let host = self.inventory.find_host(host_id)?;
         check_enabled(host)?;
@@ -342,9 +372,17 @@ impl Ops<'_> {
         let mut runnable = Vec::new();
         for target in targets {
             let refusal = cleanup_refusal(host, target, &github).or_else(|| match &target.runner {
-                Some(name) if held.contains(name) && running(name) => Some(format!(
+                Some(name) if held.drained.contains(name) && running(name) => Some(format!(
                     "{name} is draining; its directories wait until the drain stops it"
                 )),
+                Some(name)
+                    if held.held.contains(name)
+                        && matches!(target.kind, CleanupKind::PreviousBin | CleanupKind::PreviousExternals) =>
+                {
+                    Some(format!(
+                        "{name} is held stopped after a failed change; its previous versions are kept"
+                    ))
+                }
                 _ => None,
             });
             match refusal {
@@ -352,26 +390,24 @@ impl Ops<'_> {
                 None => runnable.push(target.clone()),
             }
         }
-        // Shared caches need every runner on the machine stopped, and the app
-        // only stops declared runners it isn't holding.
+        // The declared runners this cleanup may stop.
+        let stoppable = |name: &str| host.desired_runners().any(|r| r.name == name) && !held.drained.contains(name);
         if runnable.iter().any(|t| t.runner.is_none()) {
-            let blocker = host
-                .runners
-                .iter()
-                .filter_map(|r| r.replaces.as_ref().map(|l| l.name.as_str()))
-                .chain(held.iter().map(String::as_str))
-                .find(|&name| host.runner_names().any(|n| n == name) && running(name));
-            if let Some(name) = blocker {
+            let blocker = host.runner_names().find_map(|name| match local.get(name) {
+                None => Some(format!("{name}'s state is unknown")),
+                Some(l) if !l.configured || definitely_stopped(&l.service_state) => None,
+                Some(l) if l.service_active() && stoppable(name) => None,
+                Some(l) => Some(format!("{name} is {} and isn't stopped for a cleanup", l.service_state)),
+            });
+            if let Some(reason) = blocker {
                 runnable.retain(|t| t.runner.is_some());
-                messages.push(format!(
-                    "skipped machine-wide caches: {name} is running and isn't stopped for a cleanup"
-                ));
+                messages.push(format!("skipped machine-wide caches: {reason}"));
             }
         }
         let machine_wide = runnable.iter().any(|t| t.runner.is_none());
         let to_stop: Vec<&Runner> = host
             .desired_runners()
-            .filter(|r| running(&r.name) && !held.contains(&r.name))
+            .filter(|r| running(&r.name) && stoppable(&r.name))
             .filter(|r| machine_wide || runnable.iter().any(|t| t.runner.as_deref() == Some(r.name.as_str())))
             .collect();
         let sudo = self.secrets.sudo_password_for(host);
@@ -388,34 +424,65 @@ impl Ops<'_> {
                     runnable.retain(|t| t.runner.as_deref().is_some_and(|n| n != runner.name));
                 }
                 Err(e) => {
+                    // The stop may have worked despite the error: find out, so
+                    // the runner is either started again below or held.
+                    match self
+                        .remote
+                        .probe(host)
+                        .map(|l| l.get(&runner.name).map(LocalRunner::service_active))
+                    {
+                        Ok(Some(true)) => {}
+                        Ok(_) => stopped.push(runner),
+                        Err(_) => report.left_stopped.push(runner.name.clone()),
+                    }
                     stop_error = Some(format!("couldn't stop {} before cleaning: {e}", runner.name));
                     break;
                 }
             }
         }
         let outcomes = match (&stop_error, runnable.is_empty()) {
-            (None, false) => self
-                .remote
-                .cleanup(host, &runnable, options)
-                .map_err(|e| OperationError(format!("cleanup failed on {}: {e}", host.id))),
+            (None, false) => self.remote.cleanup(host, &runnable, options),
             _ => Ok(Vec::new()),
         };
-        // Put every service the cleanup stopped back the way it was, whatever happened.
         let mut failures = Vec::new();
-        for runner in stopped {
-            if let Err(e) = self.remote.start(host, runner, sudo) {
-                left_stopped.push(runner.name.clone());
-                failures.push(format!(
-                    "{} couldn't be started again: {e}; it's held stopped until you resume it",
-                    runner.name
+        let outcomes = match outcomes {
+            Ok(outcomes) => {
+                // Put every service the cleanup stopped back the way it was.
+                for runner in stopped {
+                    if let Err(e) = self.remote.start(host, runner, sudo) {
+                        report.left_stopped.push(runner.name.clone());
+                        failures.push(format!(
+                            "{} couldn't be started again: {e}; it's held stopped until you resume it",
+                            runner.name
+                        ));
+                    }
+                }
+                outcomes
+            }
+            Err(e) => {
+                // The removal may still be running on the host: starting the
+                // services now could let a job run in a half-emptied directory.
+                let names: Vec<String> = stopped.iter().map(|r| r.name.clone()).collect();
+                report.left_stopped.extend(names.iter().cloned());
+                let held_note = if names.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        " {} stay stopped and held, since the host may still be removing files; check the machine, then resume them",
+                        names.join(", ")
+                    )
+                };
+                return fail(format!(
+                    "cleanup on {} lost contact with the machine: {e}.{held_note}",
+                    host.id
                 ));
             }
-        }
+        };
         if let Some(error) = stop_error {
             failures.insert(0, format!("{error}; nothing was removed"));
         }
         let mut cleaned = 0;
-        for outcome in outcomes? {
+        for outcome in outcomes {
             if outcome.ok {
                 cleaned += 1;
                 messages.push(outcome.message);
@@ -493,7 +560,7 @@ impl Ops<'_> {
         host_id: &str,
         names: &[String],
         asset: &ReleaseAsset,
-        left_stopped: &mut Vec<String>,
+        report: &mut ChangeReport,
     ) -> Result<Vec<String>> {
         let host = self.inventory.find_host(host_id)?;
         check_enabled(host)?;
@@ -521,7 +588,7 @@ impl Ops<'_> {
                 }
                 Some(_) => {}
             }
-            messages.push(self.upgrade_one(host, runner, asset, left_stopped)?);
+            messages.push(self.upgrade_one(host, runner, asset, report)?);
         }
         Ok(messages)
     }
@@ -531,22 +598,45 @@ impl Ops<'_> {
         host: &Host,
         runner: &Runner,
         asset: &ReleaseAsset,
-        left_stopped: &mut Vec<String>,
+        report: &mut ChangeReport,
     ) -> Result<String> {
         let name = &runner.name;
         let sudo = self.secrets.sudo_password_for(host);
         match self.remote.stop(host, runner, sudo) {
             Ok(_) => {}
             Err(e) if e.0.contains(JOB_RUNNING) => return Ok(format!("skipped {name}: a job started")),
-            Err(e) => return fail(format!("upgrade of {name} stopped before any change: {e}")),
+            Err(e) => {
+                // The stop may have worked despite the error: start it again,
+                // or hold it if that can't be confirmed.
+                let state = self
+                    .remote
+                    .probe(host)
+                    .map(|l| l.get(name).map(LocalRunner::service_active));
+                let note = match state {
+                    Ok(Some(true)) => String::new(),
+                    Ok(_) => match self.remote.start(host, runner, sudo) {
+                        Ok(_) => format!("; {name} had stopped anyway and was started again"),
+                        Err(start) => {
+                            report.left_stopped.push(name.clone());
+                            format!("; {name} is stopped and couldn't be started again ({start}), so it's held")
+                        }
+                    },
+                    Err(_) => {
+                        report.left_stopped.push(name.clone());
+                        format!("; {name}'s state couldn't be read, so it's held until you check it")
+                    }
+                };
+                return fail(format!("upgrade of {name} stopped before any change: {e}{note}"));
+            }
         }
         // Until it's running the new version, a failure leaves it stopped on purpose.
-        left_stopped.push(name.clone());
+        report.left_stopped.push(name.clone());
         let recovery = |e: &dyn std::fmt::Display| {
             OperationError(format!(
-                "upgrade failed for {name}: {e}. {name} is left stopped. If its bin/ was replaced, the previous \
-                 files are in bin.fleet-previous and externals.fleet-previous. Check its diagnostic log, then \
-                 Resume… or Restart… it."
+                "upgrade failed for {name}: {e}. {name} is left stopped and held. The upgrade rolls back its \
+                 own swap, and an interrupted one is rolled back by the next upgrade; the previous version stays \
+                 beside it as bin.VERSION and externals.VERSION. Check its diagnostic log, then Resume… or \
+                 Restart… it."
             ))
         };
         let local = self.remote.probe(host).map_err(|e| recovery(&e))?;
@@ -572,7 +662,8 @@ impl Ops<'_> {
                 after.service_state
             )));
         }
-        left_stopped.retain(|n| n != name);
+        report.left_stopped.retain(|n| n != name);
+        report.upgraded.push(name.clone());
         let online = self.wait_online(name);
         let note = if replaced.contains("already runs") {
             "already ran"

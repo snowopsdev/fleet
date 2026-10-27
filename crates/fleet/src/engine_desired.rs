@@ -30,7 +30,7 @@ pub use store::DesiredStore;
 
 use crate::desired::github::{FleetGithub, ReleaseAsset};
 use crate::desired::inventory::{default_inventory_path, load_inventory_from_env};
-use crate::desired::maintenance::{CleanupTarget, StopOutcome};
+use crate::desired::maintenance::{ChangeReport, CleanupTarget, StopOutcome};
 use crate::desired::model::{FleetPlanAction, FleetSnapshot, Inventory, PlanItem, SshTransport};
 use crate::desired::operations::{self, Ops, Secrets};
 use crate::desired::remote::{FleetRemote, Transient};
@@ -489,10 +489,13 @@ impl Engine {
                 _ => None,
             };
             let ran = request.clone();
-            let held = engine.drained_runners();
-            let upgraded = reviewed.upgrade.clone();
+            let held = engine.held_runners();
+            // Saved before anything is stopped, so a crash or quit mid-change
+            // leaves these runners held (the watchdog skips them) rather than
+            // silently stopped.
+            let begun = engine.begin_holds(&host_id, &ran, &inventory, &reviewed.upgrade, &held.drained);
             let outcome = run_blocking("finish the change", move || {
-                let mut left_stopped = Vec::new();
+                let mut report = ChangeReport::default();
                 let ops = Ops {
                     inventory: &inventory,
                     github: github.as_ref(),
@@ -509,11 +512,11 @@ impl Engine {
                     }
                     ChangeRequest::Restart { runner } => ops.restart_runner(runner).map(|m| done(vec![m])),
                     ChangeRequest::Cleanup { host, options } => ops
-                        .cleanup_host(host, options, &reviewed.cleanup, &held, &mut left_stopped)
+                        .cleanup_host(host, options, &reviewed.cleanup, &held, &mut report)
                         .map(done),
                     ChangeRequest::Upgrade { host, .. } => match &reviewed.asset {
                         Some(asset) => ops
-                            .upgrade_runners(host, &reviewed.upgrade, asset, &mut left_stopped)
+                            .upgrade_runners(host, &reviewed.upgrade, asset, &mut report)
                             .map(done),
                         None => Err(operations::OperationError(
                             "the reviewed runner release is no longer available; review the upgrade again".into(),
@@ -530,14 +533,15 @@ impl Engine {
                     }),
                     ChangeRequest::Resume { runner } => ops.resume_runner(runner).map(|m| done(vec![m])),
                 };
-                (result, left_stopped)
+                (result, report)
             })
             .await;
-            let (result, left_stopped) = match outcome {
-                Ok((result, left_stopped)) => (result.map_err(|e| e.0), left_stopped),
-                Err(e) => (Err(e.to_string()), Vec::new()),
+            let (result, report) = match outcome {
+                Ok((result, report)) => (result.map_err(|e| e.0), Some(report)),
+                // How far the change got is unknown: its holds stay.
+                Err(e) => (Err(e.to_string()), None),
             };
-            engine.record_holds(&host_id, &ran, &left_stopped, &upgraded);
+            engine.record_holds(&host_id, &ran, report.as_ref(), &begun);
             match (&ran, &result) {
                 (
                     ChangeRequest::Drain { runner },

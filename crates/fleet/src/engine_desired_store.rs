@@ -82,7 +82,7 @@ pub(super) fn runner_identities(host: &Host, snapshot: &FleetSnapshot) -> BTreeM
 }
 
 impl DesiredStore {
-    pub(super) fn change_running(&self) -> bool {
+    pub(crate) fn change_running(&self) -> bool {
         self.starting
             || self
                 .operation

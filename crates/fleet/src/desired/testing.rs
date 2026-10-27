@@ -52,6 +52,10 @@ pub struct World {
     pub upgrade_failures: Vec<String>,
     /// Starting one of these runners fails on the host.
     pub start_failures: Vec<String>,
+    /// The connection drops during a cleanup (after the host started removing files).
+    pub cleanup_lost: bool,
+    /// Stopping one of these runners stops it but reports an error.
+    pub stop_errors_after_stopping: Vec<String>,
 }
 
 impl Default for World {
@@ -71,6 +75,8 @@ impl Default for World {
             latest_version: "2.999.0".into(),
             upgrade_failures: Vec::new(),
             start_failures: Vec::new(),
+            cleanup_lost: false,
+            stop_errors_after_stopping: Vec::new(),
         }
     }
 }
@@ -279,6 +285,9 @@ impl FleetRemote for FakeFleet {
         if let Some(github) = world.github.get_mut(&runner.name) {
             github.status = "offline".into();
         }
+        if world.stop_errors_after_stopping.contains(&runner.name) {
+            return Err(RemoteError("svc.sh stop exited 1".into()));
+        }
         Ok(String::new())
     }
     fn survey_cleanup(
@@ -314,6 +323,10 @@ impl FleetRemote for FakeFleet {
         _: &CleanupOptions,
     ) -> Result<Vec<CleanupOutcome>, RemoteError> {
         let mut world = self.world();
+        if world.cleanup_lost {
+            world.calls.push(format!("cleanup {} (connection lost)", host.id));
+            return Err(RemoteError("ssh: connection timed out".into()));
+        }
         let mut outcomes = Vec::new();
         let names: Vec<&str> = host.runner_names().collect();
         let active = |world: &World, name: &str| world.local.get(name).is_some_and(LocalRunner::service_active);

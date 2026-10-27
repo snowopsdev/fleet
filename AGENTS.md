@@ -49,7 +49,8 @@ carry over from Runner Fleet:
   and keeps the workspace. The one recursive removal is the reviewed **Clean up**, deliberately
   limited to the enumerated targets in [FLEET.md](docs/FLEET.md#clean-up), each resolved on the
   host inside its runner (or home) directory with no symlink on the way; never `.runner`,
-  `.credentials*`, configuration, `bin` or `externals`. Don't widen it.
+  `.credentials*`, configuration, or the `bin` and `externals` in use (only previous
+  `bin.VERSION`/`externals.VERSION` folders, by name). Don't widen it.
 - Never clean, upgrade or stop a busy runner; host scripts re-check for a running job right
   before they act. Alert destination secrets live only in the Keychain.
 - Decommission needs `decommission = true` in the inventory first; apply never installs or

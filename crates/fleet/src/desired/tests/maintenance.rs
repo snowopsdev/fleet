@@ -1,11 +1,10 @@
 //! Cleanup, upgrade, drain and resume against fake GitHub and hosts, the
 //! scripts they send, and the cleanup script run on a throwaway directory.
 
-use std::collections::BTreeSet;
-
 use super::super::github::ReleaseAsset;
 use super::super::maintenance::{
-    CleanupKind, CleanupOptions, CleanupTarget, StopOutcome, cleanup_candidates, version_behind,
+    ChangeReport, CleanupKind, CleanupOptions, CleanupTarget, HeldRunners, StopOutcome, cleanup_candidates,
+    version_behind,
 };
 use super::super::remote::{clean_script, parse_clean, parse_survey, stop_script, survey_script};
 use super::*;
@@ -118,8 +117,8 @@ fn cleanup_skips_a_runner_that_became_busy_and_runs_the_rest() {
             "linux",
             &CleanupOptions::default(),
             &targets,
-            &BTreeSet::new(),
-            &mut Vec::new(),
+            &HeldRunners::default(),
+            &mut ChangeReport::default(),
         )
         .unwrap_err();
     assert!(error.0.contains("linux-01 is busy"), "{error}");
@@ -131,8 +130,8 @@ fn cleanup_skips_a_runner_that_became_busy_and_runs_the_rest() {
             "linux",
             &CleanupOptions::default(),
             &targets,
-            &BTreeSet::new(),
-            &mut Vec::new(),
+            &HeldRunners::default(),
+            &mut ChangeReport::default(),
         )
         .unwrap();
     assert_eq!(messages.len(), 2);
@@ -154,11 +153,20 @@ fn cleanup_restores_each_runner_as_it_was_and_leaves_drained_ones_alone() {
     let fleet = linux_fleet(&inventory, "2.330.0");
     let temp = target(CleanupKind::WorkTemp, Some("linux-01"), "/r/_work/_temp");
     let docker = target(CleanupKind::Docker, None, "");
-    let held: BTreeSet<String> = ["linux-01".to_string()].into();
+    let held = HeldRunners {
+        drained: ["linux-01".to_string()].into(),
+        ..HeldRunners::default()
+    };
     let options = CleanupOptions::default();
     // Draining and still running: neither its directories nor shared caches are touched.
     let error = ops(&inventory, &fleet, Secrets::default())
-        .cleanup_host("linux", &options, &[temp.clone(), docker], &held, &mut Vec::new())
+        .cleanup_host(
+            "linux",
+            &options,
+            &[temp.clone(), docker],
+            &held,
+            &mut ChangeReport::default(),
+        )
         .unwrap_err();
     assert!(
         error.0.contains("is draining") && error.0.contains("machine-wide"),
@@ -169,7 +177,13 @@ fn cleanup_restores_each_runner_as_it_was_and_leaves_drained_ones_alone() {
     // Stopped by its drain: cleaned without being started.
     fleet.world().local.get_mut("linux-01").unwrap().service_state = "inactive".into();
     ops(&inventory, &fleet, Secrets::default())
-        .cleanup_host("linux", &options, std::slice::from_ref(&temp), &held, &mut Vec::new())
+        .cleanup_host(
+            "linux",
+            &options,
+            std::slice::from_ref(&temp),
+            &held,
+            &mut ChangeReport::default(),
+        )
         .unwrap();
     assert_eq!(fleet.world().calls, ["cleanup linux work-temp /r/_work/_temp"]);
 
@@ -177,12 +191,12 @@ fn cleanup_restores_each_runner_as_it_was_and_leaves_drained_ones_alone() {
     fleet.world().calls.clear();
     fleet.world().local.get_mut("linux-01").unwrap().service_state = "active".into();
     fleet.world().start_failures.push("linux-01".into());
-    let mut left = Vec::new();
+    let mut left = ChangeReport::default();
     let error = ops(&inventory, &fleet, Secrets::default())
-        .cleanup_host("linux", &options, &[temp], &BTreeSet::new(), &mut left)
+        .cleanup_host("linux", &options, &[temp], &HeldRunners::default(), &mut left)
         .unwrap_err();
     assert!(error.0.contains("couldn't be started again"), "{error}");
-    assert_eq!(left, ["linux-01"]);
+    assert_eq!(left.left_stopped, ["linux-01"]);
 }
 
 #[test]
@@ -196,8 +210,8 @@ fn cleanup_reports_targets_the_host_refused() {
             "linux",
             &CleanupOptions::default(),
             &targets,
-            &BTreeSet::new(),
-            &mut Vec::new(),
+            &HeldRunners::default(),
+            &mut ChangeReport::default(),
         )
         .unwrap_err();
     assert!(error.0.contains("a job started"), "{error}");
@@ -260,7 +274,12 @@ fn upgrade_stops_replaces_starts_and_confirms_the_version() {
     let inventory = example_inventory();
     let fleet = linux_fleet(&inventory, "2.329.0");
     let messages = ops(&inventory, &fleet, Secrets::default())
-        .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"), &mut Vec::new())
+        .upgrade_runners(
+            "linux",
+            &["linux-01".into()],
+            &asset("2.999.0"),
+            &mut ChangeReport::default(),
+        )
         .unwrap();
     assert_eq!(messages, ["linux-01 upgraded to 2.999.0 and is online"]);
     assert_eq!(
@@ -278,12 +297,12 @@ fn a_failed_upgrade_leaves_the_runner_stopped_with_recovery_steps() {
     let inventory = example_inventory();
     let fleet = linux_fleet(&inventory, "2.329.0");
     fleet.world().upgrade_failures.push("linux-01".into());
-    let mut left = Vec::new();
+    let mut left = ChangeReport::default();
     let error = ops(&inventory, &fleet, Secrets::default())
         .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"), &mut left)
         .unwrap_err();
     assert_eq!(
-        left,
+        left.left_stopped,
         ["linux-01"],
         "the failure is reported so the watchdog can leave it alone"
     );
@@ -292,7 +311,7 @@ fn a_failed_upgrade_leaves_the_runner_stopped_with_recovery_steps() {
         "{error}"
     );
     assert!(
-        error.0.contains("left stopped") && error.0.contains("bin.fleet-previous"),
+        error.0.contains("left stopped") && error.0.contains("rolls back"),
         "{error}"
     );
     assert_eq!(fleet.world().local["linux-01"].service_state, "inactive");
@@ -305,14 +324,19 @@ fn upgrade_never_touches_a_busy_runner_and_needs_a_digest() {
     let fleet = linux_fleet(&inventory, "2.329.0");
     fleet.world().github.get_mut("linux-01").unwrap().busy = true;
     let messages = ops(&inventory, &fleet, Secrets::default())
-        .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"), &mut Vec::new())
+        .upgrade_runners(
+            "linux",
+            &["linux-01".into()],
+            &asset("2.999.0"),
+            &mut ChangeReport::default(),
+        )
         .unwrap();
     assert_eq!(messages, ["skipped linux-01: busy"]);
     assert!(fleet.world().calls.is_empty());
     let mut unverified = asset("2.999.0");
     unverified.sha256 = None;
     let error = ops(&inventory, &fleet, Secrets::default())
-        .upgrade_runners("linux", &["linux-01".into()], &unverified, &mut Vec::new())
+        .upgrade_runners("linux", &["linux-01".into()], &unverified, &mut ChangeReport::default())
         .unwrap_err();
     assert!(error.0.contains("SHA-256"), "{error}");
 }
@@ -352,7 +376,9 @@ fn stop_scripts_refuse_while_a_job_runs() {
     let inventory = example_inventory();
     let host = inventory.find_host("linux").unwrap();
     let script = stop_script(host, &host.runners[0], &secret("sudo-pass"));
-    assert!(script.contains("grep -F -- \"$real/bin/Runner.Worker\""));
+    // `$real/bin` also covers a self-updated `bin.VERSION`.
+    assert!(script.contains("grep -F -- \"$real/bin\" | grep -F -- Runner.Worker"));
+    assert!(script.contains(".fleet-maintenance") || !script.contains("svc.sh start"));
     assert!(script.contains("run_as_root ./svc.sh stop"));
     assert!(script.contains("RF_SUDO_PASSWORD=sudo-pass\n"));
     let gui = inventory.find_host("windows-gui").unwrap();
@@ -367,7 +393,7 @@ fn stop_scripts_refuse_while_a_job_runs() {
 #[test]
 fn survey_and_clean_output_is_parsed_strictly() {
     let survey = parse_survey(
-        "noise\nRFF\tlinux-01\tRunner_1.log\nRFC\tdiag\tlinux-01\t/r/_diag\t12\t1\t\n\
+        "noise\nRFF\tdiag\tlinux-01\tRunner_1.log\nRFF\tprevious-bin\tlinux-01\tbin.2.320.0\nRFC\tdiag\tlinux-01\t/r/_diag\t12\t1\t\n\
          RFC\tdocker\t\t\t\t\tImages: 1.2GB (40%)\nRFE\twork-temp\tlinux-01\tsymlink; left it alone\n",
     )
     .unwrap();
@@ -455,4 +481,172 @@ fn cleanup_script_removes_only_contents_of_exact_targets() {
     assert!(root.join(".runner").exists() && root.join(".credentials").exists());
     assert!(root.join("bin").is_dir() && root.join("externals").is_dir());
     assert!(root.join("_work/actions-real/actions/checkout/a").exists());
+}
+
+#[test]
+fn shared_caches_wait_for_every_runner_on_the_machine() {
+    let inventory = example_inventory();
+    let host = inventory.find_host("studio").unwrap();
+    let runners: Vec<LocalRunner> = host
+        .runner_names()
+        .map(|n| LocalRunner::new(n, "p", true, "active", Some("2.330.0")))
+        .collect();
+    let github = host
+        .runner_names()
+        .map(|n| gr(n, "online", false, &[], Some(true)))
+        .collect();
+    let fleet = FakeFleet::new(github, runners);
+    let derived = target(
+        CleanupKind::XcodeDerivedData,
+        None,
+        "/Users/b/Library/Developer/Xcode/DerivedData",
+    );
+    // The legacy runner is running, and a cleanup never stops it.
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host(
+            "studio",
+            &CleanupOptions::default(),
+            std::slice::from_ref(&derived),
+            &HeldRunners::default(),
+            &mut ChangeReport::default(),
+        )
+        .unwrap_err();
+    assert!(error.0.contains("Legacy-Studio is active"), "{error}");
+    // An unknown state counts as possibly running.
+    fleet.world().local.get_mut("Legacy-Studio").unwrap().service_state = "unknown".into();
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host(
+            "studio",
+            &CleanupOptions::default(),
+            std::slice::from_ref(&derived),
+            &HeldRunners::default(),
+            &mut ChangeReport::default(),
+        )
+        .unwrap_err();
+    assert!(error.0.contains("Legacy-Studio is unknown"), "{error}");
+    assert!(fleet.world().calls.is_empty());
+    // Stopped: every declared runner is stopped for the cleanup and started again.
+    fleet.world().local.get_mut("Legacy-Studio").unwrap().service_state = "inactive".into();
+    ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host(
+            "studio",
+            &CleanupOptions::default(),
+            &[derived],
+            &HeldRunners::default(),
+            &mut ChangeReport::default(),
+        )
+        .unwrap();
+    assert_eq!(
+        fleet.world().calls,
+        [
+            "stop studio studio-01",
+            "stop studio studio-02",
+            "cleanup studio xcode-derived-data /Users/b/Library/Developer/Xcode/DerivedData",
+            "start studio studio-01",
+            "start studio studio-02"
+        ]
+    );
+}
+
+#[test]
+fn a_lost_connection_mid_cleanup_holds_the_stopped_runners_instead_of_starting_them() {
+    let inventory = example_inventory();
+    let fleet = linux_fleet(&inventory, "2.330.0");
+    fleet.world().cleanup_lost = true;
+    let mut report = ChangeReport::default();
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host(
+            "linux",
+            &CleanupOptions::default(),
+            &[target(CleanupKind::Work, Some("linux-01"), "/r/_work")],
+            &HeldRunners::default(),
+            &mut report,
+        )
+        .unwrap_err();
+    assert!(
+        error.0.contains("lost contact") && error.0.contains("may still be removing files"),
+        "{error}"
+    );
+    assert_eq!(report.left_stopped, ["linux-01"]);
+    assert!(
+        !fleet.world().calls.iter().any(|c| c.starts_with("start")),
+        "nothing is started"
+    );
+}
+
+#[test]
+fn a_held_runner_keeps_its_previous_versions() {
+    let inventory = example_inventory();
+    let fleet = linux_fleet(&inventory, "2.330.0");
+    fleet.world().local.get_mut("linux-01").unwrap().service_state = "inactive".into();
+    let held = HeldRunners {
+        held: ["linux-01".to_string()].into(),
+        ..HeldRunners::default()
+    };
+    let mut previous = target(CleanupKind::PreviousBin, Some("linux-01"), "/r");
+    previous.files = vec!["bin.2.320.0".into()];
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host(
+            "linux",
+            &CleanupOptions::default(),
+            &[previous],
+            &held,
+            &mut ChangeReport::default(),
+        )
+        .unwrap_err();
+    assert!(error.0.contains("previous versions are kept"), "{error}");
+    assert!(fleet.world().calls.is_empty());
+}
+
+#[test]
+fn a_stop_that_errors_but_stopped_is_started_again_or_held() {
+    let inventory = example_inventory();
+    let fleet = linux_fleet(&inventory, "2.329.0");
+    fleet.world().stop_errors_after_stopping.push("linux-01".into());
+    // Cleanup: the runner is started again and nothing is removed.
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host(
+            "linux",
+            &CleanupOptions::default(),
+            &[target(CleanupKind::WorkTemp, Some("linux-01"), "/r/_work/_temp")],
+            &HeldRunners::default(),
+            &mut ChangeReport::default(),
+        )
+        .unwrap_err();
+    assert!(error.0.contains("nothing was removed"), "{error}");
+    assert_eq!(fleet.world().calls, ["stop linux linux-01", "start linux linux-01"]);
+    // Upgrade: same, and if it then can't be started it's held.
+    fleet.world().calls.clear();
+    fleet.world().start_failures.push("linux-01".into());
+    let mut report = ChangeReport::default();
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"), &mut report)
+        .unwrap_err();
+    assert!(error.0.contains("so it's held"), "{error}");
+    assert_eq!(report.left_stopped, ["linux-01"]);
+    assert!(report.upgraded.is_empty());
+}
+
+#[test]
+fn only_runners_actually_upgraded_are_reported() {
+    let inventory = example_inventory();
+    let host = inventory.find_host("studio").unwrap();
+    let fleet = FakeFleet::new(
+        host.desired_runners()
+            .map(|r| gr(&r.name, "online", false, &[], Some(true)))
+            .collect(),
+        host.desired_runners()
+            .map(|r| LocalRunner::new(&r.name, &host.runner_path(r), true, "active", Some("2.329.0")))
+            .collect(),
+    );
+    fleet.world().upgrade_failures.push("studio-01".into());
+    let mut report = ChangeReport::default();
+    let _ = ops(&inventory, &fleet, Secrets::default()).upgrade_runners(
+        "studio",
+        &["studio-01".into(), "studio-02".into()],
+        &asset("2.999.0"),
+        &mut report,
+    );
+    assert_eq!(report.left_stopped, ["studio-01"]);
+    assert!(report.upgraded.is_empty(), "studio-02 was never attempted");
 }

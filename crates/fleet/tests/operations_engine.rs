@@ -748,3 +748,71 @@ async fn a_drain_that_never_finds_its_runner_idle_expires() {
             .any(|(k, d)| *k == FleetEventKind::DrainCancelled && d.contains("24 hours"))
     );
 }
+
+#[tokio::test]
+async fn a_cleanup_that_loses_the_machine_holds_its_runners_until_a_reviewed_resume() {
+    let f = fixture();
+    f.fleet.world().cleanup_targets = vec![target(
+        CleanupKind::WorkTemp,
+        Some("mini-01"),
+        Some("/Users/ci/gh-runners/acme/runner-01/_work/_temp"),
+        10,
+    )];
+    let review = f
+        .engine
+        .desired_review(ChangeRequest::Cleanup {
+            host: "mini".into(),
+            options: CleanupOptions::default(),
+        })
+        .await
+        .unwrap();
+    assert!(review.ready, "{:?}", review.blockers);
+    f.fleet.world().cleanup_lost = true;
+    f.engine
+        .desired_execute(&review.id, ChangeSecrets::default(), None)
+        .await
+        .unwrap();
+    let op = wait_done(&f.engine).await;
+    assert_eq!(op.status, OperationStatus::Failed);
+    assert!(op.error.unwrap().contains("lost contact"));
+    // Stopped for the cleanup and not started again: the machine may still be removing files.
+    assert_eq!(
+        f.fleet.world().calls,
+        ["stop mini mini-01", "cleanup mini (connection lost)"]
+    );
+    let holds: Vec<String> = f.engine.view().automation.holds.into_iter().map(|h| h.runner).collect();
+    assert_eq!(
+        holds,
+        ["mini-01"],
+        "mini-02 was never stopped, so its in-progress hold is released"
+    );
+
+    // An apply would start it, so it's blocked while the hold lasts.
+    let apply = f
+        .engine
+        .desired_review(ChangeRequest::Apply {
+            host: "mini".into(),
+            runner: Some("mini-01".into()),
+        })
+        .await
+        .unwrap();
+    assert!(
+        apply.blockers.iter().any(|b| b.contains("held stopped")),
+        "{:?}",
+        apply.blockers
+    );
+    f.fleet.world().cleanup_lost = false;
+    let resume = f
+        .engine
+        .desired_review(ChangeRequest::Resume {
+            runner: "mini-01".into(),
+        })
+        .await
+        .unwrap();
+    f.engine
+        .desired_execute(&resume.id, ChangeSecrets::default(), None)
+        .await
+        .unwrap();
+    wait_done(&f.engine).await;
+    assert!(f.engine.view().automation.holds.is_empty());
+}

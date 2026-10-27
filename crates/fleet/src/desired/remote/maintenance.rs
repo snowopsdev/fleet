@@ -17,6 +17,13 @@ const CLEANUP_PS1: &str = include_str!("../../../scripts/worker-cleanup.ps1");
 
 type Result<T> = std::result::Result<T, RemoteError>;
 
+/// The cleanup script's own deadline: it starts no new removal after this
+/// many seconds, comfortably inside the SSH timeout below, so a removal isn't
+/// still running on the host after the controller gave up on it.
+const SCRIPT_SECONDS: u64 = 840;
+/// How long the controller waits for a cleanup before treating the host as lost.
+const CLEAN_TIMEOUT_SECONDS: u64 = 960;
+
 /// What a survey found: targets that exist, and ones the host refused to measure.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CleanupSurvey {
@@ -53,7 +60,7 @@ struct Call<'a> {
 fn cleanup_script(host: &Host, mode: Mode, options: &CleanupOptions, calls: &[Call]) -> String {
     if host.is_windows() {
         let mut out = format!(
-            "$env:RF_MODE = {}\n$env:RF_DIAG_DAYS = {}\n{CLEANUP_PS1}\n",
+            "$env:RF_MODE = {}\n$env:RF_DIAG_DAYS = {}\n$env:RF_SECONDS = '{SCRIPT_SECONDS}'\n{CLEANUP_PS1}\ntry {{\n",
             ps_quote(mode.as_str()),
             ps_quote(&options.diag_older_than_days.to_string())
         );
@@ -70,10 +77,11 @@ fn cleanup_script(host: &Host, mode: Mode, options: &CleanupOptions, calls: &[Ca
                 files.join(", ")
             ));
         }
+        out.push_str("} finally { Unlock-All }\n");
         return out;
     }
     let mut out = format!(
-        "RF_MODE={}\nRF_DIAG_DAYS={}\n{CLEANUP_SH}\n",
+        "RF_MODE={}\nRF_DIAG_DAYS={}\nRF_SECONDS={SCRIPT_SECONDS}\n{CLEANUP_SH}\n",
         mode.as_str(),
         options.diag_older_than_days
     );
@@ -169,7 +177,7 @@ fn kind(value: &str, raw: &str) -> Result<CleanupKind> {
 /// diagnostic-log target of the same runner.
 pub fn parse_survey(output: &str) -> Result<CleanupSurvey> {
     let mut survey = CleanupSurvey::default();
-    let mut logs: Vec<(String, String)> = Vec::new();
+    let mut named: Vec<(CleanupKind, String, String)> = Vec::new();
     for raw in splitlines(output) {
         let raw = raw.trim_end_matches('\r');
         let fields: Vec<&str> = raw.split('\t').collect();
@@ -189,10 +197,10 @@ pub fn parse_survey(output: &str) -> Result<CleanupSurvey> {
                 });
             }
             Some("RFF") => {
-                let [_, runner, file] = fields[..] else {
+                let [_, k, runner, file] = fields[..] else {
                     return Err(malformed(raw));
                 };
-                logs.push((runner.to_string(), file.to_string()));
+                named.push((kind(k, raw)?, runner.to_string(), file.to_string()));
             }
             Some("RFE") => {
                 let [_, k, runner, message] = fields[..] else {
@@ -203,11 +211,11 @@ pub fn parse_survey(output: &str) -> Result<CleanupSurvey> {
             _ => {}
         }
     }
-    for target in survey.targets.iter_mut().filter(|t| t.kind == CleanupKind::Diag) {
-        target.files = logs
+    for target in &mut survey.targets {
+        target.files = named
             .iter()
-            .filter(|(runner, _)| Some(runner) == target.runner.as_ref())
-            .map(|(_, file)| file.clone())
+            .filter(|(k, runner, _)| *k == target.kind && Some(runner) == target.runner.as_ref())
+            .map(|(_, _, file)| file.clone())
             .collect();
     }
     Ok(survey)
@@ -251,7 +259,10 @@ pub fn parse_clean(output: &str) -> Result<Vec<CleanupOutcome>> {
                         "removed {} diagnostic log(s) from {path} ({freed})",
                         number(count).unwrap_or(0)
                     ),
-                    CleanupKind::PreviousBin | CleanupKind::PreviousExternals => format!("removed {path} ({freed})"),
+                    CleanupKind::PreviousBin | CleanupKind::PreviousExternals => format!(
+                        "removed {} previous runner version folder(s) from {path} ({freed})",
+                        number(count).unwrap_or(0)
+                    ),
                     CleanupKind::UnavailableSimulators => {
                         format!("deleted {} unavailable simulator(s)", number(count).unwrap_or(0))
                     }
@@ -289,9 +300,13 @@ pub(crate) fn stop_script(host: &Host, runner: &Runner, sudo_password: &Transien
     let name = &runner.name;
     let busy = super::super::maintenance::JOB_RUNNING;
     if host.is_windows() {
+        // CIM attributes a job by its executable path or command line; one
+        // whose neither can be read (another account, no elevation) counts as
+        // this runner's. `$bin` also covers a self-updated `bin.VERSION`.
         let worker = format!(
-            "$bin = (Join-Path $path 'bin') + [IO.Path]::DirectorySeparatorChar\n\
-if (Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue | Where-Object {{ -not $_.Path -or $_.Path.StartsWith($bin, [StringComparison]::OrdinalIgnoreCase) }}) {{ throw \"{busy} in $path (or a runner job whose path can't be read); refusing to stop {name}\" }}\n"
+            "$bin = Join-Path $path 'bin'\n\
+$jobs = @(Get-CimInstance Win32_Process -Filter \"Name='Runner.Worker.exe'\" | Where-Object {{ $where = if ($_.ExecutablePath) {{ $_.ExecutablePath }} else {{ $_.CommandLine }}; -not $where -or $where.IndexOf($bin, [StringComparison]::OrdinalIgnoreCase) -ge 0 }})\n\
+if ($jobs.Count -gt 0) {{ throw \"{busy} in $path (or a runner job whose path can't be read); refusing to stop {name}\" }}\n"
         );
         if host.is_windows_logon() {
             return format!(
@@ -331,7 +346,7 @@ test -x \"$root/svc.sh\" || {{ echo \"missing svc.sh at $root\" >&2; exit 1; }}\
 cd \"$root\"\n\
 real=\"$(pwd -P)\"\n\
 processes=\"$(ps -A -o command= 2>/dev/null || true)\"\n\
-if printf '%s\\n' \"$processes\" | grep -F -- \"$real/bin/Runner.Worker\" >/dev/null; then\n\
+if printf '%s\\n' \"$processes\" | grep -F -- \"$real/bin\" | grep -F -- Runner.Worker >/dev/null; then\n\
   echo \"{busy} in $real; refusing to stop {shown}\" >&2\n\
   exit 5\n\
 fi\n\
@@ -380,7 +395,7 @@ impl RemoteClient {
         let output = self.run_script(
             host,
             &clean_script(host, targets, options)?,
-            Some(Duration::from_secs(900)),
+            Some(Duration::from_secs(CLEAN_TIMEOUT_SECONDS)),
         )?;
         parse_clean(&output)
     }

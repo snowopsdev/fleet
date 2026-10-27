@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Upgrades one stopped runner in place on a macOS or Linux worker: downloads
-# the release, verifies the SHA-256 digest GitHub publishes, and replaces bin/
-# and externals/ inside the exact runner directory. The directory is never
-# moved, and .runner, .credentials* and the configuration are never touched.
-# The replaced bin/ and externals/ are kept as bin.fleet-previous and
-# externals.fleet-previous; a failure while swapping puts them back. The
-# controller supplies RF_* values on SSH stdin and starts the service after.
+# Upgrades one stopped runner in place on a macOS or Linux worker, using the
+# runner's own self-update layout: the release goes to bin.VERSION and
+# externals.VERSION inside the exact runner directory, and bin and externals
+# become symlinks to them. A runner still on plain bin/ and externals/ folders
+# is converted the way its self-update does (bin -> bin.OLDVERSION). The old
+# versioned folders stay as the rollback copy until the runner's own next
+# self-update prunes them. The directory is never moved, and .runner,
+# .credentials* and the configuration are never touched. A swap marker is
+# written before the first change and removed after the last, so an
+# interrupted swap is rolled back on the next run. The controller supplies
+# RF_* values on SSH stdin and starts the service after.
 set -euo pipefail
 set -f
 
@@ -24,6 +28,8 @@ case "$RF_ROOT" in
   "$HOME/gh-runners"/*) ;;
   *) echo "refusing root outside $HOME/gh-runners: $RF_ROOT" >&2; exit 2 ;;
 esac
+version_ok() { case "$1" in ''|*[!0-9.]*|.*|*.|*..*) return 1 ;; *.*.*) return 0 ;; *) return 1 ;; esac; }
+version_ok "$RF_VERSION" || { echo "refusing unexpected runner version: $RF_VERSION" >&2; exit 2; }
 if [ -L "$RF_ROOT" ] || [ ! -f "$RF_ROOT/.runner" ]; then
   echo "no configured runner at exact path $RF_ROOT" >&2
   exit 3
@@ -38,49 +44,119 @@ if [ -f /etc/NIXOS ]; then
 fi
 
 # Read the list in full first, so the search (whose arguments contain the
-# pattern) isn't in it.
+# pattern) isn't in it. Anything started from the runner directory (its
+# listener, a job, or its self-update script) means it isn't stopped.
 processes="$(ps -A -o command= 2>/dev/null || true)"
-if printf '%s\n' "$processes" | grep -F -- "$root/bin/Runner.Worker" >/dev/null; then
+if printf '%s\n' "$processes" | grep -F -- "$root/bin/Runner.Worker" >/dev/null \
+  || printf '%s\n' "$processes" | grep -F -- "$root/bin." | grep -F -- "Runner.Worker" >/dev/null; then
   echo "a job is running in $root; refusing to upgrade $RF_NAME" >&2
   exit 5
 fi
-# Anything else started from the runner directory (its listener, or a
-# self-update script) means it isn't stopped.
 if printf '%s\n' "$processes" | grep -F -- "$root/" >/dev/null; then
-  echo "$RF_NAME is still running (a process from $root); its service must be stopped before upgrading" >&2
+  echo "$RF_NAME is still running (a process from $root, such as its service or a self-update); it must be stopped before upgrading" >&2
   exit 5
 fi
-if [ -e "$root/_work/_update" ] || [ -e "$root/_update.sh" ]; then
-  echo "a runner self-update is in progress in $root; refusing to upgrade $RF_NAME" >&2
+# A self-update writes _work/_update.sh, then update.finished when it's done.
+# A recent script without a newer update.finished may still be swapping.
+update_script="$root/_work/_update.sh"
+if [ -f "$update_script" ] && [ -n "$(find "$update_script" -mmin -30 -print 2>/dev/null)" ] \
+  && ! { [ -f "$root/update.finished" ] && [ "$root/update.finished" -nt "$update_script" ]; }; then
+  echo "a runner self-update of $RF_NAME started in the last 30 minutes and hasn't finished; try again later" >&2
   exit 5
 fi
-for d in bin externals; do
-  if [ -L "$root/$d" ] || [ -L "$root/$d.fleet-previous" ]; then
-    echo "$root/$d or $d.fleet-previous is a symlink, a layout this upgrade doesn't handle; upgrade $RF_NAME by hand" >&2
-    exit 3
+# A cleanup (or another change) holds the maintenance lock while it works.
+lock="$root/.fleet-maintenance"
+if [ -f "$lock" ]; then
+  live=0
+  for pid in $(cat "$lock" 2>/dev/null); do
+    case "$pid" in ''|*[!0-9]*) continue ;; esac
+    if kill -0 "$pid" 2>/dev/null; then live=1; fi
+  done
+  if [ "$live" = 1 ]; then
+    echo "a cleanup is still working in $root; try again when it has finished" >&2
+    exit 5
   fi
-done
-# An earlier upgrade interrupted mid-swap (the connection dropped) can leave
-# bin/ or externals/ missing beside the previous files. Only the first step
-# missing is unambiguous: put bin back. Otherwise stop before anything else is
-# removed, so the previous files are never lost.
-if [ ! -e "$root/bin" ] && [ -d "$root/bin.fleet-previous" ] && [ -d "$root/externals" ] \
-  && [ ! -e "$root/externals.fleet-previous" ]; then
-  mv "$root/bin.fleet-previous" "$root/bin"
-  echo "restored $root/bin from an interrupted upgrade"
+  rm -f -- "$lock"
 fi
-for d in bin externals; do
-  if [ ! -d "$root/$d" ]; then
-    echo "$root/$d is missing: an earlier upgrade of $RF_NAME was interrupted. With its service stopped, move bin.fleet-previous and externals.fleet-previous back to bin and externals (keeping a copy of whatever is there), then upgrade again." >&2
-    exit 3
+
+marker="$root/.fleet-upgrade-swap"
+# Where bin or externals points, as a folder name in the root: `bin.2.329.0`,
+# or `bin` itself for a plain folder. Fails for a link that leaves the root.
+target_of() {
+  local d="$1" link real
+  if [ -L "$root/$d" ]; then
+    link="$(readlink "$root/$d")"
+    case "$link" in /*) ;; *) link="$root/$link" ;; esac
+    real="$(cd "$link" 2>/dev/null && pwd -P)" || return 1
+    [ "$(dirname "$real")" = "$root" ] || return 1
+    case "$(basename "$real")" in "$d".*) ;; *) return 1 ;; esac
+    basename "$real"
+  elif [ -d "$root/$d" ]; then
+    echo "$d"
+  else
+    return 1
   fi
-done
+}
+point() { ln -sfn "$root/$2" "$root/$1"; }
+
+# The marker names, for bin and externals, the folder that held the old
+# version; rolling back points each link back at it. That covers both a link
+# that was already moved and a plain folder that was renamed but not yet
+# linked.
+restore_marker() {
+  local d previous
+  while IFS='=' read -r d previous; do
+    case "$d" in bin|externals) ;; *) continue ;; esac
+    case "$previous" in "$d".*) ;; *) continue ;; esac
+    [ -d "$root/$previous" ] && [ ! -L "$root/$previous" ] || continue
+    if [ -L "$root/$d" ] || [ ! -e "$root/$d" ]; then
+      point "$d" "$previous"
+    fi
+  done < "$marker"
+  rm -f -- "$marker"
+}
+
+# Roll back a swap an earlier run didn't finish (the connection dropped).
+if [ -f "$marker" ]; then
+  restore_marker
+  echo "rolled back an interrupted upgrade of $RF_NAME"
+fi
+
+old_bin="$(target_of bin)" || { echo "$root/bin is missing or points outside the runner directory; repair it by hand" >&2; exit 3; }
+old_externals="$(target_of externals)" || { echo "$root/externals is missing or points outside the runner directory; repair it by hand" >&2; exit 3; }
 
 current="$("$root/bin/Runner.Listener" --version 2>/dev/null | tail -n 1 || true)"
 if [ "$current" = "$RF_VERSION" ]; then
   echo "$RF_NAME already runs $RF_VERSION"
   exit 0
 fi
+if { [ "$old_bin" = bin ] || [ "$old_externals" = externals ]; } && ! version_ok "$current"; then
+  echo "can't tell which version $RF_NAME runs ('$current'), so its folders can't be kept as a rollback copy; refusing" >&2
+  exit 3
+fi
+for name in "bin.$RF_VERSION" "externals.$RF_VERSION"; do
+  if [ -L "$root/$name" ]; then
+    echo "$root/$name is a symlink; refusing" >&2
+    exit 3
+  fi
+done
+# The folder that will hold the current version once the links move.
+held_name() {
+  if [ "$2" = "$1" ]; then echo "$1.$current"; else echo "$2"; fi
+}
+keep_bin="$(held_name bin "$old_bin")"
+keep_externals="$(held_name externals "$old_externals")"
+for pair in "bin:$old_bin:$keep_bin" "externals:$old_externals:$keep_externals"; do
+  IFS=: read -r d old keep <<< "$pair"
+  if [ "$old" = "$d" ] && [ -e "$root/$keep" ]; then
+    echo "$root/$d is a plain folder but $root/$keep already exists; inspect both before upgrading" >&2
+    exit 3
+  fi
+  if [ "$keep" = "$d.$RF_VERSION" ]; then
+    echo "$RF_NAME's $d already points at $d.$RF_VERSION; nothing to swap" >&2
+    exit 3
+  fi
+done
 
 remove_dir() {
   find "$1" -xdev -type d ! -perm -u+w -exec chmod u+w {} + 2>/dev/null || true
@@ -90,22 +166,17 @@ remove_dir() {
 stage="$(mktemp -d "$root/.fleet-upgrade.XXXXXX")"
 swapping=0
 finished=0
-restore() {
-  local d
-  for d in bin externals; do
-    if [ -d "$root/$d.fleet-previous" ]; then
-      if [ -e "$root/$d" ] || [ -L "$root/$d" ]; then mv "$root/$d" "$stage/failed-$d"; fi
-      mv "$root/$d.fleet-previous" "$root/$d"
-    fi
-  done
+rollback() {
+  [ -f "$marker" ] || return 0
+  restore_marker
 }
 finish() {
   local status=$?
   if [ "$finished" != 1 ] && [ "$swapping" = 1 ]; then
-    if restore; then
-      echo "restored the previous bin/ and externals/ of $RF_NAME" >&2
+    if rollback; then
+      echo "restored the previous bin and externals of $RF_NAME" >&2
     else
-      echo "couldn't restore the previous files; they're in $root/bin.fleet-previous and $root/externals.fleet-previous" >&2
+      echo "couldn't restore the previous files of $RF_NAME; see $marker" >&2
     fi
   fi
   remove_dir "$stage" 2>/dev/null || true
@@ -143,19 +214,26 @@ if [ "$new" != "$RF_VERSION" ]; then
   exit 4
 fi
 
+# Put the new folders in place beside the current ones; nothing points at them yet.
 for d in bin externals; do
-  previous="$root/$d.fleet-previous"
-  if [ -L "$previous" ]; then
-    echo "refusing to remove $previous: it is a symlink" >&2
-    exit 3
-  fi
-  if [ -e "$previous" ]; then remove_dir "$previous"; fi
+  if [ -e "$root/$d.$RF_VERSION" ]; then remove_dir "$root/$d.$RF_VERSION"; fi
+  mv "$stage/new/$d" "$root/$d.$RF_VERSION"
 done
 
+# The swap: record where each link pointed, then move both.
+printf 'bin=%s\nexternals=%s\n' "$keep_bin" "$keep_externals" > "$marker"
 swapping=1
-mv "$root/bin" "$root/bin.fleet-previous"
-mv "$stage/new/bin" "$root/bin"
-mv "$root/externals" "$root/externals.fleet-previous"
-mv "$stage/new/externals" "$root/externals"
+for d in bin externals; do
+  previous="$(target_of "$d")"
+  if [ "$previous" = "$d" ]; then
+    mv "$root/$d" "$root/$d.$current"
+  fi
+  point "$d" "$d.$RF_VERSION"
+done
+# The service runs the root copy of runsvc.sh; refresh it as a self-update does.
+if [ -f "$root/runsvc.sh" ] && [ -f "$root/bin/runsvc.sh" ]; then
+  cat "$root/bin/runsvc.sh" > "$root/runsvc.sh"
+fi
+rm -f -- "$marker"
 finished=1
-echo "replaced bin/ and externals/ of $RF_NAME with $RF_VERSION; the previous files are in bin.fleet-previous and externals.fleet-previous"
+echo "switched $RF_NAME to $RF_VERSION (bin -> bin.$RF_VERSION); the previous version stays beside it as the rollback copy"

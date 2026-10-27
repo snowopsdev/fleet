@@ -17,13 +17,13 @@ use crate::automation::{
     AutomationSettings, DrainMark, DrainState, FleetAutomation, FleetPublishStatus, FleetWatchdog, Hold,
     PublishSettings, publish,
 };
-use crate::desired::maintenance::StopOutcome;
+use crate::desired::maintenance::{ChangeReport, HeldRunners, StopOutcome};
 use crate::desired::model::FleetPlanAction;
 use crate::desired::model::{Inventory, is_active};
 use crate::desired::operations::{Ops, Secrets};
 use crate::fleet_plan::ChangeRequest;
 use crate::model::{AppConfig, FleetView, MachineView, RunnerView};
-use crate::monitoring::{FleetAlertKind, FleetEventKind, FleetMachineAlert};
+use crate::monitoring::{FleetAlertKind, FleetEventKind, FleetMachineAlert, OutboundDelivery};
 use crate::outbound::{self, AlertDestination, AlertDestinationInput, AlertDestinationKind, DestinationSecret};
 use crate::sync::MutexExt;
 
@@ -238,6 +238,16 @@ impl Engine {
         self.automation.locked().journal().drains.keys().cloned().collect()
     }
 
+    /// Drained runners and runners held stopped, for a cleanup.
+    pub(super) fn held_runners(&self) -> HeldRunners {
+        let store = self.automation.locked();
+        let journal = store.journal();
+        HeldRunners {
+            drained: journal.drains.keys().cloned().collect(),
+            held: journal.holds.keys().cloned().collect(),
+        }
+    }
+
     /// A reviewed restart ends a hold left by a failed upgrade or cleanup.
     pub(super) fn clear_hold(&self, runner: &str) {
         if let Err(e) = self.update_automation(|j| j.holds.remove(runner)) {
@@ -245,22 +255,83 @@ impl Engine {
         }
     }
 
+    /// Before an upgrade or cleanup stops anything: holds every runner it may
+    /// stop, durably, so a crash or quit mid-change can't leave one silently
+    /// stopped for the watchdog to restart half-changed. Returns the runners
+    /// newly held this way (ones already held keep their existing hold).
+    pub(super) fn begin_holds(
+        &self,
+        host: &str,
+        request: &ChangeRequest,
+        inventory: &Inventory,
+        upgrade: &[String],
+        drained: &BTreeSet<String>,
+    ) -> Vec<String> {
+        let (names, what): (Vec<String>, &str) = match request {
+            ChangeRequest::Upgrade { .. } => (upgrade.to_vec(), "An upgrade"),
+            ChangeRequest::Cleanup { .. } => (
+                inventory
+                    .find_host(host)
+                    .map(|h| {
+                        h.desired_runners()
+                            .map(|r| r.name.clone())
+                            .filter(|n| !drained.contains(n))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                "A cleanup",
+            ),
+            ChangeRequest::Apply { .. }
+            | ChangeRequest::Retire { .. }
+            | ChangeRequest::Decommission { .. }
+            | ChangeRequest::Restart { .. }
+            | ChangeRequest::Drain { .. }
+            | ChangeRequest::Resume { .. } => return Vec::new(),
+        };
+        let reason = format!(
+            "{what} was running and may have been interrupted. Check the machine, then resume it (or upgrade it again)."
+        );
+        let now = Utc::now();
+        let begun = self.update_automation(|j| {
+            let mut begun = Vec::new();
+            for name in names {
+                if !j.holds.contains_key(&name) {
+                    j.holds.insert(
+                        name.clone(),
+                        Hold {
+                            host: host.to_string(),
+                            reason: reason.clone(),
+                            since: now,
+                        },
+                    );
+                    begun.push(name);
+                }
+            }
+            begun
+        });
+        begun.unwrap_or_else(|e| {
+            tracing::warn!("saving in-progress holds failed: {e}");
+            Vec::new()
+        })
+    }
+
     /// After an upgrade or cleanup: runners it left stopped on purpose are
-    /// held, so the watchdog doesn't restart them, and runners an upgrade
-    /// finished are released.
+    /// held, the in-progress holds of the others are released, and runners an
+    /// upgrade actually finished are released from any earlier hold. Without
+    /// a report (the change ended abnormally) the in-progress holds stay.
     pub(super) fn record_holds(
         &self,
         host: &str,
         request: &ChangeRequest,
-        left_stopped: &[String],
-        upgraded: &[String],
+        report: Option<&ChangeReport>,
+        begun: &[String],
     ) {
         let reason = match request {
             ChangeRequest::Upgrade { .. } => {
                 "A failed upgrade left it stopped. Check its diagnostic log, then resume it or upgrade it again."
             }
             ChangeRequest::Cleanup { .. } => {
-                "A cleanup couldn't start its service again. Check its diagnostic log, then resume it."
+                "A cleanup left it stopped: it couldn't be started again, or the machine stopped answering mid-cleanup. Check the machine, then resume it."
             }
             ChangeRequest::Apply { .. }
             | ChangeRequest::Retire { .. }
@@ -269,15 +340,16 @@ impl Engine {
             | ChangeRequest::Drain { .. }
             | ChangeRequest::Resume { .. } => return,
         };
+        let Some(report) = report else { return };
         let now = Utc::now();
-        let finished: Vec<&String> = upgraded.iter().filter(|n| !left_stopped.contains(n)).collect();
         let saved = self.update_automation(|j| {
-            if matches!(request, ChangeRequest::Upgrade { .. }) {
-                for name in &finished {
-                    j.holds.remove(*name);
-                }
+            for name in begun.iter().filter(|n| !report.left_stopped.contains(n)) {
+                j.holds.remove(name);
             }
-            for name in left_stopped {
+            for name in &report.upgraded {
+                j.holds.remove(name);
+            }
+            for name in &report.left_stopped {
                 j.holds.insert(
                     name.clone(),
                     Hold {
@@ -291,7 +363,7 @@ impl Engine {
         if let Err(e) = saved {
             tracing::warn!("saving held runners failed: {e}");
         }
-        for name in left_stopped {
+        for name in &report.left_stopped {
             self.record_runner_history(
                 host,
                 name,
@@ -299,6 +371,44 @@ impl Engine {
                 format!("{name} is held stopped: {reason} The watchdog leaves it alone until then."),
                 true,
             );
+        }
+    }
+
+    /// A held runner seen running again (started by hand, or by the machine
+    /// restarting) after its hold began is released, with an event. Not while
+    /// a change runs, whose own holds it resolves itself.
+    fn release_running_holds(&self) {
+        if self.desired.locked().change_running() {
+            return;
+        }
+        let holds: Vec<(String, Hold)> = self
+            .automation
+            .locked()
+            .journal()
+            .holds
+            .iter()
+            .map(|(n, h)| (n.clone(), h.clone()))
+            .collect();
+        if holds.is_empty() {
+            return;
+        }
+        let view = self.view();
+        for (name, hold) in holds {
+            let Some((machine, runner)) = find_runner(&view, &hold.host, &name) else {
+                continue;
+            };
+            let running = runner
+                .local
+                .as_ref()
+                .is_some_and(|l| !l.stale && l.as_of > hold.since && is_active(&l.service_state));
+            if running && self.update_automation(|j| j.holds.remove(&name)).is_ok() {
+                self.record_history(
+                    machine,
+                    FleetEventKind::HeldStopped,
+                    format!("{name}'s service is running again, so it's no longer held stopped."),
+                    false,
+                );
+            }
         }
     }
 
@@ -343,6 +453,21 @@ impl Engine {
                     review.blockers.push(format!(
                         "{} held by a drain; resume it or cancel the drain before applying, which could start it.",
                         names.into_iter().collect::<Vec<_>>().join(", ")
+                    ));
+                }
+                // A runner held stopped after a failed change stays stopped
+                // until a reviewed resume, restart or upgrade, not an apply.
+                let holds = self.held_runners().held;
+                let held_stopped: BTreeSet<&str> = review
+                    .items
+                    .iter()
+                    .filter(|i| i.is_runnable() && holds.contains(&i.runner))
+                    .map(|i| i.runner.as_str())
+                    .collect();
+                if !held_stopped.is_empty() {
+                    review.blockers.push(format!(
+                        "{} held stopped after a failed upgrade or cleanup; check it, then resume it before applying.",
+                        held_stopped.into_iter().collect::<Vec<_>>().join(", ")
                     ));
                 }
             }
@@ -412,6 +537,7 @@ impl Engine {
             return;
         }
         self.process_drains().await;
+        self.release_running_holds();
         self.run_watchdog(Utc::now()).await;
         self.publish_availability(Utc::now()).await;
     }
@@ -995,27 +1121,43 @@ impl Engine {
                 return;
             }
         };
-        // Concurrently, each bounded by the client's 10-second timeout, so one
-        // slow destination doesn't hold up the others.
-        let sends = claimed.into_iter().map(|delivery| {
+        // Destinations are served concurrently, so a slow one doesn't hold up
+        // the others; each destination's alerts go one at a time, in the order
+        // they were raised, so it sees them in order and isn't flooded. Each
+        // request is bounded by the client's 10-second timeout.
+        let mut queues: BTreeMap<String, Vec<OutboundDelivery>> = BTreeMap::new();
+        for delivery in claimed {
+            queues.entry(delivery.destination.clone()).or_default().push(delivery);
+        }
+        let sends = queues.into_values().map(|queue| {
             let destinations = &destinations;
             let client = &client;
             async move {
-                let result = match destinations.get(&delivery.destination) {
-                    None => Err("The destination is turned off.".to_string()),
-                    Some(destination) => match self.read_secret(&destination.id).await {
-                        Ok(secret) => match outbound::request(destination, &secret, &outbound::notice(&delivery.event))
-                        {
-                            Ok(request) => outbound::send(client, request).await,
+                let mut results = Vec::with_capacity(queue.len());
+                for delivery in queue {
+                    let result = match destinations.get(&delivery.destination) {
+                        None => Err("The destination is turned off.".to_string()),
+                        Some(destination) => match self.read_secret(&destination.id).await {
+                            Ok(secret) => {
+                                match outbound::request(destination, &secret, &outbound::notice(&delivery.event)) {
+                                    Ok(request) => outbound::send(client, request).await,
+                                    Err(e) => Err(e),
+                                }
+                            }
                             Err(e) => Err(e),
                         },
-                        Err(e) => Err(e),
-                    },
-                };
-                (delivery, result)
+                    };
+                    let failed = result.is_err();
+                    results.push((delivery, result));
+                    // Later alerts wait for the next round rather than piling onto a failing endpoint.
+                    if failed {
+                        break;
+                    }
+                }
+                results
             }
         });
-        let results: Vec<_> = futures::future::join_all(sends).await;
+        let results: Vec<_> = futures::future::join_all(sends).await.into_iter().flatten().collect();
         let engine = self.clone();
         match blocking("save alert deliveries", move || {
             engine.monitoring.locked().finish_outbound(&results, Utc::now())

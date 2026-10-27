@@ -111,8 +111,9 @@ lose one), posts them with reqwest (10-second timeout, no redirects, HTTPS or lo
 errors without the URL), removes accepted ones and retries failures after 1, 2, 5, 15, 30 and
 then 60 minutes for up to a day. Maintenance pauses and removed destinations drop their queue.
 Each destination keeps at most 100 undelivered alerts; the oldest beyond that are dropped with
-an `alertsDropped` event on the machine and the destination's error. Deliveries run
-concurrently in their own five-second loop, so a slow endpoint never delays monitoring.
+an `alertsDropped` event on the machine and the destination's error. Deliveries run in their own
+five-second loop, so a slow endpoint never delays monitoring: destinations concurrently, each
+destination's alerts one at a time in order, stopping at the first failure until the next round.
 
 ## Automation
 
@@ -129,12 +130,17 @@ changes, so none overlaps a running change, and is recorded in machine history
   registration, and stops the service with the host script's job check. A drain expires after
   24 hours. While a drain holds a runner, reviews of a second drain, a restart, an upgrade or an
   apply that would start it are blocked, at review and again before running.
-- **Holds:** a failed upgrade, or a cleanup that couldn't start a runner again, records a hold;
-  the watchdog skips held runners until a reviewed resume, restart or successful upgrade.
+- **Holds:** before an upgrade or cleanup stops anything it durably holds every runner it may
+  stop; afterwards it releases those it restored and keeps holds for runners it left stopped (a
+  failed upgrade, a runner it couldn't start again, or every stopped runner when the machine
+  stopped answering mid-cleanup). An abnormal end keeps them all. The watchdog skips held runners,
+  an apply that would start one is blocked, and a hold ends with a reviewed resume, restart or
+  successful upgrade, or when the runner is seen running after the hold began.
 - **Watchdog** (`automation/watchdog.rs`, opt-in): a pure plan from the fleet view and the
   journal decides restarts with backoff (2, 5, 15, 60 minutes) and at most 3 attempts per runner
   in 6 hours, then a give-up alert (`FleetAlertKind::WatchdogGaveUp`). Restarts use the guarded
-  `restart_runner`. Enabling it is the standing approval; see
+  `restart_runner`, whose host script refuses while a cleanup holds the runner's
+  `.fleet-maintenance` lock. Enabling it is the standing approval; see
   [FLEET.md](FLEET.md#automatic-actions-opt-in).
 - **Availability variable** (`automation/publish.rs`, opt-in): counts online inventory runners
   per capability label from fresh GitHub data and writes the organization variable through

@@ -413,7 +413,7 @@ shown with its exact path and measured size:
 | `RUNNER/_work/_temp`, `RUNNER/_work/_actions` | Their contents, for idle runners. |
 | `RUNNER/_work` | Its whole contents (workspaces, tool cache, temp), only with the review's opt-in checkbox. |
 | `RUNNER/_diag` | `Runner_*.log` and `Worker_*.log` files directly in it, older than the chosen number of days (14 by default). The review lists each file; only those are removed. |
-| `RUNNER/bin.fleet-previous`, `RUNNER/externals.fleet-previous` | The previous binaries kept by the last upgrade. |
+| `RUNNER/bin.VERSION`, `RUNNER/externals.VERSION` | Previous runner versions that `bin` and `externals` no longer point at, kept by an upgrade or the runner's own self-update. Each folder is listed by name; the version in use never is. Kept while the runner is held after a failed change, or while an upgrade's swap is unfinished. |
 | `~/Library/Developer/Xcode/DerivedData` (macOS) | Its contents, only when no runner on the machine is busy. |
 | Unavailable simulators (macOS) | `xcrun simctl delete unavailable`, only when no runner is busy. |
 | Docker (macOS, Linux) | `docker system prune -f` when Docker is installed and running: stopped containers, unused networks, dangling images and build cache. Never volumes. Only when no runner is busy. |
@@ -422,21 +422,35 @@ shown with its exact path and measured size:
 fixed suffix of it (or of the home directory), requires `.runner` to name that runner, resolves
 the path, and refuses one that is a symlink, passes through one, or resolves anywhere else. It
 removes directory contents with `find -delete`, which neither follows links nor crosses into
-another file system, and keeps the directory itself. On Windows, child folders are removed with
-`rmdir /s`, which removes junctions without following them. `.runner`, `.credentials*`,
-configuration files, `bin` and `externals` are never targets. Legacy and decommissioned runner
-directories are left alone.
+another file system, and keeps the directory itself. On Windows it uses PowerShell and .NET,
+removing junctions without following them. `.runner`, `.credentials*`, configuration files and
+the `bin` and `externals` in use are never targets. Legacy and decommissioned runner directories
+are left alone.
 
 Each runner's service is stopped before its directories are cleaned, with the same job check as
 **Drain**, so it can't pick up a job while files are removed, and started again afterwards if it
 was running (a drained runner is never stopped or started by a cleanup, and a draining one keeps
-its directories). Machine-wide targets (DerivedData, simulators, Docker) are cleaned only with
-every inventory runner on the machine stopped this way; a running legacy or drained runner keeps
-them waiting. The host refuses a target while that runner's service or a job is running, or
-while a runner self-update is in progress (`_work/_update`). On Windows a runner process whose
-path can't be read counts as running, and removal never goes through `cmd.exe`: links and
-junctions are removed without being followed. If a runner can't be started again, the cleanup
-reports it and holds it stopped (see [Recovery](#recovery)).
+its directories). Machine-wide targets (DerivedData, simulators, Docker) are cleaned only when
+every runner on the machine (legacy and decommission-pending ones too) is definitely stopped or
+is a declared runner this cleanup stops; an unknown state counts as running, and the host
+refuses while any `Runner.Listener` or `Runner.Worker` runs there. The host refuses a runner's
+target while that runner's service, a job, or anything else started from its directory runs, and
+while a runner self-update is in progress: the runner writes `_work/_update.sh` (`.cmd` on
+Windows) and then `update.finished` when it's done, so a script written in the last 30 minutes
+without a newer `update.finished` counts as in progress. (`_work/_update` itself stays after
+every self-update and doesn't block anything.) A runner's processes are matched by its `bin` and
+`bin.VERSION` paths; on Windows they're attributed through CIM (`Win32_Process` executable path
+or command line), a runner process whose path can't be read counts as running, and an elevated
+SSH session attributes them precisely.
+
+While it removes files in a runner directory, the host script holds `RUNNER/.fleet-maintenance`
+with the PIDs doing the work. Starting, restarting or upgrading that runner (including the
+watchdog's restarts) refuses while any of them is alive, and a lock whose processes are gone is
+stale and removed. The script ignores a dropped connection and stops starting new removals after
+14 minutes, before the app gives up waiting. If the app loses contact with the machine during a
+cleanup, it does not start the runners it stopped: they stay stopped and held, since the machine
+may still be removing files. If a runner can't be started again, the cleanup reports it and
+holds it stopped (see [Recovery](#recovery)).
 
 This is a deliberate, narrow exception to Runner Fleet's "no broad or glob-based deletion"
 rule: these runner caches grow without bound, and each target is an enumerated, reviewed,
@@ -461,7 +475,7 @@ find "$RUNNER_TEMP" -xdev -mindepth 1 -delete
 ```
 
 A failing hook fails the job, so test it on one runner first. `.env` survives upgrades, since
-upgrades replace only `bin/` and `externals/`.
+upgrades only switch `bin` and `externals`.
 
 ### Upgrade
 
@@ -469,19 +483,31 @@ For a runner behind the latest `actions/runner` release, **Upgrade…** (a runne
 **Upgrade idle runners…** (a machine's Maintenance section) shows each runner's current and
 target version; busy runners appear as not now. Running it handles one runner at a time: stop
 the idle service, download the release on the machine and verify the SHA-256 digest GitHub
-publishes (a release without one is refused), extract it, replace `bin/` and `externals/` inside
-the same directory (keeping the old ones as `bin.fleet-previous` and
-`externals.fleet-previous`), start the service, and confirm the runner reports the new version.
-The directory is never moved and `.runner`, `.credentials*` and `.env` are never touched. A
-runner that started a job in the meantime is skipped; a failure stops there and leaves that
+publishes (a release without one is refused), and install it the way the runner's own
+self-update does: the release goes to `bin.VERSION` and `externals.VERSION` beside the current
+ones, and `bin` and `externals` become links to them (on Windows, junctions). A runner still on
+plain `bin/` and `externals/` folders is converted the same way its self-update would convert
+it, renaming them to `bin.OLDVERSION` and `externals.OLDVERSION`. The old version stays beside
+the new one as the rollback copy, until the runner's own next self-update prunes it or you
+remove it with **Clean up…**. The root's `runsvc.sh` is refreshed from the new `bin`, as a
+self-update does. Then it starts the service and confirms the runner reports the new version.
+The directory is never moved and `.runner`, `.credentials*` and `.env` are never touched.
+
+Before switching the links it writes `RUNNER/.fleet-upgrade-swap`, naming the folders that hold
+the old version, and removes it after the last step. A failure while switching points the links
+back at once; a swap interrupted by a dropped connection is rolled back by the next upgrade
+before anything else, so `bin` and `externals` never end up on different versions and the old
+version is never removed. The host refuses while anything runs from the runner directory or its
+self-update is in progress, while a cleanup holds its lock, and when `bin` or `externals` links
+outside the runner directory.
+
+A runner that started a job in the meantime is skipped; a failure stops there and leaves that
 runner stopped and *held*: the watchdog leaves it alone until a reviewed **Resume…**,
-**Restart…** or upgrade (see [Recovery](#recovery)). If a newer release appears between review
-and run, the run refuses and you review again. The host refuses while any process runs from the
-runner directory, during a runner self-update, and when `bin`, `externals` or their
-`.fleet-previous` copies are symlinks. If an earlier upgrade was interrupted mid-swap (the
-connection dropped), it puts `bin` back when only that step was done, and otherwise refuses with
-instructions, never removing the previous files. A drained runner can't be upgraded until it's
-resumed or its drain is cancelled.
+**Restart…** or upgrade (see [Recovery](#recovery)). Every runner an upgrade or cleanup may stop
+is held durably before anything is stopped, and released when it finishes, so a crash or quit
+mid-change leaves them held rather than silently stopped. If a newer release appears between
+review and run, the run refuses and you review again. A drained runner can't be upgraded until
+it's resumed or its drain is cancelled.
 
 ### Drain and resume
 
@@ -609,13 +635,18 @@ than 0. Expressions bind `>` before `&&` before `||`. Jobs that need the machine
 - **Restoring a retired runner:** its files are still at the legacy path, but its registration
   is gone. That's a manual procedure, not an automatic rollback.
 
-- **Upgrade failed:** the runner is left stopped. If its `bin/` was already replaced, the
-  previous files are in `bin.fleet-previous` and `externals.fleet-previous` in the same
-  directory (a failure while swapping puts them back by itself). Read **Diagnostic log**, then
-  **Resume…** or **Restart…**, or move the previous folders back by hand with the service
-  stopped.
-- **Held stopped:** a failed upgrade or cleanup left the runner stopped on purpose; its pane says
-  why. Fix the cause, then **Resume…** (or **Restart…** or upgrade again), which releases it.
+- **Upgrade failed:** the runner is left stopped and held, with `bin` and `externals` pointing
+  at the old version (a failure while switching points them back by itself; an interrupted
+  switch is rolled back by the next upgrade). Read **Diagnostic log**, then **Resume…** or
+  **Restart…**. By hand, with the service stopped: `ln -sfn RUNNER/bin.OLDVERSION RUNNER/bin`,
+  the same for `externals`, and remove `.fleet-upgrade-swap`.
+- **Held stopped:** a failed upgrade or cleanup left the runner stopped on purpose, or one was
+  interrupted (the app quit or crashed); its pane says why. Fix the cause, then **Resume…** (or
+  **Restart…** or upgrade again), which releases it. **Review apply…** won't start a held runner.
+  A held runner seen running again (started by hand or after a reboot) is released by itself,
+  with an event.
+- **A cleanup lost contact:** its runners stay stopped and held. Check the machine, wait for any
+  `RUNNER/.fleet-maintenance` to disappear (or its processes to end), then **Resume…**.
 - **The watchdog gave up:** an alert says so. Read the diagnostic log, fix the cause, and
   **Restart…** the runner; the watchdog tries again once it has seen the service running.
 

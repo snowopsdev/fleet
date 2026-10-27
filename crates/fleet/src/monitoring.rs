@@ -9,7 +9,7 @@ mod state;
 mod store;
 #[cfg(test)]
 pub(crate) use store::MAX_OUTBOUND_PER_DESTINATION;
-pub(crate) use store::{EVENT_PAGE_SIZE, EVENT_RETENTION, MAX_EVENTS, MonitorStore};
+pub(crate) use store::{EVENT_PAGE_SIZE, EVENT_RETENTION, MAX_EVENTS, MonitorStore, OutboundDelivery};
 
 /// Events retained on this Mac for up to 30 days (at most 5,000 entries).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]

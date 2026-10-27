@@ -1,9 +1,13 @@
-# Upgrades one stopped runner in place on a Windows worker: downloads the
-# release, verifies the SHA-256 digest GitHub publishes, and replaces bin and
-# externals inside the exact runner directory. The directory is never moved,
-# and .runner, .credentials* and the configuration are never touched. The
-# replaced folders are kept as bin.fleet-previous and externals.fleet-previous;
-# a failure while swapping puts them back. RF_* values are process-only.
+# Upgrades one stopped runner in place on a Windows worker, using the runner's
+# own self-update layout: the release goes to bin.VERSION and
+# externals.VERSION inside the exact runner directory, and bin and externals
+# become junctions to them. A runner still on plain bin and externals folders
+# is converted the way its self-update does. The old versioned folders stay as
+# the rollback copy until the runner's next self-update prunes them. The
+# directory is never moved, and .runner, .credentials* and the configuration
+# are never touched. A swap marker written before the first change and
+# removed after the last lets the next run roll back an interrupted swap.
+# RF_* values are process-only.
 $ErrorActionPreference = 'Stop'
 foreach ($required in @('RF_ROOT', 'RF_NAME', 'RF_ASSET_URL', 'RF_ASSET_NAME', 'RF_CHECKSUM', 'RF_VERSION')) {
   if (-not [Environment]::GetEnvironmentVariable($required)) { throw "Missing $required" }
@@ -12,6 +16,8 @@ $assetUri = [Uri]$env:RF_ASSET_URL
 if ($assetUri.Scheme -ne 'https' -or $assetUri.Host -ne 'github.com' -or -not $assetUri.AbsolutePath.StartsWith('/actions/runner/releases/download/')) {
   throw "Refusing unexpected runner asset URL: $env:RF_ASSET_URL"
 }
+if ($env:RF_VERSION -notmatch '^\d+\.\d+\.\d+$') { throw "Refusing unexpected runner version: $env:RF_VERSION" }
+$version = $env:RF_VERSION
 $allowedRoot = [IO.Path]::GetFullPath('C:\gh-runners')
 $root = [IO.Path]::GetFullPath($env:RF_ROOT)
 if (-not $root.StartsWith($allowedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
@@ -37,42 +43,94 @@ function Remove-Entry([string]$Path) {
     [IO.File]::Delete($item.FullName)
   }
 }
-function Remove-Tree([string]$Path) {
-  if (Test-Link $Path) { throw "refusing to remove $Path`: it is a symlink or junction" }
-  Remove-Entry $Path
-}
 $runnerFile = Join-Path $root '.runner'
 if ((Test-Link $root) -or -not (Test-Path -LiteralPath $runnerFile)) { throw "No configured runner at exact path $root" }
 if ((Get-Content -LiteralPath $runnerFile -Raw | ConvertFrom-Json).agentName -ne $env:RF_NAME) {
   throw "The runner at exact path $root is not $env:RF_NAME"
 }
-$bin = (Join-Path $root 'bin') + [IO.Path]::DirectorySeparatorChar
-# A runner process whose path can't be read counts as this runner's: the check fails closed.
-$running = Get-Process -Name Runner.Worker, Runner.Listener -ErrorAction SilentlyContinue | Where-Object { -not $_.Path -or $_.Path.StartsWith($bin, [StringComparison]::OrdinalIgnoreCase) }
-if ($running | Where-Object { $_.ProcessName -eq 'Runner.Worker' }) { throw "a job is running in $root; refusing to upgrade $env:RF_NAME" }
-if ($running) { throw "$env:RF_NAME is still running; its service must be stopped before upgrading" }
-if ((Test-Path -LiteralPath (Join-Path $root '_work\_update')) -or (Test-Path -LiteralPath (Join-Path $root '_update.cmd'))) {
-  throw "a runner self-update is in progress in $root; refusing to upgrade $env:RF_NAME"
+
+# Anything started from the runner directory (its listener, a job, its
+# self-update script) means it isn't stopped. Processes are attributed by
+# their executable path or command line from CIM; a runner process neither
+# can be read for (another account, without elevation) counts as this
+# runner's, so the check fails closed. An elevated session attributes
+# precisely.
+$fromRoot = @(Get-CimInstance Win32_Process | Where-Object {
+  $where = if ($_.ExecutablePath) { $_.ExecutablePath } else { $_.CommandLine }
+  ($where -and $where.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+    (-not $where -and $_.Name -in @('Runner.Listener.exe', 'Runner.Worker.exe'))
+})
+if ($fromRoot | Where-Object { $_.Name -eq 'Runner.Worker.exe' }) { throw "a job is running in $root; refusing to upgrade $env:RF_NAME" }
+if ($fromRoot) { throw "$env:RF_NAME is still running (a process from $root, such as its service or a self-update); it must be stopped before upgrading" }
+# A self-update writes _work\_update.cmd, then update.finished when it's done.
+$updateScript = Join-Path $root '_work\_update.cmd'
+$finished = Join-Path $root 'update.finished'
+if ((Test-Path -LiteralPath $updateScript) -and (Get-Item -LiteralPath $updateScript).LastWriteTime -gt (Get-Date).AddMinutes(-30) -and
+    -not ((Test-Path -LiteralPath $finished) -and (Get-Item -LiteralPath $finished).LastWriteTime -ge (Get-Item -LiteralPath $updateScript).LastWriteTime)) {
+  throw "a runner self-update of $env:RF_NAME started in the last 30 minutes and hasn't finished; try again later"
 }
-foreach ($name in @('bin', 'externals')) {
-  if ((Test-Link (Join-Path $root $name)) -or (Test-Link (Join-Path $root "$name.fleet-previous"))) {
-    throw "$name or $name.fleet-previous in $root is a symlink or junction, a layout this upgrade doesn't handle; upgrade $env:RF_NAME by hand"
-  }
-}
-$binPath = Join-Path $root 'bin'
-$externalsPath = Join-Path $root 'externals'
-if (-not (Test-Path -LiteralPath $binPath) -and (Test-Path -LiteralPath "$binPath.fleet-previous") -and (Test-Path -LiteralPath $externalsPath) -and -not (Test-Path -LiteralPath "$externalsPath.fleet-previous")) {
-  Rename-Item -LiteralPath "$binPath.fleet-previous" -NewName 'bin'
-  Write-Output "Restored $binPath from an interrupted upgrade"
-}
-foreach ($path in @($binPath, $externalsPath)) {
-  if (-not (Test-Path -LiteralPath $path -PathType Container)) {
-    throw "$path is missing: an earlier upgrade of $env:RF_NAME was interrupted. With its service stopped, move bin.fleet-previous and externals.fleet-previous back to bin and externals (keeping a copy of whatever is there), then upgrade again."
-  }
+# A cleanup holds the maintenance lock while it works.
+$lock = Join-Path $root '.fleet-maintenance'
+if (Test-Path -LiteralPath $lock) {
+  $live = @((Get-Content -LiteralPath $lock -Raw) -split '\s+' | Where-Object { $_ -match '^\d+$' } | Where-Object { Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue })
+  if ($live.Count -gt 0) { throw "a cleanup is still working in $root; try again when it has finished" }
+  Remove-Item -LiteralPath $lock -Force
 }
 
+# Where bin or externals points, as a folder name in the root: bin.2.329.0, or
+# bin itself for a plain folder.
+function Get-Target([string]$Name) {
+  $path = Join-Path $root $Name
+  $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+  if (-not $item) { throw "$path is missing; repair it by hand" }
+  if (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return $Name }
+  $target = [IO.Path]::GetFullPath((@($item.Target)[0]))
+  $leaf = Split-Path -Leaf $target
+  if ((Split-Path -Parent $target) -ne $root -or -not $leaf.StartsWith("$Name.", [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $target -PathType Container)) {
+    throw "$path points outside the runner directory ($target); repair it by hand"
+  }
+  return $leaf
+}
+function Set-Link([string]$Name, [string]$Folder) {
+  $path = Join-Path $root $Name
+  if (Test-Link $path) { [IO.Directory]::Delete($path, $false) }
+  New-Item -ItemType Junction -Path $path -Target (Join-Path $root $Folder) | Out-Null
+}
+$marker = Join-Path $root '.fleet-upgrade-swap'
+# The marker names the folder that held the old version for bin and externals;
+# rolling back points each link at it again.
+function Restore-Marker {
+  foreach ($line in @(Get-Content -LiteralPath $marker)) {
+    $name, $previous = $line -split '=', 2
+    if ($name -notin @('bin', 'externals') -or -not $previous.StartsWith("$name.")) { continue }
+    $folder = Join-Path $root $previous
+    if (-not (Test-Path -LiteralPath $folder -PathType Container) -or (Test-Link $folder)) { continue }
+    $path = Join-Path $root $name
+    if ((Test-Link $path) -or -not (Test-Path -LiteralPath $path)) { Set-Link $name $previous }
+  }
+  Remove-Item -LiteralPath $marker -Force
+}
+if (Test-Path -LiteralPath $marker) {
+  Restore-Marker
+  Write-Output "Rolled back an interrupted upgrade of $env:RF_NAME"
+}
+
+$oldBin = Get-Target 'bin'
+$oldExternals = Get-Target 'externals'
 $current = (& (Join-Path $root 'bin\Runner.Listener.exe') --version 2>$null | Select-Object -Last 1)
-if ($current -eq $env:RF_VERSION) { Write-Output "$env:RF_NAME already runs $env:RF_VERSION"; exit 0 }
+if ($current -eq $version) { Write-Output "$env:RF_NAME already runs $version"; exit 0 }
+if (($oldBin -eq 'bin' -or $oldExternals -eq 'externals') -and $current -notmatch '^\d+\.\d+\.\d+$') {
+  throw "Can't tell which version $env:RF_NAME runs ('$current'), so its folders can't be kept as a rollback copy; refusing"
+}
+$keep = @{}
+foreach ($pair in @(@('bin', $oldBin), @('externals', $oldExternals))) {
+  $name, $old = $pair
+  $kept = if ($old -eq $name) { "$name.$current" } else { $old }
+  if ($old -eq $name -and (Test-Path -LiteralPath (Join-Path $root $kept))) { throw "$root\$name is a plain folder but $root\$kept already exists; inspect both before upgrading" }
+  if ($kept -eq "$name.$version") { throw "$env:RF_NAME's $name already points at $name.$version; nothing to swap" }
+  if (Test-Link (Join-Path $root "$name.$version")) { throw "$root\$name.$version is a symlink or junction; refusing" }
+  $keep[$name] = $kept
+}
 
 $stage = Join-Path $root ('.fleet-upgrade-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $stage | Out-Null
@@ -90,32 +148,29 @@ try {
   if (-not (Test-Path -LiteralPath $listener) -or -not (Test-Path -LiteralPath (Join-Path $extracted 'externals'))) {
     throw "$env:RF_ASSET_NAME does not contain bin\Runner.Listener.exe and externals"
   }
-  $version = (& $listener --version 2>$null | Select-Object -Last 1)
-  if ($version -ne $env:RF_VERSION) { throw "The downloaded runner reports version '$version', expected $env:RF_VERSION" }
+  $downloaded = (& $listener --version 2>$null | Select-Object -Last 1)
+  if ($downloaded -ne $version) { throw "The downloaded runner reports version '$downloaded', expected $version" }
+  # New folders beside the current ones; nothing points at them yet.
   foreach ($name in @('bin', 'externals')) {
-    $previous = Join-Path $root "$name.fleet-previous"
-    if (Test-Path -LiteralPath $previous) { Remove-Tree $previous }
+    $folder = Join-Path $root "$name.$version"
+    if (Test-Path -LiteralPath $folder) { Remove-Entry $folder }
+    Move-Item -LiteralPath (Join-Path $extracted $name) -Destination $folder
   }
+  Set-Content -LiteralPath $marker -Value "bin=$($keep['bin'])`nexternals=$($keep['externals'])"
   $swapping = $true
   foreach ($name in @('bin', 'externals')) {
-    Rename-Item -LiteralPath (Join-Path $root $name) -NewName "$name.fleet-previous"
-    Move-Item -LiteralPath (Join-Path $extracted $name) -Destination (Join-Path $root $name)
+    if ((Get-Target $name) -eq $name) { Rename-Item -LiteralPath (Join-Path $root $name) -NewName $keep[$name] }
+    Set-Link $name "$name.$version"
   }
+  Remove-Item -LiteralPath $marker -Force
   $swapping = $false
 } catch {
-  if ($swapping) {
-    foreach ($name in @('bin', 'externals')) {
-      $previous = Join-Path $root "$name.fleet-previous"
-      if (Test-Path -LiteralPath $previous) {
-        $current = Join-Path $root $name
-        if (Test-Path -LiteralPath $current) { Move-Item -LiteralPath $current -Destination (Join-Path $stage "failed-$name") }
-        Rename-Item -LiteralPath $previous -NewName $name
-      }
-    }
+  if ($swapping -and (Test-Path -LiteralPath $marker)) {
+    Restore-Marker
     Write-Warning "Restored the previous bin and externals of $env:RF_NAME"
   }
   throw
 } finally {
   if (Test-Path -LiteralPath $stage) { Remove-Entry $stage }
 }
-Write-Output "Replaced bin and externals of $env:RF_NAME with $env:RF_VERSION; the previous files are in bin.fleet-previous and externals.fleet-previous"
+Write-Output "Switched $env:RF_NAME to $version (bin -> bin.$version); the previous version stays beside it as the rollback copy"

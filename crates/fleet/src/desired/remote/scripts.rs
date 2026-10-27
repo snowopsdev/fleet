@@ -71,6 +71,26 @@ fn powershell_preamble(values: &[(&str, String)]) -> String {
         .collect()
 }
 
+/// Refuses while a live process holds `$root/.fleet-maintenance` (a cleanup is
+/// still removing files there); a lock whose processes are gone is stale and
+/// removed. Shared by every script that starts a runner.
+pub(super) const SH_LOCK_CHECK: &str = "lock=\"$root/.fleet-maintenance\"\n\
+if [ -f \"$lock\" ]; then\n\
+  for pid in $(cat \"$lock\" 2>/dev/null); do\n\
+    case \"$pid\" in ''|*[!0-9]*) continue ;; esac\n\
+    if kill -0 \"$pid\" 2>/dev/null; then echo \"a cleanup is still working in $root; not starting the runner until it finishes\" >&2; exit 5; fi\n\
+  done\n\
+  rm -f -- \"$lock\"\n\
+fi\n";
+
+/// [`SH_LOCK_CHECK`] for PowerShell, on `$path`.
+pub(super) const WIN_LOCK_CHECK: &str = "$lock = Join-Path $path '.fleet-maintenance'\n\
+if (Test-Path -LiteralPath $lock) {\n\
+  $live = @((Get-Content -LiteralPath $lock -Raw) -split '\\s+' | Where-Object { $_ -match '^\\d+$' } | Where-Object { Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue })\n\
+  if ($live.Count -gt 0) { throw \"a cleanup is still working in $path; not starting the runner until it finishes\" }\n\
+  Remove-Item -LiteralPath $lock -Force\n\
+}\n";
+
 /// Finds the Actions runner service whose executable lives under `$path`.
 pub(super) const WIN_FIND_SERVICE: &str = "$needle = $path.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar\n\
 $service = Get-CimInstance Win32_Service | Where-Object { $_.PathName.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $_.Name -like 'actions.runner.*' } | Select-Object -First 1\n";
@@ -94,7 +114,11 @@ pub(super) fn service_script(
 ) -> String {
     let (name, path) = role_target(host, runner, role);
     if host.is_windows_logon() && role == RunnerRole::Declared {
-        return windows_logon::task_script(&path, &runner.name, action);
+        return format!(
+            "$path = {}\n{WIN_LOCK_CHECK}{}",
+            ps_quote(&path),
+            windows_logon::task_script(&path, &runner.name, action)
+        );
     }
     if host.is_windows() {
         let (cmdlet, verb) = match action {
@@ -102,7 +126,7 @@ pub(super) fn service_script(
             ServiceAction::Restart => ("Restart-Service", "restarted"),
         };
         return format!(
-            "$ErrorActionPreference = 'Stop'\n$path = {}\n{WIN_FIND_SERVICE}\
+            "$ErrorActionPreference = 'Stop'\n$path = {}\n{WIN_LOCK_CHECK}{WIN_FIND_SERVICE}\
 if (-not $service) {{ throw \"No Actions runner service found for exact path $path\" }}\n\
 {cmdlet} -Name $service.Name\n\
 Write-Output \"{verb} $($service.Name)\"\n",
@@ -145,7 +169,7 @@ run_as_root systemctl restart {unit}\n"
         String::new()
     };
     format!(
-        "set -euo pipefail\nroot={root}\n{sudo}\n\
+        "set -euo pipefail\nroot={root}\n{sudo}\n{SH_LOCK_CHECK}\
 test -x \"$root/svc.sh\" || {{ echo \"missing svc.sh at $root\" >&2; exit 1; }}\n\
 cd \"$root\"\n\
 if [ -f /etc/NIXOS ]; then\n\
