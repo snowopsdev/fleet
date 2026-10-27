@@ -450,3 +450,37 @@ async fn connection_reuse_is_opt_in_and_uses_the_private_socket_directory() {
     assert!(engine.set_ssh_connection_reuse(true).is_err());
     assert!(!engine.config().ssh_connection_reuse);
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn shared_masters_are_recycled_when_ssh_targets_change_and_when_the_app_quits() {
+    let probe = Arc::new(SharingProbe::default());
+    let (dir, engine) = fixture(probe.clone(), INVENTORY);
+    let sockets = tempfile::Builder::new().prefix("rd").tempdir_in("/tmp").unwrap();
+    let control = sockets.path().join("ssh");
+    let engine = engine.with_ssh_control_dir(&control);
+    engine.poll_tailscale().await;
+    engine.set_ssh_connection_reuse(true).unwrap();
+    // A socket left over from an earlier run is removed at the first shared read.
+    let socket = control.join("leftover");
+    let mut listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    engine.poll_machines().await;
+    assert!(!socket.exists(), "the first shared read starts fresh masters");
+    drop(listener);
+    // The same targets keep their masters...
+    listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    engine.poll_machines().await;
+    assert!(socket.exists());
+    // ...until the inventory's SSH target changes.
+    std::fs::write(
+        dir.path().join("fleet.toml"),
+        INVENTORY.replace("mini-alias", "mini.demo.ts.net"),
+    )
+    .unwrap();
+    engine.poll_machines().await;
+    assert!(!socket.exists(), "a changed SSH target recycles the masters");
+    drop(listener);
+    let _listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    engine.close_shared_ssh();
+    assert!(!socket.exists(), "quitting removes the sockets");
+}

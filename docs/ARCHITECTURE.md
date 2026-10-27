@@ -50,8 +50,12 @@ agent forwarding and no port forwarding. Settings ▸ General can turn on shared
 app refuses to use unless it's a real directory owned by the user, short enough for macOS's
 104-byte socket paths. Dead masters are detected with server-alive probes; OpenSSH replaces a
 socket whose master is gone, and other mux failures repeat the read once without sharing.
-Turning it off deletes the sockets. Reviewed changes and `tailscale ssh` never share
-connections. Scripts travel on stdin, never as long command-line
+Turning it off, quitting the app, changing the inventory's SSH targets (or what `ssh -G`
+resolves them to) and every 30 minutes delete the sockets, so masters close within two minutes
+and changed keys, known hosts and configuration apply to the next connection. While a master
+is open, any process running as this user can use its socket to run commands on that machine
+without a key, passphrase or security-key prompt; the setting says so. Reviewed changes and
+`tailscale ssh` never share connections. Scripts travel on stdin, never as long command-line
 arguments; Windows scripts are a base64 line read with `[Console]::In.ReadLine()`, so nothing
 waits on stdin EOF through cmd.exe. Discovered machines outside the inventory can report health
 using their tailnet address and advertised Tailscale SSH, or this Mac's OpenSSH configuration;

@@ -211,6 +211,8 @@ pub fn run() {
                 && let Some(engine) = app.try_state::<Arc<Engine>>()
             {
                 engine.stop_job_feeds();
+                // Leave no socket another program running as this user could use.
+                engine.close_shared_ssh();
             }
         });
 }

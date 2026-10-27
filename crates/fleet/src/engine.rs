@@ -42,6 +42,8 @@ pub struct Engine {
     machine_source: Arc<dyn crate::machine::MachineSource>,
     /// Where shared SSH connections keep their sockets, when the setting is on.
     ssh_control_dir: PathBuf,
+    /// When shared SSH masters were started, and the SSH targets they were opened against.
+    ssh_control_epoch: Mutex<Option<(std::time::Instant, String)>>,
     wake_sender: Arc<dyn crate::wake::WakeSender>,
     wake_reviews: Mutex<waking::WakeReviews>,
     machine_poll: tokio::sync::Mutex<()>,
@@ -103,6 +105,7 @@ impl Engine {
             desired_io: desired::DesiredIo::default(),
             machine_source: Arc::new(crate::machine::remote_client()),
             ssh_control_dir: crate::ssh_reuse::ControlDir::default_path(),
+            ssh_control_epoch: Mutex::default(),
             wake_sender: Arc::new(crate::machine::remote_client()),
             wake_reviews: Mutex::default(),
             machine_poll: tokio::sync::Mutex::new(()),

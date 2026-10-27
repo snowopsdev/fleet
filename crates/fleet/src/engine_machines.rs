@@ -9,6 +9,11 @@ use super::{Engine, EngineError};
 use crate::machine::{MachineSource, MachineTarget};
 use crate::model::{MachineObservation, MachinePreferences, Timed, inventory_machine_key};
 use crate::ssh_reuse::ControlDir;
+use crate::sync::MutexExt;
+
+/// Shared SSH masters are replaced at least this often, since a master keeps the
+/// authentication and configuration it started with.
+pub const RECYCLE_MASTERS_AFTER: std::time::Duration = std::time::Duration::from_secs(30 * 60);
 use crate::sync::RwLockExt;
 
 impl Engine {
@@ -74,21 +79,42 @@ impl Engine {
             ControlDir::prepare(&self.ssh_control_dir).map_err(EngineError::Invalid)?;
         }
         self.update_config(|c| c.ssh_connection_reuse = on)?;
-        if !on && let Ok(control) = ControlDir::prepare(&self.ssh_control_dir) {
-            control.close_all();
+        if !on {
+            self.close_shared_ssh();
         }
         Ok(())
     }
 
     /// The verified socket directory when connection reuse is on. If the directory isn't
-    /// safe, checks fall back to separate connections.
-    fn ssh_control(&self) -> Option<ControlDir> {
+    /// safe, checks fall back to separate connections. Masters are recycled when the
+    /// inventory's SSH targets or their resolved configuration change, after
+    /// [`RECYCLE_MASTERS_AFTER`], and at the first use after launch, so changed SSH
+    /// configuration, keys and known hosts take effect.
+    fn ssh_control(&self, connections: &str) -> Option<ControlDir> {
         if !self.config().ssh_connection_reuse {
             return None;
         }
-        ControlDir::prepare(&self.ssh_control_dir)
+        let control = ControlDir::prepare(&self.ssh_control_dir)
             .inspect_err(|e| tracing::warn!("{e}"))
-            .ok()
+            .ok()?;
+        let mut epoch = self.ssh_control_epoch.locked();
+        let current = epoch
+            .as_ref()
+            .is_some_and(|(since, seen)| since.elapsed() < RECYCLE_MASTERS_AFTER && seen == connections);
+        if !current {
+            control.close_all();
+            *epoch = Some((std::time::Instant::now(), connections.to_string()));
+        }
+        Some(control)
+    }
+
+    /// Stops sharing SSH connections: removes the sockets so no session joins an open master.
+    /// Call when the app quits.
+    pub fn close_shared_ssh(&self) {
+        if let Ok(control) = ControlDir::prepare(&self.ssh_control_dir) {
+            control.close_all();
+        }
+        *self.ssh_control_epoch.locked() = None;
     }
 
     /// Read health and runner state, with at most four concurrent SSH sessions.
@@ -111,8 +137,17 @@ impl Engine {
             return;
         }
 
+        // What shared SSH masters were opened against: a change recycles them.
+        let mut connections = String::new();
         if let Ok(inventory) = self.read_inventory().await {
-            self.resolve_ssh_hosts(&inventory).await;
+            let resolved = self.resolve_ssh_hosts(&inventory).await;
+            for host in &inventory.hosts {
+                connections.push_str(&format!(
+                    "{}\t{:?}\t{:?}\n",
+                    host.id, host.ssh_target, host.ssh_transport
+                ));
+            }
+            connections.push_str(&format!("{resolved:?}"));
         }
         let view = self.view();
         let targets = view
@@ -132,7 +167,7 @@ impl Engine {
             })
             .collect::<Vec<_>>();
         let source = &self.machine_source;
-        let control = self.ssh_control();
+        let control = self.ssh_control(&connections);
         let mut reads = stream::iter(targets.into_iter().map(|(id, target)| {
             let source = source.clone();
             let control = control.clone();

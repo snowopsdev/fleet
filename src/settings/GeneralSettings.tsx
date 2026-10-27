@@ -85,9 +85,10 @@ function SshReuse({ enabled }: { enabled: boolean }) {
           <div className="min-w-0 flex-1 text-[12.5px] text-ink-2">
             Keep one OpenSSH connection open per machine for up to two minutes after each check, so the
             minute-by-minute health checks skip a full handshake. Only these read-only checks share it; reviewed
-            changes and <span className="mono">tailscale ssh</span> machines always connect separately. An open connection
-            keeps the authentication it started with, so a revoked key or a changed SSH configuration takes effect once
-            it closes. Turning this off closes shared connections within two minutes.
+            changes and <span className="mono">tailscale ssh</span> machines always connect separately. While a shared
+            connection is open, any program running as you on this Mac can use it to run commands on that machine without
+            your key, passphrase or security-key touch. Connections are replaced every 30 minutes and when the inventory's
+            SSH targets change, and closed when the app quits; turning this off closes them within two minutes.
           </div>
           <Switch checked={enabled} label="Shared SSH connections" disabled={!isTauri || toggle.isPending} onChange={() => toggle.mutate()} />
         </div>
