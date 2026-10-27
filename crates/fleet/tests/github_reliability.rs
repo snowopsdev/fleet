@@ -105,8 +105,8 @@ async fn link_pagination_survives_conditional_cached_responses() {
     assert_eq!(first.jobs.iter().map(|job| job.id).collect::<Vec<_>>(), vec![1, 2]);
     assert!(!first.truncated);
     assert_eq!(first, second);
-    // Two scans, each listing in-progress runs (two pages), queued runs and waiting runs.
-    assert_eq!(hits.load(Ordering::SeqCst), 8);
+    // Two scans, each listing in-progress runs (two pages) and queued, waiting, pending and requested runs.
+    assert_eq!(hits.load(Ordering::SeqCst), 12);
 }
 
 #[tokio::test]
@@ -196,13 +196,13 @@ async fn run_and_job_bounds_each_mark_scan_incomplete() {
     assert_eq!(runs.jobs.len(), 1);
     assert_eq!(
         (run_hits, job_hits),
-        (8, 1),
-        "in-progress and waiting runs are both capped"
+        (16, 1),
+        "in-progress, waiting, pending and requested runs are each capped"
     );
     let (jobs, run_hits, job_hits) = capped_scan(false, true).await;
     assert!(jobs.truncated);
     assert_eq!(jobs.jobs.len(), 10);
-    assert_eq!((run_hits, job_hits), (2, 10));
+    assert_eq!((run_hits, job_hits), (4, 10));
 }
 
 #[tokio::test]

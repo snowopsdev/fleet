@@ -70,9 +70,11 @@ always uses demo data.
    A **personal account** can't have organization runners: add it as a personal account and
    list the repositories whose runners to show. An organization can list repositories too, for
    runners registered to a repository. Listing a repository's runners needs admin access to it
-   (fine-grained **Administration: Read**; gh and classic tokens: the `repo` scope). Personal
-   accounts and repository runners are monitored only; inventory changes apply to organization
-   runners.
+   (fine-grained **Administration: Read**; gh and classic tokens: the `repo` scope). A
+   repository that can't be listed is reported on its own, without hiding other runners. For a
+   personal account, sign in as its owner (or a collaborator): recently pushed repositories come
+   from the signed-in user's repository list. Personal accounts and repository runners are
+   monitored only; inventory changes apply to organization runners.
 3. Machines come from your tailnet; there's no Add step. Machines in the inventory or with
    runners on GitHub are listed under **Machines**. Other desktop and server machines sit in a
    collapsed **Other machines** group, where you can **Ignore** them (reversible under
@@ -88,11 +90,12 @@ Health and inventory runner paths are read over SSH every minute, with at most f
 a time. A failed or overdue check keeps the last successful values, marked stale; a metric that
 can't be collected shows as unknown. Busy/idle and job details come from GitHub.
 
-Each runner's version is compared with the latest `actions/runner` release, read hourly. The
-runner pane and overview show runners that are behind; Needs attention lists them once the
-release is a week old, and calls an update overdue when a runner is more than one minor release
-behind or the release is over 30 days old, since GitHub can then stop sending it jobs. Jobs
-waiting for an approval or a concurrency group are counted on the queue page, not listed.
+Each runner's version is compared with recent `actions/runner` releases, read hourly. The
+runner pane and overview show runners that are behind. Needs attention lists a runner once the
+oldest release it's missing is a week old, and calls the update overdue when the runner is more
+than one minor release behind or has missed a release for over 30 days, since GitHub can then
+stop sending it jobs. Jobs waiting for an approval or a concurrency group are counted on the
+queue page, not listed.
 
 **Machine diagnostics** on each machine pane covers Tailscale, SSH and startup, power settings,
 SSH identity, disk capacity and runner services. It runs with the minute-by-minute check,

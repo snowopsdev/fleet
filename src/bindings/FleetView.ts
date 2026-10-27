@@ -39,6 +39,6 @@ plan: FleetPlanStatus, orgs: Array<OrgStatusView>, tailnet: TailnetStatusView, m
  */
 activity: FleetActivity, 
 /**
- * The latest `actions/runner` release, when it has been read.
+ * The latest `actions/runner` release, when releases have been read.
  */
 runnerRelease: RunnerReleaseView | null, };

@@ -3,9 +3,14 @@ import type { AccountKind } from "./AccountKind";
 import type { OrgAuth } from "./OrgAuth";
 import type { RateLimit } from "./RateLimit";
 import type { RepoScope } from "./RepoScope";
+import type { RunnerRepoError } from "./RunnerRepoError";
 
 export type OrgStatusView = { login: string, hasToken: boolean, runnersAsOf: string | null, jobsAsOf: string | null, reposScanned: number, jobsTruncated: boolean, error: string | null, rateLimit: RateLimit | null, 
 /**
  * Polling is paused until then because GitHub rate-limited the account.
  */
-rateLimitedUntil: string | null, repoScope: RepoScope, auth: OrgAuth, kind: AccountKind, runnerRepos: Array<string>, };
+rateLimitedUntil: string | null, repoScope: RepoScope, auth: OrgAuth, kind: AccountKind, runnerRepos: Array<string>, 
+/**
+ * Runner repositories whose runners couldn't be listed; their last runners are kept.
+ */
+runnerRepoErrors: Array<RunnerRepoError>, };

@@ -355,6 +355,7 @@
             "latest": "2.329.0",
             "latestPublishedAt": "2026-09-21T12:00:00Z",
             "updateAvailable": true,
+            "missingSince": "2026-09-21T12:00:00Z",
             "minorVersionsBehind": 1,
             "overdue": false
           }
@@ -433,6 +434,7 @@
             "latest": "2.329.0",
             "latestPublishedAt": "2026-09-21T12:00:00Z",
             "updateAvailable": false,
+            "missingSince": null,
             "minorVersionsBehind": 0,
             "overdue": false
           }
@@ -777,6 +779,7 @@
             "latest": "2.329.0",
             "latestPublishedAt": "2026-09-21T12:00:00Z",
             "updateAvailable": false,
+            "missingSince": null,
             "minorVersionsBehind": 0,
             "overdue": false
           }
@@ -1254,6 +1257,7 @@
             "latest": "2.329.0",
             "latestPublishedAt": "2026-09-21T12:00:00Z",
             "updateAvailable": false,
+            "missingSince": null,
             "minorVersionsBehind": 0,
             "overdue": false
           }
@@ -1332,6 +1336,7 @@
             "latest": "2.329.0",
             "latestPublishedAt": "2026-09-21T12:00:00Z",
             "updateAvailable": false,
+            "missingSince": null,
             "minorVersionsBehind": 0,
             "overdue": false
           }
@@ -1405,6 +1410,7 @@
             "latest": "2.329.0",
             "latestPublishedAt": "2026-09-21T12:00:00Z",
             "updateAvailable": true,
+            "missingSince": "2026-07-25T12:00:00Z",
             "minorVersionsBehind": 8,
             "overdue": true
           }
@@ -1749,6 +1755,7 @@
             "latest": "2.329.0",
             "latestPublishedAt": "2026-09-21T12:00:00Z",
             "updateAvailable": false,
+            "missingSince": null,
             "minorVersionsBehind": 0,
             "overdue": false
           }
@@ -1929,6 +1936,7 @@
         "latest": "2.329.0",
         "latestPublishedAt": "2026-09-21T12:00:00Z",
         "updateAvailable": false,
+        "missingSince": null,
         "minorVersionsBehind": 0,
         "overdue": false
       }
@@ -2049,7 +2057,8 @@
       "kind": "organization",
       "runnerRepos": [
         "ml"
-      ]
+      ],
+      "runnerRepoErrors": []
     }
   ],
   "tailnet": {

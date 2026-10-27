@@ -7,6 +7,8 @@
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
+use chrono::{DateTime, Utc};
+
 use crate::model::FleetView;
 
 /// An opaque fingerprint of `view`'s content, excluding `generatedAt`.
@@ -24,27 +26,43 @@ pub fn revision(view: &FleetView) -> Result<String, serde_json::Error> {
     Ok(format!("{:016x}", hash.finish()))
 }
 
-/// Remembers the last pushed revision so unchanged periodic re-derivations aren't pushed,
-/// except for a heartbeat that keeps "updated" times current.
+/// The last view pushed to the UI.
+#[derive(Debug)]
+struct Pushed {
+    revision: String,
+    generated_at: DateTime<Utc>,
+    at: Instant,
+}
+
+/// Remembers the last pushed view so unchanged periodic re-derivations aren't pushed, except
+/// for a heartbeat that keeps "updated" times current, and so a periodic view derived before
+/// the latest push never replaces it.
 #[derive(Debug, Default)]
 pub struct ViewPushes {
-    last: Option<(String, Instant)>,
+    last: Option<Pushed>,
 }
 
 impl ViewPushes {
     /// The longest an unchanged view goes without a push.
     pub const HEARTBEAT: Duration = Duration::from_secs(30);
 
-    /// Whether a periodic re-derivation with `revision` should be pushed at `now`.
-    pub fn due(&self, revision: &str, now: Instant) -> bool {
-        self.last
-            .as_ref()
-            .is_none_or(|(last, at)| last != revision || now.saturating_duration_since(*at) >= Self::HEARTBEAT)
+    /// Whether a periodic re-derivation with `revision`, generated at `generated_at`, should be
+    /// pushed at `now`. A view older than the last push is never due: a poll pushed newer data
+    /// while this one was being recorded.
+    pub fn due(&self, revision: &str, generated_at: DateTime<Utc>, now: Instant) -> bool {
+        self.last.as_ref().is_none_or(|last| {
+            generated_at >= last.generated_at
+                && (last.revision != revision || now.saturating_duration_since(last.at) >= Self::HEARTBEAT)
+        })
     }
 
     /// Record any push, periodic or not.
-    pub fn pushed(&mut self, revision: String, now: Instant) {
-        self.last = Some((revision, now));
+    pub fn pushed(&mut self, revision: String, generated_at: DateTime<Utc>, now: Instant) {
+        self.last = Some(Pushed {
+            revision,
+            generated_at,
+            at: now,
+        });
     }
 }
 
@@ -53,17 +71,34 @@ mod tests {
     use super::*;
     use crate::derive::derive;
     use crate::model::DataSource;
-    use chrono::{TimeZone, Utc};
+    use chrono::TimeZone;
 
     #[test]
     fn unchanged_views_wait_for_the_heartbeat() {
         let start = Instant::now();
+        let at = Utc.with_ymd_and_hms(2026, 10, 3, 12, 0, 0).unwrap();
         let mut pushes = ViewPushes::default();
-        assert!(pushes.due("a", start));
-        pushes.pushed("a".into(), start);
-        assert!(!pushes.due("a", start + Duration::from_secs(5)));
-        assert!(pushes.due("b", start + Duration::from_secs(5)));
-        assert!(pushes.due("a", start + ViewPushes::HEARTBEAT));
+        assert!(pushes.due("a", at, start));
+        pushes.pushed("a".into(), at, start);
+        assert!(!pushes.due("a", at, start + Duration::from_secs(5)));
+        assert!(pushes.due("b", at, start + Duration::from_secs(5)));
+        assert!(pushes.due("a", at, start + ViewPushes::HEARTBEAT));
+    }
+
+    #[test]
+    fn a_periodic_view_older_than_the_last_push_is_dropped() {
+        let start = Instant::now();
+        let tick = Utc.with_ymd_and_hms(2026, 10, 3, 12, 0, 0).unwrap();
+        let mut pushes = ViewPushes::default();
+        // A poll pushed a newer view while the tick's view was being recorded.
+        pushes.pushed("poll".into(), tick + chrono::Duration::seconds(1), start);
+        assert!(!pushes.due("tick", tick, start + Duration::from_secs(1)));
+        assert!(!pushes.due("tick", tick, start + ViewPushes::HEARTBEAT));
+        assert!(pushes.due(
+            "next",
+            tick + chrono::Duration::seconds(5),
+            start + Duration::from_secs(5)
+        ));
     }
 
     #[test]
