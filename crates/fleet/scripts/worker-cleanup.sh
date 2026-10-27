@@ -75,8 +75,9 @@ out_of_time() { [ "$(date +%s)" -ge "$deadline" ]; }
 # du, docker and anything they started) is stopped and waited for, so nothing
 # keeps removing files after the lock is released. Returns the command's
 # status; 123 if the deadline had passed before it started (nothing ran); 124
-# if it was stopped part-way; 125 if it couldn't be confirmed stopped (its
-# lock is then kept: fail closed).
+# if it was stopped part-way. If the group can't be confirmed stopped, the
+# whole script exits 125 (fail closed: the lock is kept, and the app holds
+# every runner it stopped).
 current_job=""
 bounded() {
   local lock="$1" pid
@@ -94,7 +95,11 @@ bounded() {
       local stopped=$?
       current_job=""
       [ "$stopped" = 0 ] && return 124
-      return 125
+      # Something in the group outlived TERM and KILL: it may still be
+      # removing files. Fail the whole cleanup, so the app holds every runner
+      # it stopped instead of starting any; release_locks keeps the lock.
+      echo "a cleanup job couldn't be confirmed stopped; the maintenance lock stays and every stopped runner stays held" >&2
+      exit 125
     fi
     sleep 0.2
   done

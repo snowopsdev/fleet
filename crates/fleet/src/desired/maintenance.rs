@@ -464,8 +464,10 @@ impl Ops<'_> {
                 // A removal the host's deadline stopped part-way leaves that
                 // runner's directory half-emptied: it stays stopped and held. A
                 // machine-wide one touched no runner directory, and the host
-                // script reports it only once the removal has fully stopped, so
-                // the runners stopped for it start as usual.
+                // script reports it only once the removal has fully stopped (if
+                // it can't confirm that, the script fails and the error branch
+                // below holds every stopped runner), so the runners stopped for
+                // it start as usual.
                 let partial: BTreeSet<String> = outcomes
                     .iter()
                     .filter(|o| o.timed_out)
