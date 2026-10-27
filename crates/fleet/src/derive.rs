@@ -89,15 +89,20 @@ pub(crate) fn derive_without_issues(
         plan: plan_status(plan, checked.as_ref()),
         monitoring: crate::monitoring::FleetMonitoring::default(),
         automation: crate::automation::FleetAutomation::default(),
-        runner_release: obs.runner_release.as_ref().map(|r| RunnerReleaseView {
-            version: r.value.version.clone(),
-            published_at: r.value.published_at,
-            checked_at: r.at,
+        activity: crate::jobs::FleetActivity::default(),
+        runner_release: obs.runner_releases.as_ref().and_then(|list| {
+            let latest = crate::runner_version::latest(&list.value)?;
+            Some(RunnerReleaseView {
+                version: latest.version.clone(),
+                published_at: latest.published_at,
+                checked_at: list.at,
+            })
         }),
     };
     if source == DataSource::Demo {
         crate::monitoring::demo::attach(&mut view, now);
         crate::automation::demo::attach(&mut view, now);
+        crate::jobs::demo::attach(&mut view, now);
     }
     view
 }
@@ -183,7 +188,7 @@ struct GithubIndex {
     by_name: HashMap<(String, String), usize>,
     /// (org, runner id) -> in-progress job
     jobs_by_runner: HashMap<(String, u64), GhJob>,
-    release: Option<RunnerRelease>,
+    releases: Vec<RunnerRelease>,
     now: DateTime<Utc>,
 }
 
@@ -193,15 +198,20 @@ impl GithubIndex {
             runners: Vec::new(),
             by_name: HashMap::new(),
             jobs_by_runner: HashMap::new(),
-            release: obs.runner_release.as_ref().map(|r| r.value.clone()),
+            releases: obs
+                .runner_releases
+                .as_ref()
+                .map(|r| r.value.clone())
+                .unwrap_or_default(),
             now,
         };
         for org_cfg in &config.orgs {
             let org = org_cfg.login.to_lowercase();
             let Some(o) = obs.github.get(&org) else { continue };
-            if let Some(runners) = &o.runners {
+            let mut seen = HashSet::new();
+            for runners in o.runner_lists() {
                 let stale = now - runners.at > GITHUB_STALE_AFTER;
-                for r in &runners.value {
+                for r in runners.value.iter().filter(|r| seen.insert(r.id)) {
                     let i = idx.runners.len();
                     if r.repo.is_none() {
                         idx.by_name.insert((org.clone(), r.name.to_lowercase()), i);
@@ -302,8 +312,7 @@ fn runner_view(
         .as_ref()
         .and_then(|g| g.version.as_deref())
         .or_else(|| local_facts.as_ref().and_then(|l| l.version.as_deref()))
-        .zip(gh.release.as_ref())
-        .and_then(|(current, release)| crate::runner_version::status(current, release, gh.now));
+        .and_then(|current| crate::runner_version::status(current, &gh.releases, gh.now));
 
     let current_job = gh_entry
         .and_then(|e| gh.jobs_by_runner.get(&(e.org.clone(), e.runner.id)))
@@ -555,11 +564,54 @@ fn org_statuses(config: &AppConfig, obs: &Observations) -> Vec<OrgStatusView> {
                 rate_limited_until: o.and_then(|o| o.rate_limited_until),
                 repo_scope: cfg.repo_scope.clone(),
                 auth: cfg.auth,
+                public_runner_groups: o.map(public_runner_groups).unwrap_or_default(),
                 kind: cfg.kind,
                 runner_repos: cfg.runner_repos.clone(),
+                runner_repo_errors: o
+                    .map(|o| {
+                        o.repo_runner_errors
+                            .iter()
+                            .map(|(repo, e)| RunnerRepoError {
+                                repo: cfg
+                                    .runner_repos
+                                    .iter()
+                                    .find(|r| r.eq_ignore_ascii_case(repo))
+                                    .unwrap_or(repo)
+                                    .clone(),
+                                error: e.value.clone(),
+                                at: e.at,
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
             }
         })
         .collect();
     orgs.sort_by_key(|o| o.login.to_lowercase());
     orgs
+}
+
+/// Groups that allow public repositories and hold at least one of the org's runners.
+fn public_runner_groups(org: &OrgObservation) -> Vec<PublicRunnerGroup> {
+    let (Some(groups), Some(runners)) = (&org.runner_groups, &org.runners) else {
+        return Vec::new();
+    };
+    groups
+        .value
+        .iter()
+        .filter(|g| g.allows_public_repositories)
+        .filter_map(|group| {
+            let mut members: Vec<String> = runners
+                .value
+                .iter()
+                .filter(|r| r.runner_group_id == Some(group.id))
+                .map(|r| r.name.clone())
+                .collect();
+            members.sort_by_key(|n| n.to_lowercase());
+            (!members.is_empty()).then(|| PublicRunnerGroup {
+                name: group.name.clone(),
+                runners: members,
+            })
+        })
+        .collect()
 }

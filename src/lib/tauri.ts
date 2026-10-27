@@ -10,13 +10,19 @@ import type { FleetMachineEvent } from "../bindings/FleetMachineEvent";
 import type { ChangeRequest } from "../bindings/ChangeRequest";
 import type { ChangeSecrets } from "../bindings/ChangeSecrets";
 import type { ReviewView } from "../bindings/ReviewView";
+import type { FleetWakeReview } from "../bindings/FleetWakeReview";
 import type { GhStatus } from "../bindings/GhStatus";
 import type { FleetAlertDestinationInput } from "../bindings/FleetAlertDestinationInput";
 import type { FleetPublishSettings } from "../bindings/FleetPublishSettings";
 import type { AccountKind } from "../bindings/AccountKind";
 import type { OrgAuth } from "../bindings/OrgAuth";
 import type { RepoScope } from "../bindings/RepoScope";
-import { previewFleet } from "./preview";
+import type { FleetAnalytics } from "../bindings/FleetAnalytics";
+import type { FleetAnalyticsWindow } from "../bindings/FleetAnalyticsWindow";
+import type { FleetHostedRates } from "../bindings/FleetHostedRates";
+import type { FleetJobHistoryFilter } from "../bindings/FleetJobHistoryFilter";
+import type { FleetJobHistoryPage } from "../bindings/FleetJobHistoryPage";
+import { previewActivity, previewFleet } from "./preview";
 
 const previewConfigEvents = new EventTarget();
 
@@ -43,7 +49,7 @@ async function updateConfig(cmd: string, args?: Record<string, unknown>): Promis
 export const commands = {
   getFleet: (): Promise<FleetView> => (isTauri ? invoke("get_fleet") : Promise.resolve(previewFleet())),
   getConfig: (): Promise<AppConfig> =>
-    isTauri ? invoke("get_config") : Promise.resolve({ orgs: [], ignoredPeers: [], machinePreferences: {}, demoMode: true, localApi: false, desktopNotifications: false, inventoryPath: null, automation: { watchdog: false, alertDestinations: [], publish: { enabled: false, variable: "RUNNER_FLEET_STATUS", intervalMinutes: 5 } } }),
+    isTauri ? invoke("get_config") : Promise.resolve({ orgs: [], ignoredPeers: [], machinePreferences: {}, demoMode: true, localApi: false, desktopNotifications: false, inventoryPath: null, automation: { watchdog: false, alertDestinations: [], publish: { enabled: false, variable: "RUNNER_FLEET_STATUS", intervalMinutes: 5 } }, jobActivity: { hostedRates: { linux: 0.006, windows: 0.01, macos: 0.062, asOf: "2026-10-26" }, feedOrgs: [] }, sshConnectionReuse: false }),
   refreshNow: () => invoke<void>("refresh_now"),
   addOrg: (login: string, auth: OrgAuth, token: string | null, repoScope: RepoScope, kind: AccountKind = "organization", runnerRepos: string[] = []) =>
     updateConfig("add_org", { login, auth, token, repoScope, kind, runnerRepos }),
@@ -87,6 +93,17 @@ export const commands = {
   saveAlertDestination: (destination: FleetAlertDestinationInput) => invoke<string>("save_alert_destination", { destination }),
   removeAlertDestination: (id: string) => invoke<void>("remove_alert_destination", { id }),
   testAlertDestination: (id: string) => invoke<void>("test_alert_destination", { id }),
+  // Wake-on-LAN: reviewed first, then sent once from the machine's wake_via host.
+  wakeReview: (id: string) => invoke<FleetWakeReview>("wake_review", { id }),
+  wakeExecute: (reviewId: string) => invoke<string>("wake_execute", { reviewId }),
+
+  // Completed-job history and analytics (local data only), and the optional job feed.
+  getJobHistory: (filter: FleetJobHistoryFilter): Promise<FleetJobHistoryPage> =>
+    isTauri ? invoke("get_job_history", { filter }) : Promise.resolve(previewHistory(filter)),
+  getAnalytics: (window: FleetAnalyticsWindow): Promise<FleetAnalytics> =>
+    isTauri ? invoke("get_analytics", { window }) : Promise.resolve(previewActivity().analytics[window]),
+  setHostedRates: (rates: FleetHostedRates) => updateConfig("set_hosted_rates", { rates }),
+  setJobFeed: (org: string, enabled: boolean) => updateConfig("set_job_feed", { org, enabled }),
 
   // Local read-only API for agents
   getLocalApiStatus: (): Promise<LocalApiStatus> =>
@@ -94,7 +111,19 @@ export const commands = {
       ? invoke("get_local_api_status")
       : Promise.resolve({ enabled: false, url: null, error: "Only in the desktop app", discoveryFile: null }),
   setLocalApi: (on: boolean) => updateConfig("set_local_api", { on }),
+  setSshConnectionReuse: (on: boolean) => updateConfig("set_ssh_connection_reuse", { on }),
 };
+
+/** The preview fixture's first history page, filtered like the desktop app's first page. */
+function previewHistory(filter: FleetJobHistoryFilter): FleetJobHistoryPage {
+  const page = previewActivity().history;
+  if (filter.before || filter.after) return { ...page, jobs: [], hasMore: false, nextCursor: null };
+  const jobs = page.jobs.filter((j) =>
+    (!filter.runnerKey || j.runnerKey === filter.runnerKey)
+    && (!filter.machineKey || j.machineKey === filter.machineKey)
+    && (!filter.conclusion || j.conclusion === filter.conclusion));
+  return { ...page, jobs: jobs.slice(0, filter.limit ?? 50), hasMore: false, nextCursor: null };
+}
 
 /** Mirrors `LocalApiStatus` in src-tauri/src/local_api.rs, which has no generated binding. */
 export interface LocalApiStatus {

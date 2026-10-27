@@ -1,0 +1,4541 @@
+{
+  "analytics": {
+    "24h": {
+      "buckets": [
+        {
+          "busySecs": 5883,
+          "jobs": 4,
+          "start": "2026-10-02T12:00:00Z"
+        },
+        {
+          "busySecs": 2372,
+          "jobs": 5,
+          "start": "2026-10-02T13:00:00Z"
+        },
+        {
+          "busySecs": 7444,
+          "jobs": 7,
+          "start": "2026-10-02T14:00:00Z"
+        },
+        {
+          "busySecs": 5163,
+          "jobs": 8,
+          "start": "2026-10-02T15:00:00Z"
+        },
+        {
+          "busySecs": 7777,
+          "jobs": 6,
+          "start": "2026-10-02T16:00:00Z"
+        },
+        {
+          "busySecs": 3010,
+          "jobs": 5,
+          "start": "2026-10-02T17:00:00Z"
+        },
+        {
+          "busySecs": 4958,
+          "jobs": 3,
+          "start": "2026-10-02T18:00:00Z"
+        },
+        {
+          "busySecs": 5587,
+          "jobs": 9,
+          "start": "2026-10-02T19:00:00Z"
+        },
+        {
+          "busySecs": 7758,
+          "jobs": 6,
+          "start": "2026-10-02T20:00:00Z"
+        },
+        {
+          "busySecs": 4983,
+          "jobs": 7,
+          "start": "2026-10-02T21:00:00Z"
+        },
+        {
+          "busySecs": 3243,
+          "jobs": 5,
+          "start": "2026-10-02T22:00:00Z"
+        },
+        {
+          "busySecs": 5563,
+          "jobs": 7,
+          "start": "2026-10-02T23:00:00Z"
+        },
+        {
+          "busySecs": 4789,
+          "jobs": 6,
+          "start": "2026-10-03T00:00:00Z"
+        },
+        {
+          "busySecs": 5244,
+          "jobs": 6,
+          "start": "2026-10-03T01:00:00Z"
+        },
+        {
+          "busySecs": 7058,
+          "jobs": 5,
+          "start": "2026-10-03T02:00:00Z"
+        },
+        {
+          "busySecs": 1396,
+          "jobs": 4,
+          "start": "2026-10-03T03:00:00Z"
+        },
+        {
+          "busySecs": 6787,
+          "jobs": 6,
+          "start": "2026-10-03T04:00:00Z"
+        },
+        {
+          "busySecs": 5567,
+          "jobs": 8,
+          "start": "2026-10-03T05:00:00Z"
+        },
+        {
+          "busySecs": 7902,
+          "jobs": 6,
+          "start": "2026-10-03T06:00:00Z"
+        },
+        {
+          "busySecs": 5041,
+          "jobs": 6,
+          "start": "2026-10-03T07:00:00Z"
+        },
+        {
+          "busySecs": 9025,
+          "jobs": 8,
+          "start": "2026-10-03T08:00:00Z"
+        },
+        {
+          "busySecs": 5676,
+          "jobs": 7,
+          "start": "2026-10-03T09:00:00Z"
+        },
+        {
+          "busySecs": 2808,
+          "jobs": 4,
+          "start": "2026-10-03T10:00:00Z"
+        },
+        {
+          "busySecs": 4890,
+          "jobs": 6,
+          "start": "2026-10-03T11:00:00Z"
+        }
+      ],
+      "from": "2026-10-02T12:00:00Z",
+      "hostedCost": {
+        "lines": [
+          {
+            "jobs": 48,
+            "minutes": 736,
+            "os": "linux",
+            "rate": 0.006,
+            "usd": 4.416
+          },
+          {
+            "jobs": 7,
+            "minutes": 91,
+            "os": "windows",
+            "rate": 0.01,
+            "usd": 0.91
+          },
+          {
+            "jobs": 89,
+            "minutes": 1406,
+            "os": "macos",
+            "rate": 0.062,
+            "usd": 87.172
+          }
+        ],
+        "minutes": 2233,
+        "rates": {
+          "asOf": "2026-10-26",
+          "linux": 0.006,
+          "macos": 0.062,
+          "windows": 0.01
+        },
+        "unpricedJobs": 0,
+        "usd": 92.49799999999999
+      },
+      "labelSets": [
+        {
+          "jobs": 1,
+          "labels": [
+            "gpu",
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 84,
+          "p50Secs": 84,
+          "p95Secs": 84
+        },
+        {
+          "jobs": 25,
+          "labels": [
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 565,
+          "p50Secs": 81,
+          "p95Secs": 277
+        },
+        {
+          "jobs": 63,
+          "labels": [
+            "macOS",
+            "self-hosted"
+          ],
+          "maxSecs": 600,
+          "p50Secs": 72,
+          "p95Secs": 340
+        },
+        {
+          "jobs": 26,
+          "labels": [
+            "macOS",
+            "self-hosted",
+            "xcode-16"
+          ],
+          "maxSecs": 555,
+          "p50Secs": 72,
+          "p95Secs": 541
+        },
+        {
+          "jobs": 14,
+          "labels": [
+            "docker",
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 544,
+          "p50Secs": 66,
+          "p95Secs": 544
+        },
+        {
+          "jobs": 7,
+          "labels": [
+            "self-hosted",
+            "Windows"
+          ],
+          "maxSecs": 336,
+          "p50Secs": 45,
+          "p95Secs": 336
+        },
+        {
+          "jobs": 8,
+          "labels": [
+            "fleet",
+            "Linux",
+            "linux-experimental",
+            "raspberry-pi",
+            "self-hosted"
+          ],
+          "maxSecs": 283,
+          "p50Secs": 27,
+          "p95Secs": 283
+        }
+      ],
+      "machines": [
+        {
+          "busyPercent": 13.631365740740742,
+          "busySecs": 23555,
+          "machineKey": "inv:build-linux-01",
+          "name": "build-linux-01",
+          "runners": 2,
+          "totals": {
+            "cancelled": 1,
+            "failed": 1,
+            "jobs": 27,
+            "other": 0,
+            "queueP50Secs": 68,
+            "queueP95Secs": 344,
+            "runSecs": 23555,
+            "succeeded": 25,
+            "successRate": 0.9615384615384616
+          }
+        },
+        {
+          "busyPercent": 19.80902777777778,
+          "busySecs": 17115,
+          "machineKey": "inv:mac-mini-02",
+          "name": "mac-mini-02",
+          "runners": 1,
+          "totals": {
+            "cancelled": 0,
+            "failed": 1,
+            "jobs": 19,
+            "other": 0,
+            "queueP50Secs": 70,
+            "queueP95Secs": 416,
+            "runSecs": 17115,
+            "succeeded": 18,
+            "successRate": 0.9473684210526315
+          }
+        },
+        {
+          "busyPercent": 16.28472222222222,
+          "busySecs": 14070,
+          "machineKey": "inv:pi-01",
+          "name": "pi-01",
+          "runners": 1,
+          "totals": {
+            "cancelled": 0,
+            "failed": 0,
+            "jobs": 15,
+            "other": 0,
+            "queueP50Secs": 52,
+            "queueP95Secs": 283,
+            "runSecs": 14070,
+            "succeeded": 15,
+            "successRate": 1.0
+          }
+        },
+        {
+          "busyPercent": 24.93402777777778,
+          "busySecs": 64629,
+          "machineKey": "inv:studio",
+          "name": "studio",
+          "runners": 3,
+          "totals": {
+            "cancelled": 3,
+            "failed": 3,
+            "jobs": 70,
+            "other": 0,
+            "queueP50Secs": 72,
+            "queueP95Secs": 496,
+            "runSecs": 64629,
+            "succeeded": 64,
+            "successRate": 0.9552238805970149
+          }
+        },
+        {
+          "busyPercent": 6.133101851851852,
+          "busySecs": 5299,
+          "machineKey": "inv:win-builder",
+          "name": "win-builder",
+          "runners": 1,
+          "totals": {
+            "cancelled": 0,
+            "failed": 1,
+            "jobs": 7,
+            "other": 0,
+            "queueP50Secs": 45,
+            "queueP95Secs": 336,
+            "runSecs": 5299,
+            "succeeded": 6,
+            "successRate": 0.8571428571428571
+          }
+        }
+      ],
+      "observedFrom": "2026-10-02T12:00:00Z",
+      "repos": [
+        {
+          "jobs": 66,
+          "name": "acme-demo/ios-app",
+          "repo": "acme-demo/ios-app",
+          "runSecs": 62205
+        },
+        {
+          "jobs": 49,
+          "name": "acme-demo/web",
+          "repo": "acme-demo/web",
+          "runSecs": 40775
+        },
+        {
+          "jobs": 8,
+          "name": "acme-demo/infra",
+          "repo": "acme-demo/infra",
+          "runSecs": 9645
+        },
+        {
+          "jobs": 8,
+          "name": "acme-demo/api",
+          "repo": "acme-demo/api",
+          "runSecs": 6744
+        },
+        {
+          "jobs": 7,
+          "name": "acme-demo/desktop",
+          "repo": "acme-demo/desktop",
+          "runSecs": 5299
+        },
+        {
+          "jobs": 6,
+          "name": "acme-demo/ml",
+          "repo": "acme-demo/ml",
+          "runSecs": 5256
+        }
+      ],
+      "runners": [
+        {
+          "busyPercent": 6.083333333333334,
+          "busySecs": 5256,
+          "machineKey": null,
+          "machineName": null,
+          "name": "cloud-gpu-1",
+          "runnerKey": "gh:acme-demo:501",
+          "totals": {
+            "cancelled": 1,
+            "failed": 2,
+            "jobs": 6,
+            "other": 0,
+            "queueP50Secs": 85,
+            "queueP95Secs": 565,
+            "runSecs": 5256,
+            "succeeded": 3,
+            "successRate": 0.6
+          }
+        },
+        {
+          "busyPercent": 10.280092592592592,
+          "busySecs": 8882,
+          "machineKey": "inv:build-linux-01",
+          "machineName": "build-linux-01",
+          "name": "linux-01-a",
+          "runnerKey": "gh:acme-demo:301",
+          "totals": {
+            "cancelled": 1,
+            "failed": 0,
+            "jobs": 13,
+            "other": 0,
+            "queueP50Secs": 68,
+            "queueP95Secs": 101,
+            "runSecs": 8882,
+            "succeeded": 12,
+            "successRate": 1.0
+          }
+        },
+        {
+          "busyPercent": 16.98263888888889,
+          "busySecs": 14673,
+          "machineKey": "inv:build-linux-01",
+          "machineName": "build-linux-01",
+          "name": "linux-01-b",
+          "runnerKey": "gh:acme-demo:302",
+          "totals": {
+            "cancelled": 0,
+            "failed": 1,
+            "jobs": 14,
+            "other": 0,
+            "queueP50Secs": 62,
+            "queueP95Secs": 544,
+            "runSecs": 14673,
+            "succeeded": 13,
+            "successRate": 0.9285714285714286
+          }
+        },
+        {
+          "busyPercent": 19.80902777777778,
+          "busySecs": 17115,
+          "machineKey": "inv:mac-mini-02",
+          "machineName": "mac-mini-02",
+          "name": "mini-02",
+          "runnerKey": "gh:acme-demo:201",
+          "totals": {
+            "cancelled": 0,
+            "failed": 1,
+            "jobs": 19,
+            "other": 0,
+            "queueP50Secs": 70,
+            "queueP95Secs": 416,
+            "runSecs": 17115,
+            "succeeded": 18,
+            "successRate": 0.9473684210526315
+          }
+        },
+        {
+          "busyPercent": 16.28472222222222,
+          "busySecs": 14070,
+          "machineKey": "inv:pi-01",
+          "machineName": "pi-01",
+          "name": "pi-01-a",
+          "runnerKey": "gh:acme-demo:601",
+          "totals": {
+            "cancelled": 0,
+            "failed": 0,
+            "jobs": 15,
+            "other": 0,
+            "queueP50Secs": 52,
+            "queueP95Secs": 283,
+            "runSecs": 14070,
+            "succeeded": 15,
+            "successRate": 1.0
+          }
+        },
+        {
+          "busyPercent": 34.07986111111111,
+          "busySecs": 29445,
+          "machineKey": "inv:studio",
+          "machineName": "studio",
+          "name": "studio-1",
+          "runnerKey": "gh:acme-demo:101",
+          "totals": {
+            "cancelled": 0,
+            "failed": 1,
+            "jobs": 30,
+            "other": 0,
+            "queueP50Secs": 72,
+            "queueP95Secs": 282,
+            "runSecs": 29445,
+            "succeeded": 29,
+            "successRate": 0.9666666666666667
+          }
+        },
+        {
+          "busyPercent": 20.70138888888889,
+          "busySecs": 17886,
+          "machineKey": "inv:studio",
+          "machineName": "studio",
+          "name": "studio-2",
+          "runnerKey": "gh:acme-demo:102",
+          "totals": {
+            "cancelled": 1,
+            "failed": 1,
+            "jobs": 23,
+            "other": 0,
+            "queueP50Secs": 71,
+            "queueP95Secs": 496,
+            "runSecs": 17886,
+            "succeeded": 21,
+            "successRate": 0.9545454545454546
+          }
+        },
+        {
+          "busyPercent": 20.020833333333332,
+          "busySecs": 17298,
+          "machineKey": "inv:studio",
+          "machineName": "studio",
+          "name": "Studio-Old-2",
+          "runnerKey": "gh:acme-demo:90",
+          "totals": {
+            "cancelled": 2,
+            "failed": 1,
+            "jobs": 17,
+            "other": 0,
+            "queueP50Secs": 76,
+            "queueP95Secs": 600,
+            "runSecs": 17298,
+            "succeeded": 14,
+            "successRate": 0.9333333333333333
+          }
+        },
+        {
+          "busyPercent": 6.133101851851852,
+          "busySecs": 5299,
+          "machineKey": "inv:win-builder",
+          "machineName": "win-builder",
+          "name": "win-builder",
+          "runnerKey": "gh:acme-demo:401",
+          "totals": {
+            "cancelled": 0,
+            "failed": 1,
+            "jobs": 7,
+            "other": 0,
+            "queueP50Secs": 45,
+            "queueP95Secs": 336,
+            "runSecs": 5299,
+            "succeeded": 6,
+            "successRate": 0.8571428571428571
+          }
+        }
+      ],
+      "to": "2026-10-03T12:00:00Z",
+      "totals": {
+        "cancelled": 5,
+        "failed": 8,
+        "jobs": 144,
+        "other": 0,
+        "queueP50Secs": 72,
+        "queueP95Secs": 386,
+        "runSecs": 129924,
+        "succeeded": 131,
+        "successRate": 0.9424460431654677
+      },
+      "window": "24h",
+      "workflows": [
+        {
+          "jobs": 44,
+          "name": "CI",
+          "repo": "acme-demo/ios-app",
+          "runSecs": 44741
+        },
+        {
+          "jobs": 31,
+          "name": "CI",
+          "repo": "acme-demo/web",
+          "runSecs": 25822
+        },
+        {
+          "jobs": 22,
+          "name": "Release",
+          "repo": "acme-demo/ios-app",
+          "runSecs": 17464
+        },
+        {
+          "jobs": 18,
+          "name": "Deploy",
+          "repo": "acme-demo/web",
+          "runSecs": 14953
+        },
+        {
+          "jobs": 8,
+          "name": "Terraform",
+          "repo": "acme-demo/infra",
+          "runSecs": 9645
+        },
+        {
+          "jobs": 8,
+          "name": "CI",
+          "repo": "acme-demo/api",
+          "runSecs": 6744
+        },
+        {
+          "jobs": 7,
+          "name": "CI",
+          "repo": "acme-demo/desktop",
+          "runSecs": 5299
+        },
+        {
+          "jobs": 3,
+          "name": "Nightly",
+          "repo": "acme-demo/ml",
+          "runSecs": 3047
+        },
+        {
+          "jobs": 3,
+          "name": "Eval",
+          "repo": "acme-demo/ml",
+          "runSecs": 2209
+        }
+      ]
+    },
+    "30d": {
+      "buckets": [
+        {
+          "busySecs": 123134,
+          "jobs": 140,
+          "start": "2026-09-03T12:00:00Z"
+        },
+        {
+          "busySecs": 135228,
+          "jobs": 144,
+          "start": "2026-09-04T12:00:00Z"
+        },
+        {
+          "busySecs": 109371,
+          "jobs": 131,
+          "start": "2026-09-05T12:00:00Z"
+        },
+        {
+          "busySecs": 142102,
+          "jobs": 145,
+          "start": "2026-09-06T12:00:00Z"
+        },
+        {
+          "busySecs": 134208,
+          "jobs": 155,
+          "start": "2026-09-07T12:00:00Z"
+        },
+        {
+          "busySecs": 113842,
+          "jobs": 128,
+          "start": "2026-09-08T12:00:00Z"
+        },
+        {
+          "busySecs": 119190,
+          "jobs": 138,
+          "start": "2026-09-09T12:00:00Z"
+        },
+        {
+          "busySecs": 104263,
+          "jobs": 130,
+          "start": "2026-09-10T12:00:00Z"
+        },
+        {
+          "busySecs": 121779,
+          "jobs": 138,
+          "start": "2026-09-11T12:00:00Z"
+        },
+        {
+          "busySecs": 123214,
+          "jobs": 139,
+          "start": "2026-09-12T12:00:00Z"
+        },
+        {
+          "busySecs": 118087,
+          "jobs": 137,
+          "start": "2026-09-13T12:00:00Z"
+        },
+        {
+          "busySecs": 128627,
+          "jobs": 146,
+          "start": "2026-09-14T12:00:00Z"
+        },
+        {
+          "busySecs": 114825,
+          "jobs": 136,
+          "start": "2026-09-15T12:00:00Z"
+        },
+        {
+          "busySecs": 123239,
+          "jobs": 139,
+          "start": "2026-09-16T12:00:00Z"
+        },
+        {
+          "busySecs": 128989,
+          "jobs": 146,
+          "start": "2026-09-17T12:00:00Z"
+        },
+        {
+          "busySecs": 121434,
+          "jobs": 140,
+          "start": "2026-09-18T12:00:00Z"
+        },
+        {
+          "busySecs": 120553,
+          "jobs": 144,
+          "start": "2026-09-19T12:00:00Z"
+        },
+        {
+          "busySecs": 124666,
+          "jobs": 140,
+          "start": "2026-09-20T12:00:00Z"
+        },
+        {
+          "busySecs": 125791,
+          "jobs": 143,
+          "start": "2026-09-21T12:00:00Z"
+        },
+        {
+          "busySecs": 121918,
+          "jobs": 136,
+          "start": "2026-09-22T12:00:00Z"
+        },
+        {
+          "busySecs": 114283,
+          "jobs": 124,
+          "start": "2026-09-23T12:00:00Z"
+        },
+        {
+          "busySecs": 124482,
+          "jobs": 142,
+          "start": "2026-09-24T12:00:00Z"
+        },
+        {
+          "busySecs": 129483,
+          "jobs": 143,
+          "start": "2026-09-25T12:00:00Z"
+        },
+        {
+          "busySecs": 126448,
+          "jobs": 138,
+          "start": "2026-09-26T12:00:00Z"
+        },
+        {
+          "busySecs": 138483,
+          "jobs": 146,
+          "start": "2026-09-27T12:00:00Z"
+        },
+        {
+          "busySecs": 122232,
+          "jobs": 133,
+          "start": "2026-09-28T12:00:00Z"
+        },
+        {
+          "busySecs": 117999,
+          "jobs": 139,
+          "start": "2026-09-29T12:00:00Z"
+        },
+        {
+          "busySecs": 135006,
+          "jobs": 152,
+          "start": "2026-09-30T12:00:00Z"
+        },
+        {
+          "busySecs": 140827,
+          "jobs": 155,
+          "start": "2026-10-01T12:00:00Z"
+        },
+        {
+          "busySecs": 129924,
+          "jobs": 144,
+          "start": "2026-10-02T12:00:00Z"
+        }
+      ],
+      "from": "2026-09-03T12:00:00Z",
+      "hostedCost": {
+        "lines": [
+          {
+            "jobs": 1419,
+            "minutes": 21572,
+            "os": "linux",
+            "rate": 0.006,
+            "usd": 129.43200000000002
+          },
+          {
+            "jobs": 149,
+            "minutes": 2198,
+            "os": "windows",
+            "rate": 0.01,
+            "usd": 21.98
+          },
+          {
+            "jobs": 2643,
+            "minutes": 40501,
+            "os": "macos",
+            "rate": 0.062,
+            "usd": 2511.062
+          }
+        ],
+        "minutes": 64271,
+        "rates": {
+          "asOf": "2026-10-26",
+          "linux": 0.006,
+          "macos": 0.062,
+          "windows": 0.01
+        },
+        "unpricedJobs": 0,
+        "usd": 2662.4739999999997
+      },
+      "labelSets": [
+        {
+          "jobs": 149,
+          "labels": [
+            "self-hosted",
+            "Windows"
+          ],
+          "maxSecs": 600,
+          "p50Secs": 76,
+          "p95Secs": 342
+        },
+        {
+          "jobs": 203,
+          "labels": [
+            "fleet",
+            "Linux",
+            "linux-experimental",
+            "raspberry-pi",
+            "self-hosted"
+          ],
+          "maxSecs": 583,
+          "p50Secs": 74,
+          "p95Secs": 266
+        },
+        {
+          "jobs": 659,
+          "labels": [
+            "macOS",
+            "self-hosted",
+            "xcode-16"
+          ],
+          "maxSecs": 598,
+          "p50Secs": 73,
+          "p95Secs": 310
+        },
+        {
+          "jobs": 1984,
+          "labels": [
+            "macOS",
+            "self-hosted"
+          ],
+          "maxSecs": 603,
+          "p50Secs": 72,
+          "p95Secs": 354
+        },
+        {
+          "jobs": 432,
+          "labels": [
+            "docker",
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 602,
+          "p50Secs": 70,
+          "p95Secs": 362
+        },
+        {
+          "jobs": 694,
+          "labels": [
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 574,
+          "p50Secs": 69,
+          "p95Secs": 287
+        },
+        {
+          "jobs": 90,
+          "labels": [
+            "gpu",
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 433,
+          "p50Secs": 68,
+          "p95Secs": 168
+        }
+      ],
+      "machines": [
+        {
+          "busyPercent": 14.010667438271604,
+          "busySecs": 726313,
+          "machineKey": "inv:build-linux-01",
+          "name": "build-linux-01",
+          "runners": 2,
+          "totals": {
+            "cancelled": 43,
+            "failed": 63,
+            "jobs": 816,
+            "other": 0,
+            "queueP50Secs": 72,
+            "queueP95Secs": 323,
+            "runSecs": 726313,
+            "succeeded": 710,
+            "successRate": 0.9184993531694696
+          }
+        },
+        {
+          "busyPercent": 21.890663580246912,
+          "busySecs": 567406,
+          "machineKey": "inv:mac-mini-02",
+          "name": "mac-mini-02",
+          "runners": 1,
+          "totals": {
+            "cancelled": 29,
+            "failed": 51,
+            "jobs": 643,
+            "other": 0,
+            "queueP50Secs": 72,
+            "queueP95Secs": 356,
+            "runSecs": 567406,
+            "succeeded": 563,
+            "successRate": 0.9169381107491856
+          }
+        },
+        {
+          "busyPercent": 14.322878086419752,
+          "busySecs": 371249,
+          "machineKey": "inv:pi-01",
+          "name": "pi-01",
+          "runners": 1,
+          "totals": {
+            "cancelled": 13,
+            "failed": 22,
+            "jobs": 420,
+            "other": 0,
+            "queueP50Secs": 65,
+            "queueP95Secs": 283,
+            "runSecs": 371249,
+            "succeeded": 385,
+            "successRate": 0.9459459459459459
+          }
+        },
+        {
+          "busyPercent": 22.97011316872428,
+          "busySecs": 1786156,
+          "machineKey": "inv:studio",
+          "name": "studio",
+          "runners": 3,
+          "totals": {
+            "cancelled": 100,
+            "failed": 167,
+            "jobs": 2000,
+            "other": 0,
+            "queueP50Secs": 72,
+            "queueP95Secs": 340,
+            "runSecs": 1786156,
+            "succeeded": 1733,
+            "successRate": 0.9121052631578948
+          }
+        },
+        {
+          "busyPercent": 4.905285493827161,
+          "busySecs": 127145,
+          "machineKey": "inv:win-builder",
+          "name": "win-builder",
+          "runners": 1,
+          "totals": {
+            "cancelled": 2,
+            "failed": 11,
+            "jobs": 149,
+            "other": 0,
+            "queueP50Secs": 76,
+            "queueP95Secs": 342,
+            "runSecs": 127145,
+            "succeeded": 136,
+            "successRate": 0.9251700680272109
+          }
+        }
+      ],
+      "observedFrom": "2026-09-03T12:00:00Z",
+      "repos": [
+        {
+          "jobs": 1992,
+          "name": "acme-demo/ios-app",
+          "repo": "acme-demo/ios-app",
+          "runSecs": 1764393
+        },
+        {
+          "jobs": 1263,
+          "name": "acme-demo/web",
+          "repo": "acme-demo/web",
+          "runSecs": 1128290
+        },
+        {
+          "jobs": 336,
+          "name": "acme-demo/infra",
+          "repo": "acme-demo/infra",
+          "runSecs": 303440
+        },
+        {
+          "jobs": 288,
+          "name": "acme-demo/api",
+          "repo": "acme-demo/api",
+          "runSecs": 255001
+        },
+        {
+          "jobs": 183,
+          "name": "acme-demo/ml",
+          "repo": "acme-demo/ml",
+          "runSecs": 155358
+        },
+        {
+          "jobs": 149,
+          "name": "acme-demo/desktop",
+          "repo": "acme-demo/desktop",
+          "runSecs": 127145
+        }
+      ],
+      "runners": [
+        {
+          "busyPercent": 5.9937499999999995,
+          "busySecs": 155358,
+          "machineKey": null,
+          "machineName": null,
+          "name": "cloud-gpu-1",
+          "runnerKey": "gh:acme-demo:501",
+          "totals": {
+            "cancelled": 6,
+            "failed": 24,
+            "jobs": 183,
+            "other": 0,
+            "queueP50Secs": 73,
+            "queueP95Secs": 168,
+            "runSecs": 155358,
+            "succeeded": 153,
+            "successRate": 0.864406779661017
+          }
+        },
+        {
+          "busyPercent": 14.523765432098765,
+          "busySecs": 376456,
+          "machineKey": "inv:build-linux-01",
+          "machineName": "build-linux-01",
+          "name": "linux-01-a",
+          "runnerKey": "gh:acme-demo:301",
+          "totals": {
+            "cancelled": 24,
+            "failed": 27,
+            "jobs": 418,
+            "other": 0,
+            "queueP50Secs": 73,
+            "queueP95Secs": 358,
+            "runSecs": 376456,
+            "succeeded": 367,
+            "successRate": 0.9314720812182741
+          }
+        },
+        {
+          "busyPercent": 13.497569444444443,
+          "busySecs": 349857,
+          "machineKey": "inv:build-linux-01",
+          "machineName": "build-linux-01",
+          "name": "linux-01-b",
+          "runnerKey": "gh:acme-demo:302",
+          "totals": {
+            "cancelled": 19,
+            "failed": 36,
+            "jobs": 398,
+            "other": 0,
+            "queueP50Secs": 70,
+            "queueP95Secs": 323,
+            "runSecs": 349857,
+            "succeeded": 343,
+            "successRate": 0.9050131926121372
+          }
+        },
+        {
+          "busyPercent": 21.890663580246912,
+          "busySecs": 567406,
+          "machineKey": "inv:mac-mini-02",
+          "machineName": "mac-mini-02",
+          "name": "mini-02",
+          "runnerKey": "gh:acme-demo:201",
+          "totals": {
+            "cancelled": 29,
+            "failed": 51,
+            "jobs": 643,
+            "other": 0,
+            "queueP50Secs": 72,
+            "queueP95Secs": 356,
+            "runSecs": 567406,
+            "succeeded": 563,
+            "successRate": 0.9169381107491856
+          }
+        },
+        {
+          "busyPercent": 14.322878086419752,
+          "busySecs": 371249,
+          "machineKey": "inv:pi-01",
+          "machineName": "pi-01",
+          "name": "pi-01-a",
+          "runnerKey": "gh:acme-demo:601",
+          "totals": {
+            "cancelled": 13,
+            "failed": 22,
+            "jobs": 420,
+            "other": 0,
+            "queueP50Secs": 65,
+            "queueP95Secs": 283,
+            "runSecs": 371249,
+            "succeeded": 385,
+            "successRate": 0.9459459459459459
+          }
+        },
+        {
+          "busyPercent": 22.24344135802469,
+          "busySecs": 576550,
+          "machineKey": "inv:studio",
+          "machineName": "studio",
+          "name": "studio-1",
+          "runnerKey": "gh:acme-demo:101",
+          "totals": {
+            "cancelled": 31,
+            "failed": 54,
+            "jobs": 650,
+            "other": 0,
+            "queueP50Secs": 70,
+            "queueP95Secs": 343,
+            "runSecs": 576550,
+            "succeeded": 565,
+            "successRate": 0.9127625201938611
+          }
+        },
+        {
+          "busyPercent": 23.43190586419753,
+          "busySecs": 607355,
+          "machineKey": "inv:studio",
+          "machineName": "studio",
+          "name": "studio-2",
+          "runnerKey": "gh:acme-demo:102",
+          "totals": {
+            "cancelled": 33,
+            "failed": 50,
+            "jobs": 682,
+            "other": 0,
+            "queueP50Secs": 75,
+            "queueP95Secs": 322,
+            "runSecs": 607355,
+            "succeeded": 599,
+            "successRate": 0.9229583975346687
+          }
+        },
+        {
+          "busyPercent": 23.234992283950618,
+          "busySecs": 602251,
+          "machineKey": "inv:studio",
+          "machineName": "studio",
+          "name": "Studio-Old-2",
+          "runnerKey": "gh:acme-demo:90",
+          "totals": {
+            "cancelled": 36,
+            "failed": 63,
+            "jobs": 668,
+            "other": 0,
+            "queueP50Secs": 71,
+            "queueP95Secs": 352,
+            "runSecs": 602251,
+            "succeeded": 569,
+            "successRate": 0.9003164556962026
+          }
+        },
+        {
+          "busyPercent": 4.905285493827161,
+          "busySecs": 127145,
+          "machineKey": "inv:win-builder",
+          "machineName": "win-builder",
+          "name": "win-builder",
+          "runnerKey": "gh:acme-demo:401",
+          "totals": {
+            "cancelled": 2,
+            "failed": 11,
+            "jobs": 149,
+            "other": 0,
+            "queueP50Secs": 76,
+            "queueP95Secs": 342,
+            "runSecs": 127145,
+            "succeeded": 136,
+            "successRate": 0.9251700680272109
+          }
+        }
+      ],
+      "to": "2026-10-03T12:00:00Z",
+      "totals": {
+        "cancelled": 193,
+        "failed": 338,
+        "jobs": 4211,
+        "other": 0,
+        "queueP50Secs": 72,
+        "queueP95Secs": 328,
+        "runSecs": 3733627,
+        "succeeded": 3680,
+        "successRate": 0.9158785465405674
+      },
+      "window": "30d",
+      "workflows": [
+        {
+          "jobs": 1314,
+          "name": "CI",
+          "repo": "acme-demo/ios-app",
+          "runSecs": 1155879
+        },
+        {
+          "jobs": 945,
+          "name": "CI",
+          "repo": "acme-demo/web",
+          "runSecs": 846155
+        },
+        {
+          "jobs": 678,
+          "name": "Release",
+          "repo": "acme-demo/ios-app",
+          "runSecs": 608514
+        },
+        {
+          "jobs": 336,
+          "name": "Terraform",
+          "repo": "acme-demo/infra",
+          "runSecs": 303440
+        },
+        {
+          "jobs": 318,
+          "name": "Deploy",
+          "repo": "acme-demo/web",
+          "runSecs": 282135
+        },
+        {
+          "jobs": 288,
+          "name": "CI",
+          "repo": "acme-demo/api",
+          "runSecs": 255001
+        },
+        {
+          "jobs": 149,
+          "name": "CI",
+          "repo": "acme-demo/desktop",
+          "runSecs": 127145
+        },
+        {
+          "jobs": 97,
+          "name": "Nightly",
+          "repo": "acme-demo/ml",
+          "runSecs": 80872
+        },
+        {
+          "jobs": 86,
+          "name": "Eval",
+          "repo": "acme-demo/ml",
+          "runSecs": 74486
+        }
+      ]
+    },
+    "7d": {
+      "buckets": [
+        {
+          "busySecs": 22054,
+          "jobs": 27,
+          "start": "2026-09-26T12:00:00Z"
+        },
+        {
+          "busySecs": 30895,
+          "jobs": 30,
+          "start": "2026-09-26T18:00:00Z"
+        },
+        {
+          "busySecs": 38805,
+          "jobs": 41,
+          "start": "2026-09-27T00:00:00Z"
+        },
+        {
+          "busySecs": 34694,
+          "jobs": 40,
+          "start": "2026-09-27T06:00:00Z"
+        },
+        {
+          "busySecs": 31884,
+          "jobs": 39,
+          "start": "2026-09-27T12:00:00Z"
+        },
+        {
+          "busySecs": 38701,
+          "jobs": 40,
+          "start": "2026-09-27T18:00:00Z"
+        },
+        {
+          "busySecs": 38854,
+          "jobs": 38,
+          "start": "2026-09-28T00:00:00Z"
+        },
+        {
+          "busySecs": 29044,
+          "jobs": 29,
+          "start": "2026-09-28T06:00:00Z"
+        },
+        {
+          "busySecs": 29952,
+          "jobs": 35,
+          "start": "2026-09-28T12:00:00Z"
+        },
+        {
+          "busySecs": 34567,
+          "jobs": 37,
+          "start": "2026-09-28T18:00:00Z"
+        },
+        {
+          "busySecs": 29876,
+          "jobs": 30,
+          "start": "2026-09-29T00:00:00Z"
+        },
+        {
+          "busySecs": 27837,
+          "jobs": 31,
+          "start": "2026-09-29T06:00:00Z"
+        },
+        {
+          "busySecs": 24463,
+          "jobs": 31,
+          "start": "2026-09-29T12:00:00Z"
+        },
+        {
+          "busySecs": 27105,
+          "jobs": 36,
+          "start": "2026-09-29T18:00:00Z"
+        },
+        {
+          "busySecs": 34171,
+          "jobs": 34,
+          "start": "2026-09-30T00:00:00Z"
+        },
+        {
+          "busySecs": 32260,
+          "jobs": 38,
+          "start": "2026-09-30T06:00:00Z"
+        },
+        {
+          "busySecs": 26600,
+          "jobs": 33,
+          "start": "2026-09-30T12:00:00Z"
+        },
+        {
+          "busySecs": 34198,
+          "jobs": 37,
+          "start": "2026-09-30T18:00:00Z"
+        },
+        {
+          "busySecs": 39440,
+          "jobs": 42,
+          "start": "2026-10-01T00:00:00Z"
+        },
+        {
+          "busySecs": 34768,
+          "jobs": 40,
+          "start": "2026-10-01T06:00:00Z"
+        },
+        {
+          "busySecs": 46806,
+          "jobs": 48,
+          "start": "2026-10-01T12:00:00Z"
+        },
+        {
+          "busySecs": 34112,
+          "jobs": 36,
+          "start": "2026-10-01T18:00:00Z"
+        },
+        {
+          "busySecs": 28872,
+          "jobs": 32,
+          "start": "2026-10-02T00:00:00Z"
+        },
+        {
+          "busySecs": 31037,
+          "jobs": 39,
+          "start": "2026-10-02T06:00:00Z"
+        },
+        {
+          "busySecs": 31649,
+          "jobs": 35,
+          "start": "2026-10-02T12:00:00Z"
+        },
+        {
+          "busySecs": 32092,
+          "jobs": 37,
+          "start": "2026-10-02T18:00:00Z"
+        },
+        {
+          "busySecs": 30841,
+          "jobs": 35,
+          "start": "2026-10-03T00:00:00Z"
+        },
+        {
+          "busySecs": 35342,
+          "jobs": 37,
+          "start": "2026-10-03T06:00:00Z"
+        }
+      ],
+      "from": "2026-09-26T12:00:00Z",
+      "hostedCost": {
+        "lines": [
+          {
+            "jobs": 359,
+            "minutes": 5531,
+            "os": "linux",
+            "rate": 0.006,
+            "usd": 33.186
+          },
+          {
+            "jobs": 40,
+            "minutes": 528,
+            "os": "windows",
+            "rate": 0.01,
+            "usd": 5.28
+          },
+          {
+            "jobs": 608,
+            "minutes": 9608,
+            "os": "macos",
+            "rate": 0.062,
+            "usd": 595.696
+          }
+        ],
+        "minutes": 15667,
+        "rates": {
+          "asOf": "2026-10-26",
+          "linux": 0.006,
+          "macos": 0.062,
+          "windows": 0.01
+        },
+        "unpricedJobs": 0,
+        "usd": 634.162
+      },
+      "labelSets": [
+        {
+          "jobs": 144,
+          "labels": [
+            "macOS",
+            "self-hosted",
+            "xcode-16"
+          ],
+          "maxSecs": 555,
+          "p50Secs": 80,
+          "p95Secs": 342
+        },
+        {
+          "jobs": 186,
+          "labels": [
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 567,
+          "p50Secs": 71,
+          "p95Secs": 274
+        },
+        {
+          "jobs": 97,
+          "labels": [
+            "docker",
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 599,
+          "p50Secs": 71,
+          "p95Secs": 344
+        },
+        {
+          "jobs": 464,
+          "labels": [
+            "macOS",
+            "self-hosted"
+          ],
+          "maxSecs": 600,
+          "p50Secs": 71,
+          "p95Secs": 340
+        },
+        {
+          "jobs": 47,
+          "labels": [
+            "fleet",
+            "Linux",
+            "linux-experimental",
+            "raspberry-pi",
+            "self-hosted"
+          ],
+          "maxSecs": 283,
+          "p50Secs": 69,
+          "p95Secs": 163
+        },
+        {
+          "jobs": 29,
+          "labels": [
+            "gpu",
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 433,
+          "p50Secs": 63,
+          "p95Secs": 394
+        },
+        {
+          "jobs": 40,
+          "labels": [
+            "self-hosted",
+            "Windows"
+          ],
+          "maxSecs": 363,
+          "p50Secs": 60,
+          "p95Secs": 206
+        }
+      ],
+      "machines": [
+        {
+          "busyPercent": 15.23693783068783,
+          "busySecs": 184306,
+          "machineKey": "inv:build-linux-01",
+          "name": "build-linux-01",
+          "runners": 2,
+          "totals": {
+            "cancelled": 9,
+            "failed": 11,
+            "jobs": 197,
+            "other": 0,
+            "queueP50Secs": 77,
+            "queueP95Secs": 344,
+            "runSecs": 184306,
+            "succeeded": 177,
+            "successRate": 0.9414893617021277
+          }
+        },
+        {
+          "busyPercent": 23.61987433862434,
+          "busySecs": 142853,
+          "machineKey": "inv:mac-mini-02",
+          "name": "mac-mini-02",
+          "runners": 1,
+          "totals": {
+            "cancelled": 4,
+            "failed": 14,
+            "jobs": 146,
+            "other": 0,
+            "queueP50Secs": 70,
+            "queueP95Secs": 414,
+            "runSecs": 142853,
+            "succeeded": 128,
+            "successRate": 0.9014084507042254
+          }
+        },
+        {
+          "busyPercent": 16.29232804232804,
+          "busySecs": 98536,
+          "machineKey": "inv:pi-01",
+          "name": "pi-01",
+          "runners": 1,
+          "totals": {
+            "cancelled": 2,
+            "failed": 9,
+            "jobs": 111,
+            "other": 0,
+            "queueP50Secs": 66,
+            "queueP95Secs": 163,
+            "runSecs": 98536,
+            "succeeded": 100,
+            "successRate": 0.9174311926605505
+          }
+        },
+        {
+          "busyPercent": 22.9266975308642,
+          "busySecs": 415982,
+          "machineKey": "inv:studio",
+          "name": "studio",
+          "runners": 3,
+          "totals": {
+            "cancelled": 21,
+            "failed": 29,
+            "jobs": 462,
+            "other": 0,
+            "queueP50Secs": 73,
+            "queueP95Secs": 315,
+            "runSecs": 415982,
+            "succeeded": 412,
+            "successRate": 0.9342403628117913
+          }
+        },
+        {
+          "busyPercent": 5.047784391534392,
+          "busySecs": 30529,
+          "machineKey": "inv:win-builder",
+          "name": "win-builder",
+          "runners": 1,
+          "totals": {
+            "cancelled": 0,
+            "failed": 4,
+            "jobs": 40,
+            "other": 0,
+            "queueP50Secs": 60,
+            "queueP95Secs": 206,
+            "runSecs": 30529,
+            "succeeded": 36,
+            "successRate": 0.9
+          }
+        }
+      ],
+      "observedFrom": "2026-09-26T12:00:00Z",
+      "repos": [
+        {
+          "jobs": 449,
+          "name": "acme-demo/ios-app",
+          "repo": "acme-demo/ios-app",
+          "runSecs": 414971
+        },
+        {
+          "jobs": 322,
+          "name": "acme-demo/web",
+          "repo": "acme-demo/web",
+          "runSecs": 288479
+        },
+        {
+          "jobs": 76,
+          "name": "acme-demo/infra",
+          "repo": "acme-demo/infra",
+          "runSecs": 76639
+        },
+        {
+          "jobs": 69,
+          "name": "acme-demo/api",
+          "repo": "acme-demo/api",
+          "runSecs": 61588
+        },
+        {
+          "jobs": 51,
+          "name": "acme-demo/ml",
+          "repo": "acme-demo/ml",
+          "runSecs": 38713
+        },
+        {
+          "jobs": 40,
+          "name": "acme-demo/desktop",
+          "repo": "acme-demo/desktop",
+          "runSecs": 30529
+        }
+      ],
+      "runners": [
+        {
+          "busyPercent": 6.400958994708995,
+          "busySecs": 38713,
+          "machineKey": null,
+          "machineName": null,
+          "name": "cloud-gpu-1",
+          "runnerKey": "gh:acme-demo:501",
+          "totals": {
+            "cancelled": 2,
+            "failed": 6,
+            "jobs": 51,
+            "other": 0,
+            "queueP50Secs": 57,
+            "queueP95Secs": 394,
+            "runSecs": 38713,
+            "succeeded": 43,
+            "successRate": 0.8775510204081632
+          }
+        },
+        {
+          "busyPercent": 15.497850529100528,
+          "busySecs": 93731,
+          "machineKey": "inv:build-linux-01",
+          "machineName": "build-linux-01",
+          "name": "linux-01-a",
+          "runnerKey": "gh:acme-demo:301",
+          "totals": {
+            "cancelled": 6,
+            "failed": 4,
+            "jobs": 102,
+            "other": 0,
+            "queueP50Secs": 76,
+            "queueP95Secs": 251,
+            "runSecs": 93731,
+            "succeeded": 92,
+            "successRate": 0.9583333333333334
+          }
+        },
+        {
+          "busyPercent": 14.976025132275133,
+          "busySecs": 90575,
+          "machineKey": "inv:build-linux-01",
+          "machineName": "build-linux-01",
+          "name": "linux-01-b",
+          "runnerKey": "gh:acme-demo:302",
+          "totals": {
+            "cancelled": 3,
+            "failed": 7,
+            "jobs": 95,
+            "other": 0,
+            "queueP50Secs": 79,
+            "queueP95Secs": 404,
+            "runSecs": 90575,
+            "succeeded": 85,
+            "successRate": 0.9239130434782609
+          }
+        },
+        {
+          "busyPercent": 23.61987433862434,
+          "busySecs": 142853,
+          "machineKey": "inv:mac-mini-02",
+          "machineName": "mac-mini-02",
+          "name": "mini-02",
+          "runnerKey": "gh:acme-demo:201",
+          "totals": {
+            "cancelled": 4,
+            "failed": 14,
+            "jobs": 146,
+            "other": 0,
+            "queueP50Secs": 70,
+            "queueP95Secs": 414,
+            "runSecs": 142853,
+            "succeeded": 128,
+            "successRate": 0.9014084507042254
+          }
+        },
+        {
+          "busyPercent": 16.29232804232804,
+          "busySecs": 98536,
+          "machineKey": "inv:pi-01",
+          "machineName": "pi-01",
+          "name": "pi-01-a",
+          "runnerKey": "gh:acme-demo:601",
+          "totals": {
+            "cancelled": 2,
+            "failed": 9,
+            "jobs": 111,
+            "other": 0,
+            "queueP50Secs": 66,
+            "queueP95Secs": 163,
+            "runSecs": 98536,
+            "succeeded": 100,
+            "successRate": 0.9174311926605505
+          }
+        },
+        {
+          "busyPercent": 23.14649470899471,
+          "busySecs": 139990,
+          "machineKey": "inv:studio",
+          "machineName": "studio",
+          "name": "studio-1",
+          "runnerKey": "gh:acme-demo:101",
+          "totals": {
+            "cancelled": 4,
+            "failed": 6,
+            "jobs": 157,
+            "other": 0,
+            "queueP50Secs": 78,
+            "queueP95Secs": 305,
+            "runSecs": 139990,
+            "succeeded": 147,
+            "successRate": 0.9607843137254902
+          }
+        },
+        {
+          "busyPercent": 23.125992063492063,
+          "busySecs": 139866,
+          "machineKey": "inv:studio",
+          "machineName": "studio",
+          "name": "studio-2",
+          "runnerKey": "gh:acme-demo:102",
+          "totals": {
+            "cancelled": 8,
+            "failed": 13,
+            "jobs": 159,
+            "other": 0,
+            "queueP50Secs": 77,
+            "queueP95Secs": 392,
+            "runSecs": 139866,
+            "succeeded": 138,
+            "successRate": 0.9139072847682119
+          }
+        },
+        {
+          "busyPercent": 22.50760582010582,
+          "busySecs": 136126,
+          "machineKey": "inv:studio",
+          "machineName": "studio",
+          "name": "Studio-Old-2",
+          "runnerKey": "gh:acme-demo:90",
+          "totals": {
+            "cancelled": 9,
+            "failed": 10,
+            "jobs": 146,
+            "other": 0,
+            "queueP50Secs": 66,
+            "queueP95Secs": 277,
+            "runSecs": 136126,
+            "succeeded": 127,
+            "successRate": 0.927007299270073
+          }
+        },
+        {
+          "busyPercent": 5.047784391534392,
+          "busySecs": 30529,
+          "machineKey": "inv:win-builder",
+          "machineName": "win-builder",
+          "name": "win-builder",
+          "runnerKey": "gh:acme-demo:401",
+          "totals": {
+            "cancelled": 0,
+            "failed": 4,
+            "jobs": 40,
+            "other": 0,
+            "queueP50Secs": 60,
+            "queueP95Secs": 206,
+            "runSecs": 30529,
+            "succeeded": 36,
+            "successRate": 0.9
+          }
+        }
+      ],
+      "to": "2026-10-03T12:00:00Z",
+      "totals": {
+        "cancelled": 38,
+        "failed": 73,
+        "jobs": 1007,
+        "other": 0,
+        "queueP50Secs": 72,
+        "queueP95Secs": 310,
+        "runSecs": 910919,
+        "succeeded": 896,
+        "successRate": 0.9246646026831785
+      },
+      "window": "7d",
+      "workflows": [
+        {
+          "jobs": 291,
+          "name": "CI",
+          "repo": "acme-demo/ios-app",
+          "runSecs": 274916
+        },
+        {
+          "jobs": 243,
+          "name": "CI",
+          "repo": "acme-demo/web",
+          "runSecs": 213883
+        },
+        {
+          "jobs": 158,
+          "name": "Release",
+          "repo": "acme-demo/ios-app",
+          "runSecs": 140055
+        },
+        {
+          "jobs": 76,
+          "name": "Terraform",
+          "repo": "acme-demo/infra",
+          "runSecs": 76639
+        },
+        {
+          "jobs": 79,
+          "name": "Deploy",
+          "repo": "acme-demo/web",
+          "runSecs": 74596
+        },
+        {
+          "jobs": 69,
+          "name": "CI",
+          "repo": "acme-demo/api",
+          "runSecs": 61588
+        },
+        {
+          "jobs": 40,
+          "name": "CI",
+          "repo": "acme-demo/desktop",
+          "runSecs": 30529
+        },
+        {
+          "jobs": 28,
+          "name": "Nightly",
+          "repo": "acme-demo/ml",
+          "runSecs": 20269
+        },
+        {
+          "jobs": 23,
+          "name": "Eval",
+          "repo": "acme-demo/ml",
+          "runSecs": 18444
+        }
+      ]
+    }
+  },
+  "generatedAt": "2026-10-03T12:00:00Z",
+  "history": {
+    "hasMore": true,
+    "historySince": "2026-09-03T12:00:00Z",
+    "jobs": [
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T11:54:19Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T11:29:05Z",
+        "htmlUrl": "https://github.com/acme-demo/infra/actions/runs/960146261/job/7060146261",
+        "id": 7060146261,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "plan",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 81,
+        "repo": "acme-demo/infra",
+        "runId": 960146261,
+        "runSecs": 1433,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T11:30:26Z",
+        "workflowName": "Terraform"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T11:46:07Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T11:26:52Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/920146261/job/7020146261",
+        "id": 7020146261,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 101,
+        "repo": "acme-demo/ios-app",
+        "runId": 920146261,
+        "runSecs": 1054,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-03T11:28:33Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T11:43:39Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T11:25:34Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046261/job/7009046261",
+        "id": 7009046261,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 76,
+        "repo": "acme-demo/ios-app",
+        "runId": 909046261,
+        "runSecs": 1009,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T11:26:50Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T11:37:34Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T11:21:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146261/job/7010146261",
+        "id": 7010146261,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 97,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146261,
+        "runSecs": 846,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T11:23:28Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T11:29:51Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T11:25:00Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/910246261/job/7010246261",
+        "id": 7010246261,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 26,
+        "repo": "acme-demo/web",
+        "runId": 910246261,
+        "runSecs": 265,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T11:25:26Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T11:04:43Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T10:41:51Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/910146260/job/7010146260",
+        "id": 7010146260,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 89,
+        "repo": "acme-demo/web",
+        "runId": 910146260,
+        "runSecs": 1283,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T10:43:20Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T10:54:12Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T10:41:12Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930246260/job/7030246260",
+        "id": 7030246260,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 101,
+        "repo": "acme-demo/web",
+        "runId": 930246260,
+        "runSecs": 679,
+        "runnerKey": "gh:acme-demo:302",
+        "runnerName": "linux-01-b",
+        "source": "demo",
+        "startedAt": "2026-10-03T10:42:53Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T10:52:18Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T10:46:52Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/920146260/job/7020146260",
+        "id": 7020146260,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 59,
+        "repo": "acme-demo/web",
+        "runId": 920146260,
+        "runSecs": 267,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-03T10:47:51Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T10:19:00Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T10:06:52Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/920146259/job/7020146259",
+        "id": 7020146259,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 19,
+        "repo": "acme-demo/ios-app",
+        "runId": 920146259,
+        "runSecs": 709,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-03T10:07:11Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T10:09:54Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T10:05:34Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046259/job/7009046259",
+        "id": 7009046259,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 107,
+        "repo": "acme-demo/ios-app",
+        "runId": 909046259,
+        "runSecs": 153,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T10:07:21Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T09:50:10Z",
+        "conclusion": "cancelled",
+        "createdAt": "2026-10-03T09:23:15Z",
+        "htmlUrl": "https://github.com/acme-demo/ml/actions/runs/950146258/job/7050146258",
+        "id": 7050146258,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "gpu"
+        ],
+        "machineKey": null,
+        "machineName": null,
+        "name": "train-small",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 84,
+        "repo": "acme-demo/ml",
+        "runId": 950146258,
+        "runSecs": 1531,
+        "runnerKey": "gh:acme-demo:501",
+        "runnerName": "cloud-gpu-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T09:24:39Z",
+        "workflowName": "Nightly"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T09:43:55Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T09:25:34Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/909046258/job/7009046258",
+        "id": 7009046258,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 10,
+        "repo": "acme-demo/web",
+        "runId": 909046258,
+        "runSecs": 1091,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T09:25:44Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T09:43:29Z",
+        "conclusion": "failure",
+        "createdAt": "2026-10-03T09:21:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146258/job/7010146258",
+        "id": 7010146258,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 94,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146258,
+        "runSecs": 1204,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T09:23:25Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T09:35:43Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T09:26:52Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/920146258/job/7020146258",
+        "id": 7020146258,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 88,
+        "repo": "acme-demo/ios-app",
+        "runId": 920146258,
+        "runSecs": 443,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-03T09:28:20Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T09:11:14Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:45:34Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046257/job/7009046257",
+        "id": 7009046257,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 107,
+        "repo": "acme-demo/ios-app",
+        "runId": 909046257,
+        "runSecs": 1433,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:47:21Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T09:09:03Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:41:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146257/job/7010146257",
+        "id": 7010146257,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 215,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146257,
+        "runSecs": 1417,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:45:26Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T09:03:10Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:49:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146257/job/7060146257",
+        "id": 7060146257,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 114,
+        "repo": "acme-demo/web",
+        "runId": 960146257,
+        "runSecs": 731,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:50:59Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T08:55:56Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:41:12Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930246257/job/7030246257",
+        "id": 7030246257,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 24,
+        "repo": "acme-demo/web",
+        "runId": 930246257,
+        "runSecs": 860,
+        "runnerKey": "gh:acme-demo:302",
+        "runnerName": "linux-01-b",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:41:36Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T08:53:50Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:44:28Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930146257/job/7030146257",
+        "id": 7030146257,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 78,
+        "repo": "acme-demo/web",
+        "runId": 930146257,
+        "runSecs": 484,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:45:46Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T08:53:00Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:46:52Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/920146257/job/7020146257",
+        "id": 7020146257,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 23,
+        "repo": "acme-demo/web",
+        "runId": 920146257,
+        "runSecs": 345,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:47:15Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T08:32:27Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:05:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246256/job/7010246256",
+        "id": 7010246256,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 71,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246256,
+        "runSecs": 1576,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:06:11Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T08:32:02Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:09:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146256/job/7060146256",
+        "id": 7060146256,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 35,
+        "repo": "acme-demo/web",
+        "runId": 960146256,
+        "runSecs": 1342,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:09:40Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T08:26:09Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:01:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146256/job/7010146256",
+        "id": 7010146256,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 78,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146256,
+        "runSecs": 1380,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:03:09Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T08:20:23Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:06:52Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/920146256/job/7020146256",
+        "id": 7020146256,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 117,
+        "repo": "acme-demo/ios-app",
+        "runId": 920146256,
+        "runSecs": 694,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:08:49Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T08:07:30Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:03:15Z",
+        "htmlUrl": "https://github.com/acme-demo/ml/actions/runs/950146256/job/7050146256",
+        "id": 7050146256,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": null,
+        "machineName": null,
+        "name": "benchmark",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 85,
+        "repo": "acme-demo/ml",
+        "runId": 950146256,
+        "runSecs": 170,
+        "runnerKey": "gh:acme-demo:501",
+        "runnerName": "cloud-gpu-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:04:40Z",
+        "workflowName": "Eval"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T07:50:23Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T07:21:12Z",
+        "htmlUrl": "https://github.com/acme-demo/infra/actions/runs/930246255/job/7030246255",
+        "id": 7030246255,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "plan",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 91,
+        "repo": "acme-demo/infra",
+        "runId": 930246255,
+        "runSecs": 1660,
+        "runnerKey": "gh:acme-demo:302",
+        "runnerName": "linux-01-b",
+        "source": "demo",
+        "startedAt": "2026-10-03T07:22:43Z",
+        "workflowName": "Terraform"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T07:44:42Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T07:21:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146255/job/7010146255",
+        "id": 7010146255,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 74,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146255,
+        "runSecs": 1297,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T07:23:05Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T07:43:58Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T07:29:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146255/job/7060146255",
+        "id": 7060146255,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 20,
+        "repo": "acme-demo/web",
+        "runId": 960146255,
+        "runSecs": 873,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T07:29:25Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T07:41:35Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T07:25:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246255/job/7010246255",
+        "id": 7010246255,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 107,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246255,
+        "runSecs": 888,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T07:26:47Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T07:02:42Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T06:49:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146254/job/7060146254",
+        "id": 7060146254,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 23,
+        "repo": "acme-demo/web",
+        "runId": 960146254,
+        "runSecs": 794,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T06:49:28Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T07:02:41Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T06:41:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146254/job/7010146254",
+        "id": 7010146254,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 82,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146254,
+        "runSecs": 1168,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T06:43:13Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T06:55:54Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T06:44:28Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930146254/job/7030146254",
+        "id": 7030146254,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 32,
+        "repo": "acme-demo/web",
+        "runId": 930146254,
+        "runSecs": 654,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T06:45:00Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T06:53:26Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T06:45:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246254/job/7010246254",
+        "id": 7010246254,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 81,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246254,
+        "runSecs": 425,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T06:46:21Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T06:32:15Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T06:03:40Z",
+        "htmlUrl": "https://github.com/acme-demo/desktop/actions/runs/940146253/job/7040146253",
+        "id": 7040146253,
+        "labels": [
+          "self-hosted",
+          "Windows"
+        ],
+        "machineKey": "inv:win-builder",
+        "machineName": "win-builder",
+        "name": "package (Windows)",
+        "org": "acme-demo",
+        "os": "windows",
+        "queueSecs": 111,
+        "repo": "acme-demo/desktop",
+        "runId": 940146253,
+        "runSecs": 1604,
+        "runnerKey": "gh:acme-demo:401",
+        "runnerName": "win-builder",
+        "source": "demo",
+        "startedAt": "2026-10-03T06:05:31Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T06:29:58Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T06:05:34Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046253/job/7009046253",
+        "id": 7009046253,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 103,
+        "repo": "acme-demo/ios-app",
+        "runId": 909046253,
+        "runSecs": 1361,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T06:07:17Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T06:26:38Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T06:09:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146253/job/7060146253",
+        "id": 7060146253,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 27,
+        "repo": "acme-demo/web",
+        "runId": 960146253,
+        "runSecs": 1026,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T06:09:32Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T06:25:35Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T06:05:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246253/job/7010246253",
+        "id": 7010246253,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 42,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246253,
+        "runSecs": 1193,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T06:05:42Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T05:47:48Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T05:25:34Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046252/job/7009046252",
+        "id": 7009046252,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 52,
+        "repo": "acme-demo/ios-app",
+        "runId": 909046252,
+        "runSecs": 1282,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T05:26:26Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T05:46:34Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T05:24:28Z",
+        "htmlUrl": "https://github.com/acme-demo/infra/actions/runs/930146252/job/7030146252",
+        "id": 7030146252,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "plan",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 88,
+        "repo": "acme-demo/infra",
+        "runId": 930146252,
+        "runSecs": 1238,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T05:25:56Z",
+        "workflowName": "Terraform"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T05:42:01Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T05:21:51Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/910146252/job/7010146252",
+        "id": 7010146252,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 282,
+        "repo": "acme-demo/web",
+        "runId": 910146252,
+        "runSecs": 928,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T05:26:33Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T05:41:10Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T05:26:52Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/920146252/job/7020146252",
+        "id": 7020146252,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 84,
+        "repo": "acme-demo/web",
+        "runId": 920146252,
+        "runSecs": 774,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-03T05:28:16Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T05:34:02Z",
+        "conclusion": "failure",
+        "createdAt": "2026-10-03T05:23:15Z",
+        "htmlUrl": "https://github.com/acme-demo/ml/actions/runs/950146252/job/7050146252",
+        "id": 7050146252,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": null,
+        "machineName": null,
+        "name": "train-small",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 119,
+        "repo": "acme-demo/ml",
+        "runId": 950146252,
+        "runSecs": 528,
+        "runnerKey": "gh:acme-demo:501",
+        "runnerName": "cloud-gpu-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T05:25:14Z",
+        "workflowName": "Nightly"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T05:31:38Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T05:23:40Z",
+        "htmlUrl": "https://github.com/acme-demo/desktop/actions/runs/940146252/job/7040146252",
+        "id": 7040146252,
+        "labels": [
+          "self-hosted",
+          "Windows"
+        ],
+        "machineKey": "inv:win-builder",
+        "machineName": "win-builder",
+        "name": "package (Windows)",
+        "org": "acme-demo",
+        "os": "windows",
+        "queueSecs": 45,
+        "repo": "acme-demo/desktop",
+        "runId": 940146252,
+        "runSecs": 433,
+        "runnerKey": "gh:acme-demo:401",
+        "runnerName": "win-builder",
+        "source": "demo",
+        "startedAt": "2026-10-03T05:24:25Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T05:05:51Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T04:41:12Z",
+        "htmlUrl": "https://github.com/acme-demo/api/actions/runs/930246251/job/7030246251",
+        "id": 7030246251,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "test",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 62,
+        "repo": "acme-demo/api",
+        "runId": 930246251,
+        "runSecs": 1417,
+        "runnerKey": "gh:acme-demo:302",
+        "runnerName": "linux-01-b",
+        "source": "demo",
+        "startedAt": "2026-10-03T04:42:14Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T05:00:33Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T04:45:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246251/job/7010246251",
+        "id": 7010246251,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 98,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246251,
+        "runSecs": 835,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T04:46:38Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T04:50:00Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T04:41:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146251/job/7010146251",
+        "id": 7010146251,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 96,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146251,
+        "runSecs": 393,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T04:43:27Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T04:27:58Z",
+        "conclusion": "failure",
+        "createdAt": "2026-10-03T04:05:34Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/909046250/job/7009046250",
+        "id": 7009046250,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 386,
+        "repo": "acme-demo/web",
+        "runId": 909046250,
+        "runSecs": 958,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T04:12:00Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T04:25:01Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T04:06:52Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/920146250/job/7020146250",
+        "id": 7020146250,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 120,
+        "repo": "acme-demo/ios-app",
+        "runId": 920146250,
+        "runSecs": 969,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-03T04:08:52Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T04:21:41Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T04:04:28Z",
+        "htmlUrl": "https://github.com/acme-demo/infra/actions/runs/930146250/job/7030146250",
+        "id": 7030146250,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "plan",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 88,
+        "repo": "acme-demo/infra",
+        "runId": 930146250,
+        "runSecs": 945,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T04:05:56Z",
+        "workflowName": "Terraform"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T04:19:22Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T04:05:00Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/910246250/job/7010246250",
+        "id": 7010246250,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 104,
+        "repo": "acme-demo/web",
+        "runId": 910246250,
+        "runSecs": 758,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T04:06:44Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T04:17:51Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T04:01:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146250/job/7010146250",
+        "id": 7010146250,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 64,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146250,
+        "runSecs": 896,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T04:02:55Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T03:32:31Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T03:21:12Z",
+        "htmlUrl": "https://github.com/acme-demo/api/actions/runs/930246249/job/7030246249",
+        "id": 7030246249,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "test",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 51,
+        "repo": "acme-demo/api",
+        "runId": 930246249,
+        "runSecs": 628,
+        "runnerKey": "gh:acme-demo:302",
+        "runnerName": "linux-01-b",
+        "source": "demo",
+        "startedAt": "2026-10-03T03:22:03Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T03:30:40Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T03:21:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146249/job/7010146249",
+        "id": 7010146249,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 107,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146249,
+        "runSecs": 422,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T03:23:38Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T03:03:42Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T02:43:40Z",
+        "htmlUrl": "https://github.com/acme-demo/desktop/actions/runs/940146248/job/7040146248",
+        "id": 7040146248,
+        "labels": [
+          "self-hosted",
+          "Windows"
+        ],
+        "machineKey": "inv:win-builder",
+        "machineName": "win-builder",
+        "name": "test",
+        "org": "acme-demo",
+        "os": "windows",
+        "queueSecs": 64,
+        "repo": "acme-demo/desktop",
+        "runId": 940146248,
+        "runSecs": 1138,
+        "runnerKey": "gh:acme-demo:401",
+        "runnerName": "win-builder",
+        "source": "demo",
+        "startedAt": "2026-10-03T02:44:44Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T03:02:04Z",
+        "conclusion": "failure",
+        "createdAt": "2026-10-03T02:41:12Z",
+        "htmlUrl": "https://github.com/acme-demo/api/actions/runs/930246248/job/7030246248",
+        "id": 7030246248,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "test",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 39,
+        "repo": "acme-demo/api",
+        "runId": 930246248,
+        "runSecs": 1213,
+        "runnerKey": "gh:acme-demo:302",
+        "runnerName": "linux-01-b",
+        "source": "demo",
+        "startedAt": "2026-10-03T02:41:51Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T02:56:31Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T02:41:51Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/910146248/job/7010146248",
+        "id": 7010146248,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 50,
+        "repo": "acme-demo/web",
+        "runId": 910146248,
+        "runSecs": 830,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T02:42:41Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T02:52:42Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T02:45:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246248/job/7010246248",
+        "id": 7010246248,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 112,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246248,
+        "runSecs": 350,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T02:46:52Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T02:28:47Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T02:01:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146247/job/7010146247",
+        "id": 7010146247,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 56,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146247,
+        "runSecs": 1560,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T02:02:47Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T02:25:52Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T02:05:34Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046247/job/7009046247",
+        "id": 7009046247,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 17,
+        "repo": "acme-demo/ios-app",
+        "runId": 909046247,
+        "runSecs": 1201,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T02:05:51Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T02:24:08Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T02:04:28Z",
+        "htmlUrl": "https://github.com/acme-demo/api/actions/runs/930146247/job/7030146247",
+        "id": 7030146247,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "test",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 68,
+        "repo": "acme-demo/api",
+        "runId": 930146247,
+        "runSecs": 1112,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T02:05:36Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T01:57:55Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T01:21:51Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/910146246/job/7010146246",
+        "id": 7010146246,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 555,
+        "repo": "acme-demo/web",
+        "runId": 910146246,
+        "runSecs": 1609,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T01:31:06Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T01:44:37Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T01:25:34Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046246/job/7009046246",
+        "id": 7009046246,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 90,
+        "repo": "acme-demo/ios-app",
+        "runId": 909046246,
+        "runSecs": 1053,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T01:27:04Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T01:36:41Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T01:23:40Z",
+        "htmlUrl": "https://github.com/acme-demo/desktop/actions/runs/940146246/job/7040146246",
+        "id": 7040146246,
+        "labels": [
+          "self-hosted",
+          "Windows"
+        ],
+        "machineKey": "inv:win-builder",
+        "machineName": "win-builder",
+        "name": "package (Windows)",
+        "org": "acme-demo",
+        "os": "windows",
+        "queueSecs": 18,
+        "repo": "acme-demo/desktop",
+        "runId": 940146246,
+        "runSecs": 763,
+        "runnerKey": "gh:acme-demo:401",
+        "runnerName": "win-builder",
+        "source": "demo",
+        "startedAt": "2026-10-03T01:23:58Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T01:35:19Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T01:21:12Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930246246/job/7030246246",
+        "id": 7030246246,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 26,
+        "repo": "acme-demo/web",
+        "runId": 930246246,
+        "runSecs": 821,
+        "runnerKey": "gh:acme-demo:302",
+        "runnerName": "linux-01-b",
+        "source": "demo",
+        "startedAt": "2026-10-03T01:21:38Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T01:33:58Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T01:26:52Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/920146246/job/7020146246",
+        "id": 7020146246,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 47,
+        "repo": "acme-demo/ios-app",
+        "runId": 920146246,
+        "runSecs": 379,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-03T01:27:39Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T01:10:19Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T00:45:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246245/job/7010246245",
+        "id": 7010246245,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 51,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246245,
+        "runSecs": 1468,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T00:45:51Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T00:57:09Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T00:41:12Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930246245/job/7030246245",
+        "id": 7030246245,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 60,
+        "repo": "acme-demo/web",
+        "runId": 930246245,
+        "runSecs": 897,
+        "runnerKey": "gh:acme-demo:302",
+        "runnerName": "linux-01-b",
+        "source": "demo",
+        "startedAt": "2026-10-03T00:42:12Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T00:50:48Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T00:44:28Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930146245/job/7030146245",
+        "id": 7030146245,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 26,
+        "repo": "acme-demo/web",
+        "runId": 930146245,
+        "runSecs": 354,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T00:44:54Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T00:47:27Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T00:41:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146245/job/7010146245",
+        "id": 7010146245,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 34,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146245,
+        "runSecs": 302,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T00:42:25Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T00:25:17Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T00:05:34Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/909046244/job/7009046244",
+        "id": 7009046244,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 47,
+        "repo": "acme-demo/web",
+        "runId": 909046244,
+        "runSecs": 1136,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-03T00:06:21Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T00:18:52Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T00:03:15Z",
+        "htmlUrl": "https://github.com/acme-demo/ml/actions/runs/950146244/job/7050146244",
+        "id": 7050146244,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": null,
+        "machineName": null,
+        "name": "benchmark",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 85,
+        "repo": "acme-demo/ml",
+        "runId": 950146244,
+        "runSecs": 852,
+        "runnerKey": "gh:acme-demo:501",
+        "runnerName": "cloud-gpu-1",
+        "source": "demo",
+        "startedAt": "2026-10-03T00:04:40Z",
+        "workflowName": "Eval"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T00:12:48Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T00:04:28Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930146244/job/7030146244",
+        "id": 7030146244,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 101,
+        "repo": "acme-demo/web",
+        "runId": 930146244,
+        "runSecs": 399,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T00:06:09Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T23:47:19Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T23:21:51Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/910146243/job/7010146243",
+        "id": 7010146243,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 35,
+        "repo": "acme-demo/web",
+        "runId": 910146243,
+        "runSecs": 1493,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-02T23:22:26Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T23:45:38Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T23:29:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146243/job/7060146243",
+        "id": 7060146243,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 95,
+        "repo": "acme-demo/web",
+        "runId": 960146243,
+        "runSecs": 898,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T23:30:40Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T23:44:04Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T23:26:52Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/920146243/job/7020146243",
+        "id": 7020146243,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 86,
+        "repo": "acme-demo/web",
+        "runId": 920146243,
+        "runSecs": 946,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-02T23:28:18Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T23:42:14Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T23:21:12Z",
+        "htmlUrl": "https://github.com/acme-demo/api/actions/runs/930246243/job/7030246243",
+        "id": 7030246243,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "test",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 544,
+        "repo": "acme-demo/api",
+        "runId": 930246243,
+        "runSecs": 718,
+        "runnerKey": "gh:acme-demo:302",
+        "runnerName": "linux-01-b",
+        "source": "demo",
+        "startedAt": "2026-10-02T23:30:16Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T23:39:53Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T23:25:34Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046243/job/7009046243",
+        "id": 7009046243,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 106,
+        "repo": "acme-demo/ios-app",
+        "runId": 909046243,
+        "runSecs": 753,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-02T23:27:20Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T23:29:52Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T23:25:00Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/910246243/job/7010246243",
+        "id": 7010246243,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 33,
+        "repo": "acme-demo/web",
+        "runId": 910246243,
+        "runSecs": 259,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-02T23:25:33Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T23:08:16Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T22:41:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146242/job/7010146242",
+        "id": 7010146242,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 37,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146242,
+        "runSecs": 1548,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-02T22:42:28Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T22:51:34Z",
+        "conclusion": "failure",
+        "createdAt": "2026-10-02T22:43:40Z",
+        "htmlUrl": "https://github.com/acme-demo/desktop/actions/runs/940146242/job/7040146242",
+        "id": 7040146242,
+        "labels": [
+          "self-hosted",
+          "Windows"
+        ],
+        "machineKey": "inv:win-builder",
+        "machineName": "win-builder",
+        "name": "test",
+        "org": "acme-demo",
+        "os": "windows",
+        "queueSecs": 336,
+        "repo": "acme-demo/desktop",
+        "runId": 940146242,
+        "runSecs": 138,
+        "runnerKey": "gh:acme-demo:401",
+        "runnerName": "win-builder",
+        "source": "demo",
+        "startedAt": "2026-10-02T22:49:16Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T22:22:58Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T22:09:05Z",
+        "htmlUrl": "https://github.com/acme-demo/infra/actions/runs/960146241/job/7060146241",
+        "id": 7060146241,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "plan",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 52,
+        "repo": "acme-demo/infra",
+        "runId": 960146241,
+        "runSecs": 781,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T22:09:57Z",
+        "workflowName": "Terraform"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T22:15:12Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T22:05:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246241/job/7010246241",
+        "id": 7010246241,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 53,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246241,
+        "runSecs": 559,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-02T22:05:53Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T22:13:13Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T22:04:28Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930146241/job/7030146241",
+        "id": 7030146241,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 53,
+        "repo": "acme-demo/web",
+        "runId": 930146241,
+        "runSecs": 472,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T22:05:21Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T22:07:19Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T22:01:51Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/910146241/job/7010146241",
+        "id": 7010146241,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 87,
+        "repo": "acme-demo/web",
+        "runId": 910146241,
+        "runSecs": 241,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-02T22:03:18Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T21:53:53Z",
+        "conclusion": "failure",
+        "createdAt": "2026-10-02T21:26:52Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/920146240/job/7020146240",
+        "id": 7020146240,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 70,
+        "repo": "acme-demo/web",
+        "runId": 920146240,
+        "runSecs": 1551,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-02T21:28:02Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T21:38:54Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T21:21:12Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930246240/job/7030246240",
+        "id": 7030246240,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 344,
+        "repo": "acme-demo/web",
+        "runId": 930246240,
+        "runSecs": 718,
+        "runnerKey": "gh:acme-demo:302",
+        "runnerName": "linux-01-b",
+        "source": "demo",
+        "startedAt": "2026-10-02T21:26:56Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T21:37:14Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T21:29:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146240/job/7060146240",
+        "id": 7060146240,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 65,
+        "repo": "acme-demo/web",
+        "runId": 960146240,
+        "runSecs": 424,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T21:30:10Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T21:34:56Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T21:21:51Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146240/job/7010146240",
+        "id": 7010146240,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 62,
+        "repo": "acme-demo/ios-app",
+        "runId": 910146240,
+        "runSecs": 723,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-02T21:22:53Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T21:12:10Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T20:45:34Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046239/job/7009046239",
+        "id": 7009046239,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 84,
+        "repo": "acme-demo/ios-app",
+        "runId": 909046239,
+        "runSecs": 1512,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-02T20:46:58Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T21:10:03Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T20:45:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246239/job/7010246239",
+        "id": 7010246239,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 60,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246239,
+        "runSecs": 1443,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-02T20:46:00Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T21:03:54Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T20:44:28Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930146239/job/7030146239",
+        "id": 7030146239,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 99,
+        "repo": "acme-demo/web",
+        "runId": 930146239,
+        "runSecs": 1067,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T20:46:07Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T20:54:50Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T20:41:51Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/910146239/job/7010146239",
+        "id": 7010146239,
+        "labels": [
+          "self-hosted",
+          "macOS",
+          "xcode-16"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "test-unit",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 72,
+        "repo": "acme-demo/web",
+        "runId": 910146239,
+        "runSecs": 707,
+        "runnerKey": "gh:acme-demo:101",
+        "runnerName": "studio-1",
+        "source": "demo",
+        "startedAt": "2026-10-02T20:43:03Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T20:29:21Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T20:09:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146238/job/7060146238",
+        "id": 7060146238,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 24,
+        "repo": "acme-demo/web",
+        "runId": 960146238,
+        "runSecs": 1192,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T20:09:29Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T20:29:01Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T20:06:52Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/920146238/job/7020146238",
+        "id": 7020146238,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:mac-mini-02",
+        "machineName": "mac-mini-02",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 270,
+        "repo": "acme-demo/ios-app",
+        "runId": 920146238,
+        "runSecs": 1059,
+        "runnerKey": "gh:acme-demo:201",
+        "runnerName": "mini-02",
+        "source": "demo",
+        "startedAt": "2026-10-02T20:11:22Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T20:28:05Z",
+        "conclusion": "cancelled",
+        "createdAt": "2026-10-02T20:05:34Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046238/job/7009046238",
+        "id": 7009046238,
+        "labels": [
+          "macOS",
+          "self-hosted"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "archive",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 65,
+        "repo": "acme-demo/ios-app",
+        "runId": 909046238,
+        "runSecs": 1286,
+        "runnerKey": "gh:acme-demo:90",
+        "runnerName": "Studio-Old-2",
+        "source": "demo",
+        "startedAt": "2026-10-02T20:06:39Z",
+        "workflowName": "Release"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T20:14:09Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T20:04:28Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930146238/job/7030146238",
+        "id": 7030146238,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 65,
+        "repo": "acme-demo/web",
+        "runId": 930146238,
+        "runSecs": 516,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T20:05:33Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T20:14:09Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T20:05:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246238/job/7010246238",
+        "id": 7010246238,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "ui-tests",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 6,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246238,
+        "runSecs": 543,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-02T20:05:06Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T19:55:32Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T19:29:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146237/job/7060146237",
+        "id": 7060146237,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 283,
+        "repo": "acme-demo/web",
+        "runId": 960146237,
+        "runSecs": 1304,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T19:33:48Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T19:35:14Z",
+        "conclusion": "cancelled",
+        "createdAt": "2026-10-02T19:24:28Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930146237/job/7030146237",
+        "id": 7030146237,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "docker"
+        ],
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 21,
+        "repo": "acme-demo/web",
+        "runId": 930146237,
+        "runSecs": 625,
+        "runnerKey": "gh:acme-demo:301",
+        "runnerName": "linux-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T19:24:49Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-02T19:34:03Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T19:25:00Z",
+        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246237/job/7010246237",
+        "id": 7010246237,
+        "labels": [
+          "self-hosted",
+          "macOS"
+        ],
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "name": "build (macOS)",
+        "org": "acme-demo",
+        "os": "macos",
+        "queueSecs": 117,
+        "repo": "acme-demo/ios-app",
+        "runId": 910246237,
+        "runSecs": 426,
+        "runnerKey": "gh:acme-demo:102",
+        "runnerName": "studio-2",
+        "source": "demo",
+        "startedAt": "2026-10-02T19:26:57Z",
+        "workflowName": "CI"
+      }
+    ],
+    "nextCursor": "0000000179096964300000000000007010246237",
+    "order": "newestFirst",
+    "storageError": null
+  }
+}

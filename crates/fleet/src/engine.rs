@@ -40,12 +40,17 @@ pub struct Engine {
     desired_changed: tokio::sync::watch::Sender<u64>,
     desired_io: desired::DesiredIo,
     machine_source: Arc<dyn crate::machine::MachineSource>,
+    /// Where shared SSH connections keep their sockets, when the setting is on.
+    ssh_control_dir: PathBuf,
+    wake_sender: Arc<dyn crate::wake::WakeSender>,
+    wake_reviews: Mutex<waking::WakeReviews>,
     machine_poll: tokio::sync::Mutex<()>,
     desired_refresh_gate: tokio::sync::Mutex<()>,
     doctor_gate: tokio::sync::Mutex<()>,
     monitoring: Mutex<crate::monitoring::MonitorStore>,
     automation: Mutex<crate::automation::AutomationStore>,
     variables: Arc<dyn crate::automation::ActionsVariables>,
+    job_activity: job_history::JobActivity,
 }
 
 impl std::fmt::Debug for Engine {
@@ -62,6 +67,10 @@ pub mod desired;
 #[path = "engine_automation.rs"]
 mod automation;
 
+#[path = "engine_job_feed.rs"]
+mod job_feed;
+#[path = "engine_jobs.rs"]
+mod job_history;
 #[path = "engine_machines.rs"]
 mod machines;
 #[path = "engine_monitoring.rs"]
@@ -70,8 +79,11 @@ mod monitoring;
 mod orgs;
 #[path = "engine_secrets.rs"]
 mod secrets;
+#[path = "engine_wake.rs"]
+mod waking;
 pub use orgs::AccountSetup;
 pub use secrets::{MemorySecrets, SecretStore};
+pub use waking::WakeReview;
 
 impl Engine {
     pub fn load(config_path: impl Into<PathBuf>, secrets: Arc<dyn SecretStore>) -> Result<Self, EngineError> {
@@ -84,6 +96,7 @@ impl Engine {
         };
         let monitoring = crate::monitoring::MonitorStore::load(config_path.with_file_name("monitoring.json"));
         let automation = crate::automation::AutomationStore::load(config_path.with_file_name("automation.json"));
+        let job_activity = job_history::JobActivity::load(&config_path);
         Ok(Self {
             config_path,
             config: RwLock::new(config),
@@ -95,12 +108,16 @@ impl Engine {
             desired_changed: tokio::sync::watch::channel(0).0,
             desired_io: desired::DesiredIo::default(),
             machine_source: Arc::new(crate::machine::remote_client()),
+            ssh_control_dir: crate::ssh_reuse::ControlDir::default_path(),
+            wake_sender: Arc::new(crate::machine::remote_client()),
+            wake_reviews: Mutex::default(),
             machine_poll: tokio::sync::Mutex::new(()),
             desired_refresh_gate: tokio::sync::Mutex::new(()),
             doctor_gate: tokio::sync::Mutex::new(()),
             monitoring: Mutex::new(monitoring),
             automation: Mutex::new(automation),
             variables: Arc::new(crate::automation::GhVariables::installed()),
+            job_activity,
         })
     }
 
@@ -147,6 +164,7 @@ impl Engine {
             .locked()
             .attach(&mut view, now, config.desktop_notifications);
         self.attach_automation(&mut view, &config, now);
+        self.attach_job_activity(&mut view);
         crate::issues::attach(&mut view);
         view
     }

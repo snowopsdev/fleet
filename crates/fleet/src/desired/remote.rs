@@ -285,6 +285,27 @@ impl RemoteClient {
             .map_err(|e| RemoteError(e.to_string()))
     }
 
+    /// `run_script` with extra OpenSSH options ahead of the target, for monitoring's optional
+    /// connection reuse. The hardening options stay; `tailscale ssh` gets no extra options.
+    pub(crate) fn run_script_with_options<'a>(
+        &self,
+        connection: impl Into<Connection<'a>>,
+        script: &str,
+        extra: &[String],
+    ) -> Result<String> {
+        let connection = connection.into();
+        let (mut command, input) = self.script_command(connection, script)?;
+        if connection.transport == SshTransport::Openssh
+            && let Some(at) = command.iter().position(|a| a == "--")
+        {
+            command.splice(at..at, extra.iter().cloned());
+        }
+        self.runner
+            .run(&command, Some(&input), self.timeout, NonZeroExit::Error)
+            .map(|r| r.stdout)
+            .map_err(|e| RemoteError(e.to_string()))
+    }
+
     fn run_worker_script(
         &self,
         host: &Host,

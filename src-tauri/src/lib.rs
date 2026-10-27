@@ -131,8 +131,14 @@ pub fn run() {
             app.manage(engine.clone());
             let api = local_api::start(engine.clone(), app.path().app_config_dir()?);
             app.manage(api);
-            let poller = poller::start(app.handle().clone(), engine);
+            let poller = poller::start(app.handle().clone(), engine.clone());
             app.manage(poller);
+            // The optional real-time job feed; does nothing until an organization turns it on.
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = engine.run_job_feeds().await {
+                    tracing::warn!("job feed unavailable: {e}");
+                }
+            });
 
             app.set_menu(build_menu(app.handle())?)?;
             app.on_menu_event(|app, event| match event.id().as_ref() {
@@ -183,10 +189,13 @@ pub fn run() {
             commands::get_gh_status,
             commands::use_gh_for_org,
             commands::set_local_api,
+            commands::set_ssh_connection_reuse,
             commands::desired_refresh,
             commands::desired_doctor,
             commands::desired_logs,
             commands::desired_review,
+            commands::wake_review,
+            commands::wake_execute,
             commands::desired_execute,
             commands::desired_dismiss_operation,
             commands::desired_cancel_drain,
@@ -195,7 +204,19 @@ pub fn run() {
             commands::save_alert_destination,
             commands::remove_alert_destination,
             commands::test_alert_destination,
+            commands::get_job_history,
+            commands::get_analytics,
+            commands::set_hosted_rates,
+            commands::set_job_feed,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Runner Dashboard");
+        .build(tauri::generate_context!())
+        .expect("error while building Runner Dashboard")
+        .run(|app, event| {
+            // Forwarders create a webhook on the organization; never leave one running.
+            if let tauri::RunEvent::Exit = event
+                && let Some(engine) = app.try_state::<Arc<Engine>>()
+            {
+                engine.stop_job_feeds();
+            }
+        });
 }

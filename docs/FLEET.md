@@ -57,6 +57,12 @@ These are persistent machines: anyone who can change a workflow in an eligible p
 repository can run code on them. Keep the runner group restricted to private repositories and
 limit write access.
 
+A runner group open to public repositories is worse: anyone can open a pull request from a
+fork, and its workflow runs on your machines and can leave changes behind for later jobs. The
+app warns (a GitHub finding) when the inventory's group allows public repositories, and, for
+organizations added in Settings, when any runner group with self-hosted runners does. See
+GitHub's [hardening for self-hosted runners](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#hardening-for-self-hosted-runners).
+
 ## Inventory format
 
 ```toml
@@ -82,7 +88,7 @@ group every runner registers into. Each `[[hosts]]` entry is one machine:
 | Key | Meaning |
 |---|---|
 | `id` | Unique host ID. The local API accepts `inv:<id>` for the host's machine. |
-| `platform` | `darwin-arm64`, `windows-arm64`, `windows-x64` or `linux-x64`. |
+| `platform` | `darwin-arm64`, `darwin-x64` (Intel Macs), `windows-arm64`, `windows-x64`, `linux-x64` or `linux-arm64` (Raspberry Pi, Ampere, Asahi). See [Platforms](#platforms). |
 | `ssh` | SSH target, or `${NAME}` to read it from the environment variable `NAME`. |
 | `ssh_transport` | `openssh` (default) or `tailscale`. |
 | `root` | The dedicated directory that holds this host's runners. |
@@ -90,6 +96,9 @@ group every runner registers into. Each `[[hosts]]` entry is one machine:
 | `service_account` | Windows only, and required for `windows-logon`. |
 | `labels` | Labels on every runner of the host: `fleet`, one platform capability label (`macos-build`, `windows-build`, `linux-build` or `linux-experimental`) and, by convention, `host-<id>`. |
 | `enabled` | `false` leaves the host out of checks and changes. Defaults to `true`. |
+| `xcode` | macOS only, optional: Xcode versions jobs expect, such as `["26.1"]`. See [Xcode and simulators](#xcode-and-simulators). |
+| `simulator_runtimes` | macOS only, optional: simulator runtimes jobs expect, such as `["iOS 26.0"]`. |
+| `mac_address`, `wake_via` | Optional, together: the address to wake with Wake-on-LAN and the host on the same network that sends the packet. See [Wake a sleeping machine](#wake-a-sleeping-machine). |
 | `runners` | At least one runner. |
 
 A runner takes `name`, unique across the inventory, and `directory`, one path component below
@@ -99,11 +108,31 @@ supersedes (add `repository = "org/repo"` for a repository-level one), and
 `decommission = true`. Validation rejects duplicate names or paths, traversal, the wrong service
 mode for the platform, and roots outside the runner area.
 
+## Platforms
+
+| `platform` | Runner release asset | `service_mode` | Capability label |
+|---|---|---|---|
+| `darwin-arm64` | `actions-runner-osx-arm64-*.tar.gz` | `launchagent` | `macos-build` |
+| `darwin-x64` | `actions-runner-osx-x64-*.tar.gz` | `launchagent` | `macos-build` |
+| `linux-x64` | `actions-runner-linux-x64-*.tar.gz` | `systemd` | `linux-build` or `linux-experimental` |
+| `linux-arm64` | `actions-runner-linux-arm64-*.tar.gz` | `systemd` | `linux-build` or `linux-experimental` |
+| `windows-x64` | `actions-runner-win-x64-*.zip` | `windows-service` or `windows-logon` | `windows-build` |
+| `windows-arm64` | `actions-runner-win-arm64-*.zip` | `windows-service` or `windows-logon` | `windows-build` |
+
+The architecture only selects the runner download. Install scripts, LaunchAgent and systemd
+paths, NixOS modules and runner checks are the same for both architectures of an operating
+system, and every download is verified against the SHA-256 digest GitHub publishes for that
+asset. Machine diagnostics warn when a machine reports a different architecture than its
+`platform`. `darwin-x64` and `linux-arm64` are not in Runner Fleet: an inventory that uses
+them doesn't load there, so leave them out of inventories you compare with
+[the parity script](#parity-with-runner-fleet).
+
 ## The example fleet
 
 [`inventory/fleet.example.toml`](../inventory/fleet.example.toml) demonstrates macOS LaunchAgents,
 Linux systemd, Windows services and Windows logon tasks. It includes a legacy migration, a
-decommissioned runner, a GUI lane separated from build work and a Linux canary.
+decommissioned runner, a GUI lane separated from build work, a Linux canary, an Intel Mac and
+a Raspberry Pi.
 
 Keep actual hardware, capacity and unattended-setup notes in your private inventory's comments.
 Runners live in one dedicated root per host, for example:
@@ -112,6 +141,11 @@ Runners live in one dedicated root per host, for example:
 macOS/Linux: ~/gh-runners/acme/runner-01
 Windows:     C:\gh-runners\acme\runner-01
 ```
+
+To keep runner workspaces on another volume, such as an external SSD on a Mac mini, make
+`~/gh-runners` a symlink to a directory on it. The machine's health then shows the runner
+volume's free space, its diagnostics include a **Runner volume** check, and low-disk alerts
+cover it like the system disk.
 
 ## Using the app
 
@@ -163,7 +197,10 @@ and `health HOST`).
 through Runner Fleet's `bin/fleet` and through this port, and compares the JSON. It needs a
 Runner Fleet checkout (`RUNNER_FLEET_DIR`, default `~/Code/soloterm/runner-fleet`) and python3.
 It reads `RUNNER_DASHBOARD_INVENTORY` like the app. Free-disk numbers and runners outside the
-inventory are ignored, since they move between the two runs.
+inventory are ignored, since they move between the two runs. The `darwin-x64` and
+`linux-arm64` platforms and the optional host keys `xcode`, `simulator_runtimes`,
+`mac_address` and `wake_via` are additions of this app; Runner Fleet rejects them, so compare
+inventories without them.
 
 ```sh
 scripts/fleet-parity.sh              # all four commands
@@ -233,6 +270,35 @@ Runner checks report each `power:*` setting. Nothing here ever changes power set
 Runners that share a user account also share its caches and machine access; concurrent jobs
 are not isolated. Record each host's capacity and operating constraints in the private inventory.
 
+**macOS readiness.** Machine diagnostics on a Mac also read, without changing anything or
+prompting: whether automatic login is set for the runner account
+(`com.apple.loginwindow autoLoginUser`); which user is on the console and whether its screen
+is locked (`IOConsoleUsers`, `CGSSessionScreenIsLocked`); whether the SSH session can read the
+login keychain (`security show-keychain-info`, exit status only); and how many valid
+code-signing identities there are (a count; identities never leave the machine). A locked
+screen or another user on the console is a warning on hosts with a GUI lane (an `*-e2e`
+label). SSH logins get their own security session, so a keychain that is locked for SSH may
+still be unlocked for the LaunchAgent; the check says so instead of guessing. Every command has
+a few seconds to finish, with stdin closed.
+
+### Xcode and simulators
+
+Diagnostics list the Xcode apps in `/Applications` (read from each app's `version.plist`), the
+selected developer directory (`xcode-select -p`) and whether the selected Xcode's license is
+accepted (`xcodebuild -license check`). They warn when the Command Line Tools are selected
+although Xcode is installed, and when the license isn't accepted. The `/usr/bin` shims are
+never run, so a Mac without developer tools isn't offered an install dialog.
+
+Declare the versions jobs rely on to get a warning when one is missing:
+
+```toml
+xcode = ["26.1", "16.4"]           # 26 accepts any 26.x; 26.1 accepts 26.1 and 26.1.x
+simulator_runtimes = ["iOS 26.0"]  # read with simctl list runtimes, only when declared
+```
+
+The app never installs Xcode or runtimes. Simulator runtimes can't be listed until the
+license is accepted.
+
 **Tailscale SSH hosts** use `ssh_transport = "tailscale"` and explicit
 `builder@HOST.example.ts.net` targets; scripts and transient passwords go over stdin. Tailscale
 SSH must already be enabled and authorized on the machine. On macOS that means the open-source
@@ -267,6 +333,26 @@ are verified. Don't also enable `services.github-runners` for inventory runners.
    ```
 
 3. In the app: **Check now**, then **Run checks** for the new host, then **Review apply…**.
+
+## Wake a sleeping machine
+
+A machine that sleeps or powers off drops off the tailnet, so nothing can reach it directly.
+If its network card supports Wake-on-LAN, declare its address and another inventory host on
+the same network:
+
+```toml
+mac_address = "02:00:5e:10:00:01"  # six hex pairs, ':' or '-'
+wake_via = "studio"                # another [[hosts]] id
+```
+
+When the machine is offline, its pane offers **Wake…**. The review shows the address, the
+sending host and the broadcast address (`255.255.255.255:9`); it's blocked unless the sending
+host is online on the tailnet and the machine isn't. Sending re-reads the inventory and the
+tailnet, then runs a small script on the sending host over SSH: python3, or perl, broadcasts
+one magic packet (a bash `/dev/udp` redirect can't broadcast); Windows hosts use .NET's
+`UdpClient`. Only the validated address reaches the script, as twelve hex digits. The machine's
+history records the wake. Enable Wake-on-LAN on the machine itself first (on macOS, **Wake for
+network access**, reported by diagnostics); a packet doesn't prove the machine woke.
 
 ## Replace and retire a runner
 
@@ -488,6 +574,7 @@ runner directories by explicit path, separately.
 | Linux install fails on sudo | Use the sudo password field in the review, or configure narrowly scoped non-interactive sudo. |
 | Windows job can't see a certificate or profile | Check the runner's service identity; use a dedicated build account only when needed. |
 | Logon-task runner offline | **Run checks**: auto-logon must be set and the account's session active. |
-| GUI E2E fails with focus or visibility errors on a Mac | A locked desktop fails every GUI test: check `IOConsoleUsers`' `CGSSessionScreenIsLocked`. |
+| GUI E2E fails with focus or visibility errors on a Mac | A locked desktop fails every GUI test: the machine's **Screen lock** diagnostic reads `IOConsoleUsers`' `CGSSessionScreenIsLocked`. |
+| `xcodebuild` fails on a Mac with Xcode installed | Check the **Selected developer directory** and **Xcode license** diagnostics. |
 | "GitHub name exists but exact local directory is missing" | Resolve the collision by hand. Apply never uses `--replace`. |
 | Local `.runner` exists but GitHub has no runner | Inspect before re-registering. Apply won't tear it down. |

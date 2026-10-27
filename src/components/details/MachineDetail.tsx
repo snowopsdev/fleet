@@ -21,8 +21,10 @@ import { MachineGlance } from "./MachineGlance";
 import { MachinePreferencesForm } from "../MachinePreferencesForm";
 import { MachineMonitoring } from "./Monitoring";
 import { RunnerChecks } from "./RunnerChecks";
+import { RecentJobsSection } from "./RecentJobs";
 import { RunnerTable } from "./RunnerTable";
 import { CopyValue } from "../CopyValue";
+import { WakeMachine } from "./WakeCard";
 
 const OS_NAME = { macos: "macOS", linux: "Linux", windows: "Windows", other: "Other" } as const;
 
@@ -69,12 +71,15 @@ export function MachineDetail({ machine: m, view }: { machine: MachineView; view
       <MachineMaintenance m={m} change={change} enabled={isTauri && !busy} />
       <ChangePanel change={change} busy={busy} />
       <ConnectionNotice m={m} />
+      <WakeMachine key={`${view.source}:${m.id}`} machine={m} live={live} />
       <MachineMonitoring key={`${view.source}:${m.id}`} machine={m} view={view} />
       <MachineDiagnostics machine={m} />
 
       <Section title="Runners" count={m.runners.length} action={<span className="font-mono text-[12px] text-ink-2">{runnerSummary(m)}</span>}>
         <RunnerTable m={m} />
       </Section>
+
+      {m.runners.length > 0 && <RecentJobsSection view={view} machineKey={m.monitoring.machineKey || m.id} />}
 
       <MachineFacts m={m} inFleet={view.machines.some((x) => x.id === m.id)} />
       {d && (

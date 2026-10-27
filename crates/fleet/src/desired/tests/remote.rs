@@ -79,6 +79,20 @@ fn openssh_transport_is_batch_and_strict() {
 }
 
 #[test]
+fn doctor_prerequisites_follow_the_operating_system_not_the_architecture() {
+    let inventory = example_inventory();
+    let intel = posix_doctor(inventory.find_host("intel-mac").unwrap());
+    assert!(intel.contains("for command in curl tar git shasum; do"), "{intel}");
+    assert!(intel.contains("pmset -g custom"));
+    let pi = posix_doctor(inventory.find_host("pi").unwrap());
+    assert!(
+        pi.contains("for command in curl tar git sha256sum systemctl sudo; do"),
+        "{pi}"
+    );
+    assert!(pi.contains("systemd starts before login"));
+}
+
+#[test]
 fn posix_probe_parser_ignores_login_banner() {
     let out = "Welcome\nRF1\tmac-01\t/Users/a/gh-runners/r1\ttrue\tactive\t2.336.0\n";
     let runner = &parse_posix_probe(out).unwrap()["mac-01"];

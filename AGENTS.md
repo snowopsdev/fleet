@@ -14,7 +14,11 @@ specifics that take precedence:
   runs; commit them with the Rust change. Give exported names a prefix (`Fleet…`) when they could
   collide.
 - **Demo fixture:** regenerate `src/fixtures/demo-fleet.json` when the views it covers change:
-  `cargo run -q -p fleet --example demo_json > src/fixtures/demo-fleet.json`.
+  `cargo run -q -p fleet --example demo_json > src/fixtures/demo-fleet.json`. The preview's job
+  history and analytics come from
+  `cargo run -q -p fleet --example demo_activity_json > src/fixtures/demo-activity.json`.
+- **Job feed:** tests never start `gh webhook forward`; they use a fake `Launch` (see
+  `crates/fleet/src/jobs/feed_tests.rs` and `crates/fleet/tests/job_history.rs`).
 - **Error text** from `EngineError` and the desired-state operations is shown to the user as is,
   so it's written as sentences. That's deliberate, despite the lowercase-messages guideline.
 - **Safety:** tests never contact a real host, the GitHub org or a real webhook/ntfy endpoint;

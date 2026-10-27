@@ -402,7 +402,14 @@ fn discovery_and_demo_cover_current_stale_offline_and_failed_ssh() {
     let names: Vec<_> = view.machines.iter().map(|m| m.display_name.as_str()).collect();
     assert_eq!(
         names,
-        ["build-linux-01", "mac-mini-02", "mac-mini-03", "studio", "win-builder"]
+        [
+            "build-linux-01",
+            "mac-mini-02",
+            "mac-mini-03",
+            "pi-01",
+            "studio",
+            "win-builder"
+        ]
     );
     assert!(!view.other_machines.iter().any(|m| m.display_name == "iphone"));
 }
@@ -665,13 +672,22 @@ fn runner_versions_are_compared_with_the_latest_release() {
         ],
     );
     assert!(f.view().unmatched_runners.iter().all(|r| r.version_status.is_none()));
-    f.obs.runner_release = Some(Timed::new(
-        ago(60),
-        RunnerRelease {
-            version: "2.330.0".into(),
-            published_at: Some(now() - Duration::days(2)),
-        },
-    ));
+    let releases = |latest_days: i64| {
+        Timed::new(
+            ago(60),
+            vec![
+                RunnerRelease {
+                    version: "2.330.0".into(),
+                    published_at: Some(now() - Duration::days(latest_days)),
+                },
+                RunnerRelease {
+                    version: "2.329.0".into(),
+                    published_at: Some(now() - Duration::days(90)),
+                },
+            ],
+        )
+    };
+    f.obs.runner_releases = Some(releases(2));
     let v = f.view();
     assert_eq!(
         v.runner_release.as_ref().map(|r| (r.version.as_str(), r.checked_at)),
@@ -692,13 +708,13 @@ fn runner_versions_are_compared_with_the_latest_release() {
     // A release two days old is inside the grace period for runners that update themselves.
     assert!(!v.issues.iter().any(|i| i.id.starts_with("runner-version")));
 
-    f.obs.runner_release.as_mut().unwrap().value.published_at = Some(now() - Duration::days(8));
+    f.obs.runner_releases = Some(releases(8));
     let v = f.view();
     let issue = v.issues.iter().find(|i| i.id == "runner-version:available").unwrap();
     assert_eq!(issue.runner_key.as_deref(), Some("gh:acme:2"));
     assert_eq!(issue.title, "Runner update available: 2.330.0");
 
-    f.obs.runner_release.as_mut().unwrap().value.published_at = Some(now() - Duration::days(31));
+    f.obs.runner_releases = Some(releases(31));
     let v = f.view();
     let ids: Vec<&str> = v
         .issues

@@ -208,7 +208,10 @@ fn issues_for_machine(machine: &MachineView) -> Vec<FleetIssue> {
         let warnings: Vec<_> = diagnostics
             .checks
             .iter()
-            .filter(|c| c.status == DiagnosticStatus::Warn && !(disk_alert && c.id == "disk-space"))
+            .filter(|c| {
+                c.status == DiagnosticStatus::Warn
+                    && !(disk_alert && matches!(c.id.as_str(), "disk-space" | "runner-disk"))
+            })
             .collect();
         if !warnings.is_empty() {
             issues.push(FleetIssue::new(
@@ -315,15 +318,19 @@ fn runner_issues(view: &FleetView) -> Vec<FleetIssue> {
         .collect()
 }
 
-/// Runners behind the latest `actions/runner` release: one low-priority finding once runners
-/// that update themselves should have, and a stronger one when GitHub may stop sending jobs.
+/// Runners behind the latest `actions/runner` release: one low-priority finding for runners
+/// missing a release for a week (those that update themselves should have by then), and a
+/// stronger one when GitHub may stop sending jobs.
 fn runner_version_issues(view: &FleetView) -> Vec<FleetIssue> {
     let Some(release) = &view.runner_release else {
         return Vec::new();
     };
-    let settled = release
-        .published_at
-        .is_none_or(|at| view.generated_at - at >= crate::runner_version::UPDATE_GRACE);
+    let settled = |r: &RunnerView| {
+        r.version_status.as_ref().is_some_and(|v| {
+            v.missing_since
+                .is_none_or(|at| view.generated_at - at >= crate::runner_version::UPDATE_GRACE)
+        })
+    };
     let behind: Vec<&RunnerView> = view
         .machines
         .iter()
@@ -335,6 +342,7 @@ fn runner_version_issues(view: &FleetView) -> Vec<FleetIssue> {
     let (overdue, due): (Vec<&RunnerView>, Vec<&RunnerView>) = behind
         .into_iter()
         .partition(|r| r.version_status.as_ref().is_some_and(|v| v.overdue));
+    let due: Vec<&RunnerView> = due.into_iter().filter(|r| settled(r)).collect();
     let list = |runners: &[&RunnerView]| {
         runners
             .iter()
@@ -367,7 +375,7 @@ fn runner_version_issues(view: &FleetView) -> Vec<FleetIssue> {
             ),
         ),
     ] {
-        if runners.is_empty() || (id == "runner-version:available" && !settled) {
+        if runners.is_empty() {
             continue;
         }
         let mut issue = FleetIssue::new(id, Runner, title, detail);
@@ -402,8 +410,56 @@ fn queue_issues(view: &FleetView) -> Vec<FleetIssue> {
         .collect()
 }
 
-fn github_issues(view: &FleetView) -> Vec<FleetIssue> {
+/// GitHub's guidance on self-hosted runners and public repositories.
+const SELF_HOSTED_HARDENING_URL: &str = "https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#hardening-for-self-hosted-runners";
+
+fn public_repository_detail(group: &str, runners: &[String]) -> String {
+    let on = if runners.is_empty() {
+        "the inventory's runners".to_string()
+    } else {
+        runners.join(", ")
+    };
+    format!(
+        "Public repositories can use the runner group {group}. Anyone can open a pull request from a fork of a public repository, and its workflow can run on {on}. These runners are persistent, so that code can read what earlier jobs left behind and tamper with later ones. Turn off public repositories for this group in the organization's runner group settings (docs/FLEET.md, Setup; {SELF_HOSTED_HARDENING_URL})."
+    )
+}
+
+/// Runner groups open to public repositories: the inventory's group (from the policy check
+/// before registering) and any group with self-hosted runners, read by monitoring.
+fn public_repository_issues(view: &FleetView) -> Vec<FleetIssue> {
     let mut issues = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for org in &view.orgs {
+        for group in &org.public_runner_groups {
+            seen.insert((org.login.to_lowercase(), group.name.clone()));
+            issues.push(FleetIssue::new(
+                format!("public-group:{}:{}", org.login.to_lowercase(), group.name),
+                Github,
+                format!("Runner group {} allows public repositories", group.name),
+                public_repository_detail(&group.name, &group.runners),
+            ));
+        }
+    }
+    if let Some(org) = &view.plan.organization
+        && view
+            .plan
+            .policy_errors
+            .iter()
+            .any(|e| e.contains(crate::desired::github::PUBLIC_REPOSITORIES_ISSUE))
+        && !seen.contains(&(org.name.to_lowercase(), org.runner_group.clone()))
+    {
+        issues.push(FleetIssue::new(
+            format!("public-group:{}:{}", org.name.to_lowercase(), org.runner_group),
+            Github,
+            format!("Runner group {} allows public repositories", org.runner_group),
+            public_repository_detail(&org.runner_group, &[]),
+        ));
+    }
+    issues
+}
+
+fn github_issues(view: &FleetView) -> Vec<FleetIssue> {
+    let mut issues = public_repository_issues(view);
     if let Some(org) = &view.plan.organization
         && view.source == DataSource::Live
         && !view.orgs.iter().any(|o| o.login.eq_ignore_ascii_case(&org.name))
@@ -428,6 +484,16 @@ fn github_issues(view: &FleetView) -> Vec<FleetIssue> {
                 Github,
                 format!("GitHub: {}", org.login),
                 error,
+            );
+            issue.fix = Some(FleetIssueFix::OrganizationSignIn);
+            issues.push(issue);
+        }
+        for failed in &org.runner_repo_errors {
+            let mut issue = FleetIssue::new(
+                format!("org:{}:repo:{}", org.login, failed.repo),
+                Github,
+                format!("GitHub: {}/{} runners", org.login, failed.repo),
+                &failed.error,
             );
             issue.fix = Some(FleetIssueFix::OrganizationSignIn);
             issues.push(issue);
@@ -466,6 +532,88 @@ fn operation_issues(view: &FleetView) -> Vec<FleetIssue> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn demo_view() -> FleetView {
+        let now = Utc::now();
+        let (config, observations) = crate::demo::dataset(now);
+        crate::derive::derive(
+            &config,
+            &observations,
+            &crate::demo_desired::plan_inputs(now),
+            now,
+            DataSource::Demo,
+        )
+    }
+
+    fn public_groups(view: &FleetView) -> Vec<(String, String)> {
+        view.issues
+            .iter()
+            .filter(|i| i.id.starts_with("public-group:"))
+            .map(|i| (i.id.clone(), i.title.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn groups_open_to_public_repositories_warn_once_with_the_fork_risk() {
+        let mut view = demo_view();
+        assert_eq!(
+            public_groups(&view),
+            [(
+                "public-group:acme-demo:Community builds".to_string(),
+                "Runner group Community builds allows public repositories".to_string()
+            )]
+        );
+        let issue = view.issues.iter().find(|i| i.id.starts_with("public-group:")).unwrap();
+        assert_eq!(issue.category, FleetIssueCategory::Github);
+        assert!(issue.detail.contains("fork") && issue.detail.contains("pi-01-a"));
+        assert!(issue.detail.contains(SELF_HOSTED_HARDENING_URL));
+
+        // The inventory's group, from the policy check, is reported once even when
+        // monitoring also lists it.
+        view.plan.policy_errors =
+            vec!["runner group 'Acme trusted builders' is unsafe: public repositories must be disabled".into()];
+        attach(&mut view);
+        assert_eq!(public_groups(&view).len(), 2);
+        view.orgs[0].public_runner_groups[0].name = "Acme trusted builders".into();
+        attach(&mut view);
+        assert_eq!(
+            public_groups(&view),
+            [(
+                "public-group:acme-demo:Acme trusted builders".to_string(),
+                "Runner group Acme trusted builders allows public repositories".to_string()
+            )]
+        );
+        // Other policy problems aren't about public repositories.
+        view.orgs[0].public_runner_groups.clear();
+        view.plan.policy_errors = vec!["runner group 'x' is unsafe: workflow access must include all workflows".into()];
+        attach(&mut view);
+        assert!(public_groups(&view).is_empty());
+    }
+
+    #[test]
+    fn only_public_groups_holding_runners_are_listed() {
+        use crate::model::{GhRunnerGroup, Timed};
+        let now = Utc::now();
+        let (config, mut observations) = crate::demo::dataset(now);
+        let org = observations.github.get_mut("acme-demo").unwrap();
+        org.runner_groups = Some(Timed::new(
+            now,
+            vec![GhRunnerGroup {
+                id: 9,
+                name: "Empty".into(),
+                allows_public_repositories: true,
+            }],
+        ));
+        let view = crate::derive::derive(
+            &config,
+            &observations,
+            &crate::demo_desired::plan_inputs(now),
+            now,
+            DataSource::Demo,
+        );
+        assert!(view.orgs[0].public_runner_groups.is_empty());
+        assert!(public_groups(&view).is_empty());
+    }
     use crate::machine_diagnostics::{DiagnosticGroup, MachineDiagnostic, MachineDiagnostics};
     use crate::monitoring::{FleetMachineAlert, FleetMonitoring};
     use chrono::Utc;

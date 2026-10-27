@@ -15,6 +15,7 @@ use crate::engine::Engine;
 
 mod checks;
 mod common;
+mod jobs;
 mod queries;
 mod reads;
 mod schema;
@@ -50,6 +51,8 @@ pub fn router(engine: Arc<Engine>) -> Router {
         .route("/v1/events", get(reads::events))
         .route("/v1/issues", get(reads::issues))
         .route("/v1/changes", get(reads::changes))
+        .route("/v1/jobs/history", get(jobs::history))
+        .route("/v1/analytics", get(jobs::analytics))
         .route("/v1/logs", get(checks::logs))
         .route("/v1/checks", axum::routing::post(checks::start))
         .route("/v1/checks/{id}", get(checks::status))
@@ -75,5 +78,7 @@ pub async fn bind(port: u16) -> std::io::Result<tokio::net::TcpListener> {
     tokio::net::TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port)).await
 }
 
+#[cfg(test)]
+mod jobs_tests;
 #[cfg(test)]
 mod tests;

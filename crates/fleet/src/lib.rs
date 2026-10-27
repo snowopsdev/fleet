@@ -7,6 +7,7 @@
 //! - `monitoring`: local machine history, alerts and notification requests
 //! - `outbound`: alert destinations (Slack, Discord, ntfy, webhooks)
 //! - `automation`: deferred drains, the opt-in watchdog and published availability
+//! - `jobs`: completed-job history, utilization analytics and the optional webhook job feed
 //! - `desired`, `fleet_plan`: the inventory, its checks and reviewed changes
 //! - `local_api`: the read-only loopback HTTP API
 //! - `runner_version`: runner versions compared with the latest `actions/runner` release
@@ -25,6 +26,7 @@ pub mod fleet_plan;
 pub mod gh;
 pub mod github;
 pub mod issues;
+pub mod jobs;
 pub mod labels;
 pub mod local_api;
 pub mod machine;
@@ -33,9 +35,11 @@ pub mod model;
 pub mod monitoring;
 pub mod outbound;
 pub mod runner_version;
+pub mod ssh_reuse;
 pub mod sync;
 pub mod tailscale;
 pub mod view_updates;
+pub mod wake;
 
 #[cfg(test)]
 mod derive_tests;

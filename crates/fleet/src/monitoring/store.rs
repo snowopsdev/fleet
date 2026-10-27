@@ -478,6 +478,27 @@ impl MonitorStore {
         Ok(())
     }
 
+    /// Records something the user did to a machine, such as sending a wake packet.
+    pub fn note(
+        &mut self,
+        machine: &MachineView,
+        kind: FleetEventKind,
+        detail: String,
+        now: DateTime<Utc>,
+    ) -> Result<(), String> {
+        let original = self.journal.clone();
+        let key = self.key(machine);
+        self.event(&key, &machine.display_name, now, kind, detail);
+        if let Err(e) = self.save() {
+            self.journal = original;
+            self.storage_error = Some(e.clone());
+            return Err(e);
+        }
+        self.storage_error = None;
+        self.saved_at = Some(now);
+        Ok(())
+    }
+
     /// Up to `limit` deliveries due now. Each is pushed out by a few minutes
     /// and saved before it is returned, so a crash mid-send retries it later
     /// rather than immediately (it can be delivered twice, never lost).

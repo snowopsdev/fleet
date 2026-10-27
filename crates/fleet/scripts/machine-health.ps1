@@ -28,4 +28,13 @@ try {
     }
   }
 } catch { }
+# The drive holding the inventory host's runner root ($RfmRunnerRoot, set ahead of this script).
+try {
+  if ($RfmRunnerRoot) {
+    $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($RfmRunnerRoot))
+    if ($drive.TotalSize -gt 0) {
+      Write-Output "RFM`troot_disk`t$($drive.Name)`t$($drive.TotalSize)`t$($drive.TotalFreeSpace)"
+    }
+  }
+} catch { }
 Write-Output 'RFM_END'

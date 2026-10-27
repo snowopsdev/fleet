@@ -184,6 +184,12 @@ pub fn set_local_api(engine: EngineState, on: bool) -> Result<()> {
     Ok(engine.set_local_api(on)?)
 }
 
+/// Shares one OpenSSH connection per machine across read-only monitoring checks.
+#[tauri::command]
+pub fn set_ssh_connection_reuse(engine: EngineState, on: bool) -> Result<()> {
+    Ok(engine.set_ssh_connection_reuse(on)?)
+}
+
 // Desired state: checks are read-only. Changes run only from a review the user saw,
 // and only if the host still matches it; passwords are used once and never stored.
 
@@ -200,6 +206,20 @@ pub async fn desired_doctor(engine: EngineState<'_>, host: Option<String>) -> Re
 #[tauri::command]
 pub async fn desired_logs(engine: EngineState<'_>, runner: String, lines: u32) -> Result<String> {
     Ok(engine.desired_logs(runner, lines).await?)
+}
+
+/// Read-only: what waking an offline machine with Wake-on-LAN would do.
+#[tauri::command]
+pub async fn wake_review(engine: EngineState<'_>, id: String) -> Result<fleet::engine::WakeReview> {
+    Ok(engine.wake_review(&id).await?)
+}
+
+/// Sends a reviewed wake packet from the machine's `wake_via` host.
+#[tauri::command]
+pub async fn wake_execute(app: AppHandle, engine: EngineState<'_>, review_id: String) -> Result<String> {
+    let message = engine.wake_execute(&review_id).await?;
+    emit_view(&app, &engine);
+    Ok(message)
 }
 
 #[tauri::command]
@@ -257,6 +277,45 @@ pub async fn set_desktop_notifications(app: AppHandle, engine: EngineState<'_>, 
 #[tauri::command]
 pub fn test_desktop_notification(app: AppHandle) -> Result<()> {
     crate::notifications::test(&app).map_err(AppError::Invalid)
+}
+
+// Completed-job history and analytics read local data only; the job feed setting starts or
+// stops a `gh webhook forward` for that organization.
+
+#[tauri::command]
+pub async fn get_job_history(
+    engine: EngineState<'_>,
+    filter: fleet::jobs::history::FleetJobHistoryFilter,
+) -> Result<fleet::jobs::history::FleetJobHistoryPage> {
+    let owned = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || owned.job_history(&owned.view(), &filter))
+        .await
+        .map_err(|e| AppError::Invalid(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn get_analytics(
+    engine: EngineState<'_>,
+    window: fleet::jobs::analytics::FleetAnalyticsWindow,
+) -> Result<fleet::jobs::analytics::FleetAnalytics> {
+    let owned = engine.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || owned.job_analytics(&owned.view(), window))
+        .await
+        .map_err(|e| AppError::Invalid(e.to_string()))
+}
+
+#[tauri::command]
+pub fn set_hosted_rates(app: AppHandle, engine: EngineState, rates: fleet::jobs::FleetHostedRates) -> Result<()> {
+    engine.set_hosted_rates(rates)?;
+    emit_view(&app, &engine);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_job_feed(app: AppHandle, engine: EngineState, org: String, enabled: bool) -> Result<()> {
+    engine.set_job_feed(&org, enabled)?;
+    emit_view(&app, &engine);
+    Ok(())
 }
 
 // Automatic and deferred changes. Each is opt-in or authorised by a review; none runs in demo mode.

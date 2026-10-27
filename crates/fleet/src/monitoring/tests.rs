@@ -121,7 +121,7 @@ fn disk_alert_requires_new_samples_and_recovers_only_with_margin() {
     assert!(store.deliver(&v, v.generated_at).is_empty());
     attach(&store, &mut v);
     assert_eq!(v.monitoring.alerts.len(), 1);
-    let disk = v.machines[0].health.as_mut().unwrap().disks.pop().unwrap();
+    let disk = v.machines[0].health.as_mut().unwrap().disks.remove(0);
     sample(&mut v, now() + Duration::minutes(4));
     assert!(store.deliver(&v, v.generated_at).is_empty());
     attach(&store, &mut v);
@@ -336,6 +336,7 @@ fn disk_alerts_group_shared_capacity_and_keep_distinct_drives_in_one_machine_ale
             mount_point: mount.into(),
             total_bytes: 1000,
             available_bytes: free,
+            runner_root: mount == "/Volumes/Builds",
         })
         .collect();
     for minute in 1..=2 {
@@ -347,7 +348,7 @@ fn disk_alerts_group_shared_capacity_and_keep_distinct_drives_in_one_machine_ale
     let detail = &v.monitoring.alerts[0].detail;
     assert_eq!(detail.matches("9.0% free").count(), 1);
     assert!(detail.contains("/, /System/Volumes/Data:"));
-    assert!(detail.contains("/Volumes/Builds: 4.0% free"));
+    assert!(detail.contains("/Volumes/Builds (runner root): 4.0% free"), "{detail}");
 }
 
 // Most observation tests model a native API that accepts every request.

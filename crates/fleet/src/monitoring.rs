@@ -44,6 +44,8 @@ pub enum FleetEventKind {
     WatchdogGaveUp,
     /// A service the watchdog acted on runs again.
     WatchdogRecovered,
+    /// A Wake-on-LAN magic packet was sent after a review.
+    WakeRequested,
 }
 
 /// A timestamped observation, not a claim about events between polling samples.

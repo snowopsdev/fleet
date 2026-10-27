@@ -168,6 +168,10 @@ fn runner_records(
     Ok(runners)
 }
 
+/// The runner group policy problem reported when public repositories can use the group.
+/// Monitoring recognizes it in `policy_errors` to explain the fork pull request risk.
+pub const PUBLIC_REPOSITORIES_ISSUE: &str = "public repositories must be disabled";
+
 /// GitHub represents "all repositories, public disabled" as
 /// `visibility = all` plus `allows_public_repositories = false`.
 fn group_policy_issues(group: &Map<String, Value>) -> Vec<&'static str> {
@@ -176,7 +180,7 @@ fn group_policy_issues(group: &Map<String, Value>) -> Vec<&'static str> {
         issues.push("repository access must include all organization repositories");
     }
     if group.get("allows_public_repositories") != Some(&Value::Bool(false)) {
-        issues.push("public repositories must be disabled");
+        issues.push(PUBLIC_REPOSITORIES_ISSUE);
     }
     if group.get("restricted_to_workflows") != Some(&Value::Bool(false)) {
         issues.push("workflow access must include all workflows in private repositories");
@@ -426,6 +430,35 @@ mod tests {
         let asset = client(fake_gh(false)).latest_asset("osx-arm64").unwrap();
         assert_eq!(asset.version, "2.999.0");
         assert_eq!(asset.sha256, Some("a".repeat(64)));
+    }
+
+    #[test]
+    fn new_platforms_select_their_own_release_asset_and_digest() {
+        use crate::desired::model::Platform;
+        let release = json!({"tag_name": "v2.999.0", "assets": [
+            {"name": "actions-runner-osx-arm64-2.999.0.tar.gz", "browser_download_url": "https://example.invalid/osx-arm64",
+             "digest": format!("sha256:{}", "a".repeat(64))},
+            {"name": "actions-runner-osx-x64-2.999.0.tar.gz", "browser_download_url": "https://example.invalid/osx-x64",
+             "digest": format!("sha256:{}", "b".repeat(64))},
+            {"name": "actions-runner-linux-x64-2.999.0.tar.gz", "browser_download_url": "https://example.invalid/linux-x64",
+             "digest": format!("sha256:{}", "c".repeat(64))},
+            {"name": "actions-runner-linux-arm64-2.999.0.tar.gz", "browser_download_url": "https://example.invalid/linux-arm64",
+             "digest": format!("sha256:{}", "d".repeat(64))},
+        ]})
+        .to_string();
+        let c = client(RecordingRunner::new(move |_| release.clone()));
+        for (platform, digest) in [(Platform::DarwinX64, "b"), (Platform::LinuxArm64, "d")] {
+            let asset = c.latest_asset(platform.runner_asset()).unwrap();
+            assert_eq!(
+                asset,
+                ReleaseAsset {
+                    version: "2.999.0".into(),
+                    name: format!("actions-runner-{}-2.999.0.tar.gz", platform.runner_asset()),
+                    url: format!("https://example.invalid/{}", platform.runner_asset()),
+                    sha256: Some(digest.repeat(64)),
+                }
+            );
+        }
     }
 
     #[test]

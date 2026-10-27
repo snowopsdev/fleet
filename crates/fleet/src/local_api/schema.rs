@@ -8,7 +8,11 @@ use std::sync::OnceLock;
 use super::MAX_PAGE_SIZE;
 use super::checks::{CheckJob, CheckRequest, DEFAULT_LOG_LINES, LogQuery, LogRead, MAX_LOG_LINES};
 use super::common::ErrorBody;
+use super::jobs::{AnalyticsQuery, JobHistoryQuery};
 use super::queries::{self, NoQuery, Parameters};
+use crate::jobs::analytics::FleetAnalytics;
+use crate::jobs::history::FleetJobOrder;
+use crate::jobs::{FleetCompletedJob, JOB_RETENTION, MAX_JOBS};
 use crate::model::{FleetView, MachineView};
 use crate::monitoring::{EVENT_PAGE_SIZE, EVENT_RETENTION, MAX_EVENTS};
 
@@ -28,6 +32,8 @@ pub(super) fn endpoint_descriptions() -> Value {
         "GET /v1/events": "Retained history, newest first; machine or machineKey, before, limit",
         "GET /v1/issues": "Shared attention findings; machine, category, stale, muted, after, limit",
         "GET /v1/changes": "Compare the current revision with since",
+        "GET /v1/jobs/history": "Completed self-hosted jobs; machine, runner, org, repo, conclusion, before or after, limit",
+        "GET /v1/analytics": "Busy time, job counts, queue waits, top repos and workflows, and a hosted-cost estimate; window=24h, 7d or 30d",
         "GET /v1/logs": "Bounded log tail for an inventory runner; runner, org, lines",
         "POST /v1/checks": "Start a read-only refresh, inventory check, or doctor job; optional machine",
         "GET /v1/checks/{id}": "Read check status and completion result",
@@ -127,6 +133,17 @@ fn parameters<T: JsonSchema>(components: &mut Map<String, Value>) -> Vec<Value> 
         .collect()
 }
 
+/// Job cursors are 40 digits, unlike 20-digit event IDs.
+fn job_history_parameters(components: &mut Map<String, Value>) -> Vec<Value> {
+    let mut parameters = parameters::<JobHistoryQuery>(components);
+    for parameter in &mut parameters {
+        if parameter["name"] == "before" || parameter["name"] == "after" {
+            parameter["schema"] = json!({ "type": "string", "pattern": "^[0-9]{40}$" });
+        }
+    }
+    parameters
+}
+
 fn document() -> Value {
     let mut components = Map::new();
     let fleet = register::<FleetView>(&mut components);
@@ -135,6 +152,10 @@ fn document() -> Value {
     let check = register::<CheckJob>(&mut components);
     let check_request = register::<CheckRequest>(&mut components);
     let logs = register::<LogRead>(&mut components);
+    let job = register::<FleetCompletedJob>(&mut components);
+    let analytics = register::<FleetAnalytics>(&mut components);
+    let order = register::<FleetJobOrder>(&mut components);
+    let nullable_string = json!({ "type": ["string", "null"] });
     register::<ErrorBody>(&mut components);
     components.insert(
         "Metadata".into(),
@@ -230,6 +251,22 @@ fn document() -> Value {
             "/v1/changes",
             envelope(object(json!({ "changed": { "type": "boolean" } }))),
             parameters::<queries::ChangesQuery>(&mut components),
+        ),
+        (
+            "/v1/jobs/history",
+            envelope(object(
+                json!({ "jobs": array(job), "order": order, "hasMore": { "type": "boolean" },
+                "nextCursor": nullable_string, "historySince": { "type": ["string", "null"], "format": "date-time" },
+                "storageError": nullable_string, "retentionDays": { "const": JOB_RETENTION.num_days() },
+                "maxJobs": { "const": MAX_JOBS } }),
+            )),
+            job_history_parameters(&mut components),
+        ),
+        (
+            "/v1/analytics",
+            envelope(object(json!({ "analytics": analytics,
+                "historySince": { "type": ["string", "null"], "format": "date-time" }, "storageError": nullable_string }))),
+            parameters::<AnalyticsQuery>(&mut components),
         ),
         ("/v1/logs", envelope(logs), parameters::<LogQuery>(&mut components)),
         (

@@ -27,6 +27,7 @@ export const eventStyle: Record<FleetEventKind, { label: string; tone: Tone }> =
   watchdogRestartFailed: { label: "Automatic restart failed", tone: "warn" },
   watchdogGaveUp: { label: "Automatic restarts stopped", tone: "bad" },
   watchdogRecovered: { label: "Running again", tone: "ok" },
+  wakeRequested: { label: "Wake requested", tone: "info" },
 };
 
 /** History pages hold this many events: `PAGE_SIZE` in crates/fleet/src/monitoring/store.rs. */

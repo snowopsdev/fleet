@@ -16,8 +16,8 @@ request with an `Origin` header, so browser pages can't call it. No CORS headers
 GET, HEAD and `POST /v1/checks` are accepted. Responses never include tokens or other
 credentials; log reads return runner diagnostic output as written by the runner. No endpoint
 installs, registers, restarts, retires, decommissions, cleans up, upgrades, drains or resumes
-runners, mints runner tokens, changes alert destinations or automatic actions, or changes host
-configuration.
+runners, mints runner tokens, wakes machines, changes alert destinations or automatic actions,
+or changes host configuration.
 
 ## Routes
 
@@ -37,6 +37,8 @@ configuration.
 | `GET /v1/events` | History: `machine` or `machineKey`, `before`, `limit` ([History](#history)) |
 | `GET /v1/issues` | `machine`, `category`, `stale`, `muted`, `after`, `limit` |
 | `GET /v1/changes` | `since=<revision>`; returns `changed` ([Polling](#polling-and-errors)) |
+| `GET /v1/jobs/history` | `machine`, `runner`, `org`, `repo`, `conclusion`, `before` or `after`, `limit` ([Jobs](#job-history-and-analytics)) |
+| `GET /v1/analytics` | `window=24h` (default), `7d` or `30d` ([Jobs](#job-history-and-analytics)) |
 | `GET /v1/logs` | `runner`, `org`, `lines` ([Logs](#fresh-checks-and-logs)) |
 | `POST /v1/checks` | Start a read-only check ([Checks](#fresh-checks-and-logs)) |
 | `GET /v1/checks/{id}` | Check status and result |
@@ -87,7 +89,10 @@ fleet-wide.
 Runners and organizations carry GitHub details for monitoring: `github.repo` is set on
 repository runners (monitoring only, never matched to inventory hosts), `versionStatus` compares
 the runner's version with the latest release in the fleet's `runnerRelease`, and
-`orgs[].rateLimitedUntil` is set while GitHub polls for that account are paused. The queue's
+`orgs[].rateLimitedUntil` is set while GitHub polls for that account are paused.
+`orgs[].runnerRepoErrors` lists runner repositories that couldn't be listed; their runners keep
+their last listing and age into stale. `versionStatus.missingSince` is when the oldest release
+the runner lacks was published; `overdue` counts from it. The queue's
 `held` counts self-hosted jobs GitHub holds for an approval or concurrency group.
 
 `/v1/fleet`'s `automation` describes reviewed drains (`draining` or `stopped`), the watchdog
@@ -121,8 +126,42 @@ the maximum is 200. Events are newest first. Pass `nextCursor` as exclusive `bef
 New events don't move an existing history cursor. Old entries can expire during pagination.
 
 History contains transitions observed while the app was running, within the retention limits
-in [ARCHITECTURE.md](ARCHITECTURE.md#event-history-and-alerts). It is not an archive of
-completed GitHub jobs. Demo history is separate from the live journal.
+in [ARCHITECTURE.md](ARCHITECTURE.md#event-history-and-alerts). Completed jobs are in
+[`/v1/jobs/history`](#job-history-and-analytics). Demo history is separate from the live journal.
+
+## Job history and analytics
+
+```sh
+curl -s 'localhost:47622/v1/jobs/history?machine=inv:studio&conclusion=failure&limit=50'
+curl -s 'localhost:47622/v1/jobs/history?after=0000000176073920000000000000000000000111'
+curl -s 'localhost:47622/v1/analytics?window=7d'
+```
+
+`/v1/jobs/history` returns completed self-hosted jobs recorded on this Mac: `jobs`, `order`,
+`hasMore`, `nextCursor`, `historySince`, `storageError`, `retentionDays` and `maxJobs`. Each job
+has its `conclusion` (`success`, `failure`, `cancelled`, `skipped`, `timedOut`, `actionRequired`,
+`neutral`, `stale`, `startupFailure`, `unknown`), `queueSecs`, `runSecs`, `runnerKey`,
+`machineKey` and `source` (`poll`, `webhook` or `demo`).
+
+- `machine` resolves like other routes; an ID that matches no current machine is used as a
+  retained history identity, so removed machines keep their jobs. `runner` takes a runner key
+  or name (`org` disambiguates); a name GitHub no longer lists matches recorded runner names.
+  `repo` is `owner/name` or the bare name, case-insensitive.
+- Cursors are 40 digits (completion time in milliseconds, then job ID). Without `after`, jobs
+  are newest first and `nextCursor` goes in exclusive `before`. With only `after`, jobs are
+  oldest first and `nextCursor` goes in exclusive `after`, which suits polling for new
+  completions. The default limit is 50; the maximum is 200.
+
+`/v1/analytics` returns `analytics` for the window ending at `generatedAt`: `from`, `to`,
+`observedFrom` (start of recorded time in the window), `totals`, per-`machines` and
+per-`runners` busy seconds and `busyPercent`, `labelSets` (queue-wait median, p95 and maximum
+per label set, slowest first), the top 10 `repos` and `workflows` by runner time, `buckets` for
+a chart (hourly, six-hourly or daily), and `hostedCost`, an estimate at the rates in Settings.
+`busyPercent` is null with less than a minute of recorded time. Both routes read only local
+data; they never call GitHub. Jobs that started and finished between two scans can be missing
+unless the real-time job feed is on. In demo mode both return fictional data.
+
+The job feed's webhook receiver is a separate loopback listener, not part of this API.
 
 ## Fresh checks and logs
 

@@ -26,6 +26,7 @@ ssh = "studio"
 root = "~/gh-runners/acme-demo"
 service_mode = "launchagent"
 labels = ["fleet", "macos-build", "xcode"]
+xcode = ["26.1"]
 runners = [
   { name = "studio-1", directory = "runner-01", labels = ["macos-e2e"] },
   { name = "studio-2", directory = "runner-02", replaces = { name = "Studio-Old-2", directory = "~/actions-runner-2" } },
@@ -38,6 +39,8 @@ ssh = "mac-mini-02"
 root = "~/gh-runners/acme-demo"
 service_mode = "launchagent"
 labels = ["fleet", "macos-build"]
+xcode = ["26.1", "16.4"]
+simulator_runtimes = ["iOS 26.0"]
 runners = [{ name = "mini-02", directory = "runner-01" }]
 
 [[hosts]]
@@ -61,7 +64,19 @@ root = "C:\\gh-runners\\acme-demo"
 service_mode = "windows-service"
 service_account = ".\\builder"
 labels = ["fleet", "windows-build"]
+mac_address = "02:00:5e:10:00:42"
+wake_via = "build-linux-01"
 runners = [{ name = "win-builder", directory = "runner-01" }]
+
+[[hosts]]
+id = "pi-01"
+platform = "linux-arm64"
+ssh = "builder@pi-01.demo.ts.net"
+ssh_transport = "tailscale"
+root = "~/gh-runners/acme-demo"
+service_mode = "systemd"
+labels = ["fleet", "linux-experimental", "raspberry-pi"]
+runners = [{ name = "pi-01-a", directory = "runner-01" }]
 
 [[hosts]]
 id = "mac-mini-03"
@@ -112,6 +127,21 @@ pub fn snapshot() -> FleetSnapshot {
             "online",
             false,
             &["self-hosted", "Linux", "fleet", "linux-build", "ubuntu"],
+            Some(true),
+        )),
+        group(GithubRunner::new(
+            106,
+            "pi-01-a",
+            "online",
+            false,
+            &[
+                "self-hosted",
+                "Linux",
+                "ARM64",
+                "fleet",
+                "linux-experimental",
+                "raspberry-pi",
+            ],
             Some(true),
         )),
         group(GithubRunner::new(
@@ -171,6 +201,13 @@ pub fn snapshot() -> FleetSnapshot {
             Some("2.329.0"),
         ),
         LocalRunner::new("mini-03-01", "~/gh-runners/acme-demo/runner-01", false, "missing", None),
+        LocalRunner::new(
+            "pi-01-a",
+            "~/gh-runners/acme-demo/runner-01",
+            true,
+            "active",
+            Some("2.329.0"),
+        ),
     ];
     FleetSnapshot {
         github: github.into_iter().map(|g| (g.name.clone(), g)).collect(),

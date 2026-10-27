@@ -23,8 +23,12 @@ use reqwest::header::{ACCEPT, ETAG, HeaderMap, IF_NONE_MATCH, LINK, RETRY_AFTER,
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::model::{AccountKind, GhJob, GhRunner, JobScan, OrgConfig, RateLimit, RepoScope, RunnerRelease};
+use crate::model::{
+    AccountKind, GhJob, GhRunner, GhRunnerGroup, JobScan, OrgConfig, RateLimit, RepoScope, RunnerRelease,
+};
 use crate::sync::{MutexExt, RwLockExt};
+
+mod completed;
 
 pub const API_VERSION: &str = "2026-03-10";
 /// Hard cap on repos scanned per org per cycle, whatever the scope says.
@@ -39,8 +43,14 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_CACHED_PAGES: usize = 512;
 /// GitHub's advice for a secondary rate limit without a `retry-after` header: wait at least a minute.
 const SECONDARY_RATE_LIMIT_WAIT: chrono::Duration = chrono::Duration::seconds(60);
-/// Workflow-run statuses whose jobs can still need a runner (`waiting` runs hold jobs for approval).
-const ACTIVE_RUN_STATUSES: [&str; 3] = ["in_progress", "queued", "waiting"];
+/// Workflow-run statuses whose jobs can still need a runner. `waiting` runs hold jobs for an
+/// approval; `pending` and `requested` runs wait for a concurrency group or haven't started.
+const ACTIVE_RUN_STATUSES: [&str; 5] = ["in_progress", "queued", "waiting", "pending", "requested"];
+/// Room a `Recent` scope keeps for extra repositories (runner repositories, recently active
+/// ones, a probe), so the most recently pushed repositories can't crowd them out.
+pub const MAX_EXTRA_REPOS: usize = 20;
+/// Releases read to find when a runner first missed an update.
+const RELEASE_PAGE: usize = 30;
 
 #[derive(Debug, Clone)]
 struct ApiPage {
@@ -114,6 +124,16 @@ pub enum GithubError {
     Decode(String),
     #[error("GitHub runner listing is incomplete: {0}")]
     Incomplete(String),
+}
+
+/// An account's runner listings. Each runner repository is read separately, so one that
+/// can't be listed (renamed, or no admin access) doesn't hide the others.
+#[derive(Debug, Default)]
+pub struct AccountRunners {
+    /// Organization runners; empty for a personal account.
+    pub org: Vec<GhRunner>,
+    /// Each runner repository (name without the owner) with its runners, or why they couldn't be listed.
+    pub repos: Vec<(String, Result<Vec<GhRunner>, GithubError>)>,
 }
 
 /// One page of an account's repository names, and whether GitHub has more.
@@ -300,6 +320,47 @@ impl GithubClient {
         Ok(runners.items.into_iter().map(RawRunner::into_model).collect())
     }
 
+    /// Runner groups and whether public repositories may use them (read-only, ETag cached).
+    pub async fn runner_groups(&self, org: &str) -> Result<Vec<GhRunnerGroup>, GithubError> {
+        #[derive(Deserialize)]
+        struct RawGroup {
+            id: u64,
+            name: String,
+            #[serde(default)]
+            allows_public_repositories: bool,
+        }
+        let groups = self
+            .collection::<RawGroup>(
+                &format!("/orgs/{org}/actions/runner-groups"),
+                "runner_groups",
+                100,
+                MAX_RUNNER_PAGES,
+            )
+            .await?;
+        if groups.truncated {
+            return Err(GithubError::Incomplete(format!(
+                "Couldn't read all of {org}'s runner groups within {MAX_RUNNER_PAGES} pages."
+            )));
+        }
+        Ok(groups
+            .items
+            .into_iter()
+            .map(|g| GhRunnerGroup {
+                id: g.id,
+                name: g.name,
+                allows_public_repositories: g.allows_public_repositories,
+            })
+            .collect())
+    }
+
+    /// An organization's runner groups; personal accounts have none.
+    pub async fn account_runner_groups(&self, account: &OrgConfig) -> Result<Vec<GhRunnerGroup>, GithubError> {
+        match account.kind {
+            AccountKind::Organization => self.runner_groups(&account.login).await,
+            AccountKind::User => Ok(Vec::new()),
+        }
+    }
+
     /// Self-hosted runners registered to one repository, each tagged with `owner/repo`.
     pub async fn repo_runners(&self, owner: &str, repo: &str) -> Result<Vec<GhRunner>, GithubError> {
         let full = format!("{owner}/{repo}");
@@ -327,28 +388,30 @@ impl GithubClient {
             .collect())
     }
 
-    /// Every runner an account shows: an organization's own runners, plus the repository
-    /// runners of its `runner_repos`. Any list that can't be read fails the whole read, so a
-    /// runner never looks unregistered because of a permission problem elsewhere.
-    pub async fn account_runners(&self, account: &OrgConfig) -> Result<Vec<GhRunner>, GithubError> {
-        let mut runners = match account.kind {
+    /// Every runner listing an account shows: an organization's own runners, and the repository
+    /// runners of its `runner_repos`. A failure listing the organization's runners fails the
+    /// read; so do a rejected token and a rate limit anywhere. Any other repository failure
+    /// is kept beside that repository.
+    pub async fn account_runners(&self, account: &OrgConfig) -> Result<AccountRunners, GithubError> {
+        let org = match account.kind {
             AccountKind::Organization => self.org_runners(&account.login).await?,
             AccountKind::User => Vec::new(),
         };
-        let listed: Vec<Result<Vec<GhRunner>, GithubError>> =
+        let repos: Vec<(String, Result<Vec<GhRunner>, GithubError>)> =
             stream::iter(account.runner_repos.iter().take(MAX_REPOS).cloned())
-                .map(|repo| async move { self.repo_runners(&account.login, &repo).await })
+                .map(|repo| async move {
+                    let listed = self.repo_runners(&account.login, &repo).await;
+                    (repo, listed)
+                })
                 .buffered(CONCURRENCY)
                 .collect()
                 .await;
-        for repo_runners in listed {
-            for runner in repo_runners? {
-                if !runners.iter().any(|r| r.id == runner.id) {
-                    runners.push(runner);
-                }
+        for (_, listed) in &repos {
+            if let Err(e @ (GithubError::Unauthorized | GithubError::RateLimited { .. })) = listed {
+                return Err(e.clone());
             }
         }
-        Ok(runners)
+        Ok(AccountRunners { org, repos })
     }
 
     /// One page of an account's unarchived repository names, sorted by `sort`
@@ -406,19 +469,29 @@ impl GithubClient {
         Ok(repos)
     }
 
-    /// The newest published `actions/runner` release.
-    pub async fn latest_runner_release(&self) -> Result<RunnerRelease, GithubError> {
+    /// Recent published `actions/runner` releases (no drafts or pre-releases), newest first.
+    pub async fn runner_releases(&self) -> Result<Vec<RunnerRelease>, GithubError> {
         #[derive(Deserialize)]
         struct Release {
             tag_name: String,
             published_at: Option<DateTime<Utc>>,
+            #[serde(default)]
+            draft: bool,
+            #[serde(default)]
+            prerelease: bool,
         }
-        let page = self.get("/repos/actions/runner/releases/latest").await?;
-        let release: Release = decode(page.body)?;
-        Ok(RunnerRelease {
-            version: release.tag_name.trim_start_matches('v').to_string(),
-            published_at: release.published_at,
-        })
+        let page = self
+            .get(&format!("/repos/actions/runner/releases?per_page={RELEASE_PAGE}"))
+            .await?;
+        let releases: Vec<Release> = decode(page.body)?;
+        Ok(releases
+            .into_iter()
+            .filter(|r| !r.draft && !r.prerelease)
+            .map(|r| RunnerRelease {
+                version: r.tag_name.trim_start_matches('v').to_string(),
+                published_at: r.published_at,
+            })
+            .collect())
     }
 
     async fn runs(&self, org: &str, repo: &str, status: &str) -> Result<Collection<u64>, GithubError> {
@@ -462,7 +535,9 @@ impl GithubClient {
     }
 
     /// Unfinished jobs across an account's repos in scope. A `Recent` scope also scans
-    /// `extra_repos` (deduplicated, within [`MAX_REPOS`]); other scopes are exact.
+    /// `extra_repos`, in order, within [`MAX_REPOS`]: up to [`MAX_EXTRA_REPOS`] of them get
+    /// room by scanning fewer recently pushed repositories. The scan is marked truncated when
+    /// recent repositories or extras give way. Other scopes are exact.
     pub async fn scan_account_jobs(&self, account: &OrgConfig, extra_repos: &[String]) -> Result<JobScan, GithubError> {
         self.scan(&account.login, account.kind, &account.repo_scope, extra_repos)
             .await
@@ -477,6 +552,14 @@ impl GithubClient {
         scope: &RepoScope,
         extra_repos: &[String],
     ) -> Result<JobScan, GithubError> {
+        let mut extras: Vec<&String> = Vec::new();
+        if matches!(scope, RepoScope::Recent { max_repos } if *max_repos > 0) {
+            for repo in extra_repos {
+                if !extras.iter().any(|r| r.eq_ignore_ascii_case(repo)) {
+                    extras.push(repo);
+                }
+            }
+        }
         let (mut repos, mut truncated) = match scope {
             RepoScope::None => return Ok(JobScan::default()),
             RepoScope::Selected { repos } => (
@@ -484,22 +567,20 @@ impl GithubClient {
                 repos.len() > MAX_REPOS,
             ),
             RepoScope::Recent { max_repos } => {
-                let max = (*max_repos as usize).min(MAX_REPOS);
-                (
-                    self.recent_repos(org, kind, max).await?,
-                    (*max_repos as usize) > MAX_REPOS,
-                )
+                let wanted = *max_repos as usize;
+                let max = wanted.min(MAX_REPOS - extras.len().min(MAX_EXTRA_REPOS));
+                (self.recent_repos(org, kind, max).await?, wanted > max)
             }
         };
-        if matches!(scope, RepoScope::Recent { max_repos } if *max_repos > 0) {
-            for repo in extra_repos {
-                if repos.len() >= MAX_REPOS {
-                    break;
-                }
-                if !repos.iter().any(|r| r.eq_ignore_ascii_case(repo)) {
-                    repos.push(repo.clone());
-                }
+        for repo in extras {
+            if repos.iter().any(|r| r.eq_ignore_ascii_case(repo)) {
+                continue;
             }
+            if repos.len() >= MAX_REPOS {
+                truncated = true;
+                break;
+            }
+            repos.push(repo.clone());
         }
 
         let results: Vec<Result<Collection<GhJob>, GithubError>> = stream::iter(repos.iter().cloned())
@@ -585,7 +666,7 @@ fn hint_runner_permission(e: GithubError, org: &str) -> GithubError {
 fn hint_repo_runner_permission(e: GithubError, repo: &str) -> GithubError {
     match e {
         GithubError::Forbidden(msg) | GithubError::NotFound(msg) => GithubError::RepoRunners(format!(
-            "Couldn't list {repo}'s runners: {msg}. That needs admin access to the repository, with the fine-grained repository permission \"Administration: read\" (classic tokens and gh: the repo scope)."
+            "Couldn't list {repo}'s runners: {msg}. That needs admin access to the repository, with the fine-grained repository permission \"Administration: read\" (classic tokens and gh: the repo scope). If it was renamed or deleted, update the account's runner repositories in Settings ▸ GitHub."
         )),
         other => other,
     }

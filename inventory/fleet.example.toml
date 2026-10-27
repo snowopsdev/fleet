@@ -30,6 +30,9 @@ ssh_transport = "tailscale"
 root = "~/gh-runners/acme"
 service_mode = "launchagent"
 labels = ["fleet", "macos-build", "xcode", "host-mini"]
+# Optional: Xcode versions and simulator runtimes jobs expect; diagnostics flag missing ones.
+xcode = ["26.1"]
+simulator_runtimes = ["iOS 26.0"]
 runners = [{ name = "mini-01", directory = "runner-01" }]
 
 [[hosts]]
@@ -83,3 +86,26 @@ root = "~/gh-runners/acme"
 service_mode = "systemd"
 labels = ["fleet", "linux-experimental", "arch", "host-linux-canary"]
 runners = [{ name = "linux-canary-01", directory = "runner-01" }]
+
+# Platforms beyond Runner Fleet's four: an Intel Mac and a Raspberry Pi.
+[[hosts]]
+id = "intel-mac"
+platform = "darwin-x64"
+ssh = "intel-mac"
+root = "~/gh-runners/acme"
+service_mode = "launchagent"
+labels = ["fleet", "macos-build", "host-intel-mac"]
+# Optional Wake-on-LAN: the studio, on the same network, sends the magic packet.
+mac_address = "02:00:5e:10:00:01"
+wake_via = "studio"
+runners = [{ name = "intel-mac-01", directory = "runner-01" }]
+
+[[hosts]]
+id = "pi"
+platform = "linux-arm64"
+ssh = "builder@pi.example.ts.net"
+ssh_transport = "tailscale"
+root = "~/gh-runners/acme"
+service_mode = "systemd"
+labels = ["fleet", "linux-experimental", "raspberry-pi", "host-pi"]
+runners = [{ name = "pi-01", directory = "runner-01" }]

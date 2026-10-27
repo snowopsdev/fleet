@@ -50,10 +50,10 @@ fn push(app: &AppHandle, view: FleetView, when: Push) {
         });
         let now = Instant::now();
         let mut pushes = poller.pushes.locked();
-        if when == Push::IfChanged && !pushes.due(&revision, now) {
+        if when == Push::IfChanged && !pushes.due(&revision, view.generated_at, now) {
             return;
         }
-        pushes.pushed(revision, now);
+        pushes.pushed(revision, view.generated_at, now);
     }
     if let Err(e) = app.emit(FLEET_UPDATED, view) {
         tracing::warn!("emit failed: {e}");
@@ -76,7 +76,7 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
         e.poll_github_runners().await
     });
     spawn_loop(&app, &engine, &refresh, Duration::from_secs(45), |e| async move {
-        e.poll_github_jobs().await
+        e.poll_github_jobs_and_history().await
     });
     // Reviewed drains waiting for a job to finish, the opt-in watchdog and the
     // opt-in availability variable. The engine does nothing here in demo mode.
@@ -96,10 +96,11 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
                 let monitor = engine.clone();
                 match tauri::async_runtime::spawn_blocking(move || monitor.monitoring_round(chrono::Utc::now())).await {
                     Ok((events, view)) => {
+                        // Push before delivery waits on the OS; a poll may push newer data meanwhile.
+                        push(&app, view, Push::IfChanged);
                         deliver_notifications(&app, &engine, events).await;
                         // Queued alerts for Slack, Discord, ntfy and webhooks, retried with backoff.
                         engine.deliver_alerts().await;
-                        push(&app, view, Push::IfChanged);
                     }
                     Err(error) => {
                         tracing::warn!("recording machine history failed: {error}");

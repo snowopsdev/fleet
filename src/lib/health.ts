@@ -15,3 +15,9 @@ export function primaryDisk(health: HealthView | null | undefined): DiskStats | 
 export function diskUsedFraction(disk: DiskStats | undefined): number | null {
   return disk ? 1 - disk.availableBytes / Math.max(1, disk.totalBytes) : null;
 }
+
+/** The filesystem holding the runner root, when it isn't the primary disk (e.g. an external SSD). */
+export function runnerDisk(health: HealthView | null | undefined): DiskStats | undefined {
+  const primary = primaryDisk(health);
+  return health?.disks.find((disk) => disk.runnerRoot && disk !== primary);
+}

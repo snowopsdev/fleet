@@ -3,4 +3,4 @@
 /**
  * Events retained on this Mac for up to 30 days (at most 5,000 entries).
  */
-export type FleetEventKind = "monitoringStarted" | "targetChanged" | "online" | "offline" | "sshUnavailable" | "sshRecovered" | "rebooted" | "runnerServiceChanged" | "offlineAlert" | "lowDisk" | "diskRecovered" | "maintenanceStarted" | "maintenanceEnded" | "alertsResumed" | "drainRequested" | "drained" | "drainCancelled" | "resumed" | "watchdogRestarted" | "watchdogRestartFailed" | "watchdogGaveUp" | "watchdogRecovered";
+export type FleetEventKind = "monitoringStarted" | "targetChanged" | "online" | "offline" | "sshUnavailable" | "sshRecovered" | "rebooted" | "runnerServiceChanged" | "offlineAlert" | "lowDisk" | "diskRecovered" | "maintenanceStarted" | "maintenanceEnded" | "alertsResumed" | "drainRequested" | "drained" | "drainCancelled" | "resumed" | "watchdogRestarted" | "watchdogRestartFailed" | "watchdogGaveUp" | "watchdogRecovered" | "wakeRequested";

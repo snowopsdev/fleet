@@ -8,6 +8,7 @@ use futures::{StreamExt, stream};
 use super::{Engine, EngineError};
 use crate::machine::{MachineSource, MachineTarget};
 use crate::model::{MachineObservation, MachinePreferences, Timed, inventory_machine_key};
+use crate::ssh_reuse::ControlDir;
 use crate::sync::RwLockExt;
 
 impl Engine {
@@ -59,6 +60,37 @@ impl Engine {
         self
     }
 
+    /// Keep shared SSH connection sockets somewhere else (tests).
+    pub fn with_ssh_control_dir(mut self, dir: impl Into<std::path::PathBuf>) -> Self {
+        self.ssh_control_dir = dir.into();
+        self
+    }
+
+    /// Share one OpenSSH connection per machine across monitoring checks, or stop.
+    /// Turning it off removes the sockets, so open connections close within
+    /// [`crate::ssh_reuse::CONTROL_PERSIST_SECS`] seconds.
+    pub fn set_ssh_connection_reuse(&self, on: bool) -> Result<(), EngineError> {
+        if on {
+            ControlDir::prepare(&self.ssh_control_dir).map_err(EngineError::Invalid)?;
+        }
+        self.update_config(|c| c.ssh_connection_reuse = on)?;
+        if !on && let Ok(control) = ControlDir::prepare(&self.ssh_control_dir) {
+            control.close_all();
+        }
+        Ok(())
+    }
+
+    /// The verified socket directory when connection reuse is on. If the directory isn't
+    /// safe, checks fall back to separate connections.
+    fn ssh_control(&self) -> Option<ControlDir> {
+        if !self.config().ssh_connection_reuse {
+            return None;
+        }
+        ControlDir::prepare(&self.ssh_control_dir)
+            .inspect_err(|e| tracing::warn!("{e}"))
+            .ok()
+    }
+
     /// Read health and runner state, with at most four concurrent SSH sessions.
     /// Concurrent refresh requests coalesce; failures preserve the last good data.
     pub async fn poll_machines(&self) {
@@ -100,14 +132,19 @@ impl Engine {
             })
             .collect::<Vec<_>>();
         let source = &self.machine_source;
+        let control = self.ssh_control();
         let mut reads = stream::iter(targets.into_iter().map(|(id, target)| {
             let source = source.clone();
+            let control = control.clone();
             async move {
                 let inspected = target.clone();
-                let result = tokio::task::spawn_blocking(move || source.inspect(&inspected))
-                    .await
-                    .map_err(|e| format!("The SSH check stopped unexpectedly: {e}"))
-                    .and_then(|r| r.map_err(|e| e.to_string()));
+                let result = tokio::task::spawn_blocking(move || match &control {
+                    Some(control) => source.inspect_shared(&inspected, control),
+                    None => source.inspect(&inspected),
+                })
+                .await
+                .map_err(|e| format!("The SSH check stopped unexpectedly: {e}"))
+                .and_then(|r| r.map_err(|e| e.to_string()));
                 (id, target, result)
             }
         }))

@@ -105,10 +105,136 @@ fn service_mode_must_match_platform() {
 
 #[test]
 fn unknown_platforms_and_service_modes_are_inventory_errors() {
-    let e = load_err(&base().replace("platform = \"darwin-arm64\"", "platform = \"darwin-x64\""));
-    assert_eq!(e, "test: unsupported platform 'darwin-x64'");
+    let e = load_err(&base().replace("platform = \"darwin-arm64\"", "platform = \"freebsd-x64\""));
+    assert_eq!(e, "test: unsupported platform 'freebsd-x64'");
     let e = load_err(&base().replace("service_mode = \"launchagent\"", "service_mode = \"cron\""));
     assert_eq!(e, "test: darwin-arm64 requires service_mode='launchagent'");
+}
+
+#[test]
+fn intel_macs_and_arm64_linux_are_supported_beyond_runner_fleet() {
+    let intel = load(&base().replace("platform = \"darwin-arm64\"", "platform = \"darwin-x64\"")).unwrap();
+    let host = intel.find_host("test").unwrap();
+    assert_eq!(
+        (host.platform, host.platform.runner_asset(), host.service_mode),
+        (Platform::DarwinX64, "osx-x64", ServiceMode::Launchagent)
+    );
+    let e = load_err(
+        &base()
+            .replace("platform = \"darwin-arm64\"", "platform = \"darwin-x64\"")
+            .replace("service_mode = \"launchagent\"", "service_mode = \"systemd\""),
+    );
+    assert_eq!(e, "test: darwin-x64 requires service_mode='launchagent'");
+    let arm = base()
+        .replace("platform = \"darwin-arm64\"", "platform = \"linux-arm64\"")
+        .replace("service_mode = \"launchagent\"", "service_mode = \"systemd\"");
+    let e = load_err(&arm);
+    assert_eq!(
+        e,
+        "test: include exactly one platform capability label: linux-build, linux-experimental"
+    );
+    let arm = load(&arm.replace("\"macos-build\"", "\"linux-build\"")).unwrap();
+    let host = arm.find_host("test").unwrap();
+    assert_eq!(
+        (host.platform, host.platform.runner_asset(), host.service_mode),
+        (Platform::LinuxArm64, "linux-arm64", ServiceMode::Systemd)
+    );
+    let example = example_inventory();
+    assert_eq!(example.find_host("pi").unwrap().platform, Platform::LinuxArm64);
+    assert_eq!(example.find_host("intel-mac").unwrap().platform, Platform::DarwinX64);
+}
+
+#[test]
+fn macos_hosts_can_declare_xcode_versions_and_simulator_runtimes() {
+    let text = base().replace(
+        "service_mode = \"launchagent\"",
+        "service_mode = \"launchagent\"\nxcode = [\"26.1\", \"16\"]\nsimulator_runtimes = [\"iOS 26.0\"]",
+    );
+    let host = load(&text).unwrap().hosts.remove(0);
+    assert_eq!(
+        (host.xcode, host.simulator_runtimes),
+        (vec!["26.1".to_string(), "16".into()], vec!["iOS 26.0".to_string()])
+    );
+    for (field, message) in [
+        (
+            "xcode = [\"26.1; rm -rf ~\"]",
+            "test: invalid xcode version: '26.1; rm -rf ~'",
+        ),
+        ("xcode = [\"latest\"]", "test: invalid xcode version: 'latest'"),
+        (
+            "simulator_runtimes = [\"iOS\"]",
+            "test: invalid simulator runtime: 'iOS' (use a name like 'iOS 26.0')",
+        ),
+        (
+            "simulator_runtimes = [\"Android 14\"]",
+            "test: invalid simulator runtime: 'Android 14' (use a name like 'iOS 26.0')",
+        ),
+        ("xcode = \"26.1\"", "xcode must be an array of strings"),
+    ] {
+        let text = base().replace(
+            "service_mode = \"launchagent\"",
+            &format!("service_mode = \"launchagent\"\n{field}"),
+        );
+        assert_eq!(load_err(&text), message, "{field}");
+    }
+    let linux = base()
+        .replace("platform = \"darwin-arm64\"", "platform = \"linux-x64\"")
+        .replace(
+            "service_mode = \"launchagent\"",
+            "service_mode = \"systemd\"\nxcode = [\"26.1\"]",
+        )
+        .replace("\"macos-build\"", "\"linux-build\"");
+    assert_eq!(
+        load_err(&linux),
+        "test: xcode and simulator_runtimes are supported only on macOS"
+    );
+}
+
+#[test]
+fn wake_on_lan_needs_a_valid_address_and_another_host_to_send_from() {
+    let relay = base()
+        .replace("id = \"test\"", "id = \"relay\"")
+        .replace("test-host", "relay-host")
+        .replace("test-01", "relay-01");
+    let relay = &relay[relay.find("[[hosts]]").unwrap()..];
+    let with = |fields: &str| {
+        format!(
+            "{}{relay}",
+            base().replace(
+                "service_mode = \"launchagent\"",
+                &format!("service_mode = \"launchagent\"\n{fields}")
+            )
+        )
+    };
+    let host = load(&with("mac_address = \"AA-BB-CC-00-11-22\"\nwake_via = \"relay\""))
+        .unwrap()
+        .hosts
+        .remove(0);
+    assert_eq!(
+        (host.mac_address.as_deref(), host.wake_via.as_deref()),
+        (Some("aa:bb:cc:00:11:22"), Some("relay"))
+    );
+    for (fields, message) in [
+        (
+            "mac_address = \"aa:bb:cc:00:11\"\nwake_via = \"relay\"",
+            "test: invalid mac_address: 'aa:bb:cc:00:11' (use six pairs of hex digits, like 'aa:bb:cc:dd:ee:ff')",
+        ),
+        (
+            "mac_address = \"aa:bb:cc:00:11:22\"",
+            "test: mac_address and wake_via go together",
+        ),
+        ("wake_via = \"relay\"", "test: mac_address and wake_via go together"),
+        (
+            "mac_address = \"aa:bb:cc:00:11:22\"\nwake_via = \"test\"",
+            "test: wake_via must name another host",
+        ),
+        (
+            "mac_address = \"aa:bb:cc:00:11:22\"\nwake_via = \"nowhere\"",
+            "test: wake_via names an unknown host: 'nowhere'",
+        ),
+    ] {
+        assert_eq!(load_err(&with(fields)), message, "{fields}");
+    }
 }
 
 #[test]

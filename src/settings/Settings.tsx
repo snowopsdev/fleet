@@ -1,4 +1,5 @@
 import { useConfig, useFleet } from "../hooks";
+import { ActivitySettings } from "./ActivitySettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { GitHubSettings } from "./GitHubSettings";
 import { MachinePreferences } from "./MachinePreferences";
@@ -26,6 +27,7 @@ export function Settings() {
           <Notifications enabled={config.desktopNotifications} demo={config.demoMode} />
           <AlertDestinations view={view} />
         </>,
+        Activity: <ActivitySettings config={config} view={view} />,
         General: <GeneralSettings config={config} view={view} />,
       }}
     />

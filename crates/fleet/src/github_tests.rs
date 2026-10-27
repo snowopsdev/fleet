@@ -49,6 +49,37 @@ async fn paginates_runners_and_sends_version_header() {
     assert_eq!(client.rate_limit().unwrap().remaining, 4990);
 }
 
+#[tokio::test]
+async fn reads_runner_group_repository_policy() {
+    let router = Router::new().route(
+        "/orgs/{org}/actions/runner-groups",
+        get(|Path(org): Path<String>| async move {
+            assert_eq!(org, "acme");
+            Json(json!({"total_count": 2, "runner_groups": [
+                {"id": 1, "name": "Default", "visibility": "all", "allows_public_repositories": false},
+                {"id": 4, "name": "Open source", "visibility": "all", "allows_public_repositories": true},
+            ]}))
+        }),
+    );
+    let base = serve(router).await;
+    let groups = GithubClient::new(&base, "t0k").runner_groups("acme").await.unwrap();
+    assert_eq!(
+        groups,
+        [
+            GhRunnerGroup {
+                id: 1,
+                name: "Default".into(),
+                allows_public_repositories: false
+            },
+            GhRunnerGroup {
+                id: 4,
+                name: "Open source".into(),
+                allows_public_repositories: true
+            },
+        ]
+    );
+}
+
 #[test]
 fn etag_cache_evicts_the_least_recently_used_page() {
     let page = || ApiPage {
@@ -193,11 +224,8 @@ async fn personal_accounts_list_repository_runners() {
                     AxStatus::OK,
                     Json(json!({"total_count": 2, "runners": [runner(5, "box", true), runner(6, "box-2", false)]})),
                 ),
-                "site" => (
-                    AxStatus::OK,
-                    // The same runner can't be listed twice.
-                    Json(json!({"total_count": 1, "runners": [runner(6, "box-2", false)]})),
-                ),
+                "site" => (AxStatus::OK, Json(json!({"total_count": 0, "runners": []}))),
+                "locked" => (AxStatus::UNAUTHORIZED, Json(json!({"message": "Bad credentials"}))),
                 _ => {
                     assert_eq!(owner, "me");
                     (AxStatus::NOT_FOUND, Json(json!({"message": "Not Found"})))
@@ -216,12 +244,20 @@ async fn personal_accounts_list_repository_runners() {
         kind: AccountKind::User,
         runner_repos: vec!["app".into(), "site".into()],
     };
-    let runners = client.account_runners(&account).await.unwrap();
-    assert_eq!(runners.iter().map(|r| r.id).collect::<Vec<_>>(), vec![5, 6]);
-    assert!(runners.iter().all(|r| r.repo.as_deref() == Some("me/app")));
-
     account.runner_repos.push("private".into());
-    let err = client.account_runners(&account).await.unwrap_err();
+    let listing = client.account_runners(&account).await.unwrap();
+    assert!(listing.org.is_empty());
+    let [(app, Ok(app_runners)), (site, Ok(site_runners)), (private, Err(err))] = listing.repos.as_slice() else {
+        panic!("{:?}", listing.repos)
+    };
+    assert_eq!(
+        (app.as_str(), site.as_str(), private.as_str()),
+        ("app", "site", "private")
+    );
+    assert_eq!(app_runners.iter().map(|r| r.id).collect::<Vec<_>>(), vec![5, 6]);
+    assert!(app_runners.iter().all(|r| r.repo.as_deref() == Some("me/app")));
+    assert!(site_runners.is_empty());
+    // A repository that can't be listed stays beside the others, with the fix in its message.
     let GithubError::RepoRunners(msg) = err else {
         panic!("{err:?}")
     };
@@ -229,23 +265,44 @@ async fn personal_accounts_list_repository_runners() {
         msg.starts_with("Couldn't list me/private's runners: Not Found."),
         "{msg}"
     );
-    assert!(msg.contains("Administration: read"));
+    assert!(msg.contains("Administration: read") && msg.contains("renamed or deleted"));
+
+    // A rejected token isn't about one repository: the whole read fails.
+    account.runner_repos.push("locked".into());
+    assert_eq!(
+        client.account_runners(&account).await.unwrap_err(),
+        GithubError::Unauthorized
+    );
 }
 
 #[tokio::test]
-async fn reads_the_latest_runner_release() {
+async fn reads_published_runner_releases() {
     let router = Router::new().route(
-        "/repos/actions/runner/releases/latest",
-        get(|| async { Json(json!({"tag_name": "v2.329.0", "published_at": "2026-10-01T09:00:00Z"})) }),
+        "/repos/actions/runner/releases",
+        get(|Query(q): Query<HashMap<String, String>>| async move {
+            assert_eq!(q["per_page"], "30");
+            Json(json!([
+                {"tag_name": "v2.331.0", "published_at": null, "draft": true},
+                {"tag_name": "v2.330.0-beta", "published_at": "2026-10-02T09:00:00Z", "prerelease": true},
+                {"tag_name": "v2.329.0", "published_at": "2026-10-01T09:00:00Z", "draft": false, "prerelease": false},
+                {"tag_name": "v2.328.0", "published_at": "2026-08-01T09:00:00Z"}
+            ]))
+        }),
     );
     let base = serve(router).await;
-    let release = GithubClient::new(&base, "t").latest_runner_release().await.unwrap();
+    let releases = GithubClient::new(&base, "t").runner_releases().await.unwrap();
     assert_eq!(
-        release,
-        RunnerRelease {
-            version: "2.329.0".into(),
-            published_at: Some("2026-10-01T09:00:00Z".parse().unwrap()),
-        }
+        releases,
+        vec![
+            RunnerRelease {
+                version: "2.329.0".into(),
+                published_at: Some("2026-10-01T09:00:00Z".parse().unwrap()),
+            },
+            RunnerRelease {
+                version: "2.328.0".into(),
+                published_at: Some("2026-08-01T09:00:00Z".parse().unwrap()),
+            },
+        ]
     );
 }
 
@@ -268,6 +325,9 @@ async fn recent_scope_adds_extra_repos_and_keeps_held_jobs() {
                 let runs = match (repo.as_str(), q["status"].as_str()) {
                     ("nightly", "in_progress") => json!([{"id": 31}]),
                     ("app", "waiting") => json!([{"id": 41}]),
+                    // Blocked by a concurrency group, and not yet started.
+                    ("app", "pending") => json!([{"id": 51}]),
+                    ("nightly", "requested") => json!([{"id": 61}]),
                     _ => json!([]),
                 };
                 Json(json!({"total_count": 0, "workflow_runs": runs}))
@@ -278,6 +338,8 @@ async fn recent_scope_adds_extra_repos_and_keeps_held_jobs() {
             get(|Path((_o, _r, run)): Path<(String, String, u64)>| async move {
                 let jobs = if run == 31 {
                     json!([{"id": 311, "run_id": 31, "name": "cron", "status": "in_progress", "labels": ["self-hosted"], "runner_id": 5}])
+                } else if run == 51 || run == 61 {
+                    json!([{"id": run * 10 + 1, "run_id": run, "name": "held", "status": if run == 51 {"pending"} else {"requested"}, "labels": ["self-hosted"]}])
                 } else {
                     json!([
                         {"id": 411, "run_id": 41, "name": "deploy", "status": "waiting", "labels": ["self-hosted"]},
@@ -304,8 +366,68 @@ async fn recent_scope_adds_extra_repos_and_keeps_held_jobs() {
     assert_eq!(scan.repos_scanned, vec!["app", "nightly"]);
     assert_eq!(
         scan.jobs.iter().map(|j| (j.id, j.status.as_str())).collect::<Vec<_>>(),
-        vec![(311, "in_progress"), (411, "waiting")]
+        vec![
+            (311, "in_progress"),
+            (411, "waiting"),
+            (511, "pending"),
+            (611, "requested")
+        ]
     );
+}
+
+#[tokio::test]
+async fn a_full_recent_scope_keeps_room_for_extra_repos() {
+    let asked = Arc::new(Mutex::new(Vec::new()));
+    let log = asked.clone();
+    let router = Router::new()
+        .route(
+            "/orgs/{org}/repos",
+            get(move |Query(q): Query<HashMap<String, String>>| {
+                let log = log.clone();
+                async move {
+                    let per_page: usize = q["per_page"].parse().unwrap();
+                    log.locked().push(per_page);
+                    Json(Value::Array(
+                        (0..per_page).map(|i| json!({"name": format!("recent{i}")})).collect(),
+                    ))
+                }
+            }),
+        )
+        .route(
+            "/repos/{org}/{repo}/actions/runs",
+            get(|| async { Json(json!({"total_count": 0, "workflow_runs": []})) }),
+        );
+    let base = serve(router).await;
+    let client = GithubClient::new(&base, "t");
+    let mut account = OrgConfig {
+        login: "acme".into(),
+        api_base: base.clone(),
+        repo_scope: RepoScope::Recent { max_repos: 50 },
+        added_at: Utc::now(),
+        auth: crate::model::OrgAuth::Token,
+        kind: AccountKind::Organization,
+        runner_repos: Vec::new(),
+    };
+    let extras: Vec<String> = ["gpu", "nightly", "GPU"].map(String::from).to_vec();
+    let scan = client.scan_account_jobs(&account, &extras).await.unwrap();
+    assert_eq!(scan.repos_scanned.len(), MAX_REPOS);
+    assert_eq!(&scan.repos_scanned[48..], ["gpu", "nightly"]);
+    assert!(scan.truncated, "two of the 50 requested recent repositories gave way");
+
+    // Up to MAX_EXTRA_REPOS extras are reserved; any beyond don't fit once recent ones fill the rest.
+    let many: Vec<String> = (0..MAX_EXTRA_REPOS + 5).map(|i| format!("extra{i}")).collect();
+    let scan = client.scan_account_jobs(&account, &many).await.unwrap();
+    assert_eq!(scan.repos_scanned.len(), MAX_REPOS);
+    assert!(scan.repos_scanned.contains(&format!("extra{}", MAX_EXTRA_REPOS - 1)));
+    assert!(!scan.repos_scanned.contains(&format!("extra{MAX_EXTRA_REPOS}")));
+    assert!(scan.truncated);
+
+    // A scope with room to spare isn't truncated by extras.
+    account.repo_scope = RepoScope::Recent { max_repos: 10 };
+    let scan = client.scan_account_jobs(&account, &extras).await.unwrap();
+    assert_eq!(scan.repos_scanned.len(), 12);
+    assert!(!scan.truncated);
+    assert_eq!(*asked.locked(), vec![48, MAX_REPOS - MAX_EXTRA_REPOS, 10]);
 }
 
 #[tokio::test]
