@@ -15,15 +15,16 @@ Every route requires a loopback client address and a loopback `Host` header, and
 request with an `Origin` header, so browser pages can't call it. No CORS headers are sent. Only
 GET, HEAD and `POST /v1/checks` are accepted. Responses never include tokens or other
 credentials; log reads return runner diagnostic output as written by the runner. No endpoint
-installs, registers, restarts, retires or decommissions runners, mints runner tokens, wakes
-machines, or changes host configuration.
+installs, registers, restarts, retires, decommissions, cleans up, upgrades, drains or resumes
+runners, mints runner tokens, wakes machines, changes alert destinations or automatic actions,
+or changes host configuration.
 
 ## Routes
 
 | Route | Filters and result |
 | --- | --- |
 | `GET /` | Capabilities, limits and semantics |
-| `GET /v1/fleet` | Complete FleetView, including `otherMachines` and `issues` |
+| `GET /v1/fleet` | Complete FleetView, including `otherMachines`, `issues` and `automation` |
 | `GET /v1/summary` | Summary, organization and tailnet status |
 | `GET /v1/machines` | `scope=all` (default), `fleet` or `discovered`; `os`, `connection`, `q`, `after`, `limit` |
 | `GET /v1/machines/{id}` | One machine |
@@ -94,6 +95,13 @@ their last listing and age into stale. `versionStatus.missingSince` is when the 
 the runner lacks was published; `overdue` counts from it. The queue's
 `held` counts self-hosted jobs GitHub holds for an approval or concurrency group.
 
+`/v1/fleet`'s `automation` describes reviewed drains (`draining` or `stopped`), the watchdog
+(whether it's on, and each runner's recent attempts, next attempt and give-up), alert
+destinations (kind, name, host summary, queue length and last outcome; never URLs or tokens)
+and the published availability variable. It is read-only: drains, the watchdog and
+destinations are changed only in the app. A watchdog give-up is an alert (`watchdogGaveUp`) in
+`/v1/monitoring` and `/v1/issues`.
+
 `/v1/issues` is the desktop's attention feed. `summary.attention` equals the full
 `issues.length`, including unresolved stale or muted alerts. The UI renders alerts, history
 storage failures and operation failures in their own panels; the remaining findings appear
@@ -137,7 +145,8 @@ has its `conclusion` (`success`, `failure`, `cancelled`, `skipped`, `timedOut`, 
 
 - `machine` resolves like other routes; an ID that matches no current machine is used as a
   retained history identity, so removed machines keep their jobs. `runner` takes a runner key
-  or name (`org` disambiguates); a name GitHub no longer lists matches recorded runner names.
+  or name; a name GitHub no longer lists matches recorded runner names. `org` filters by
+  organization and also disambiguates runner names.
   `repo` is `owner/name` or the bare name, case-insensitive.
 - Cursors are 40 digits (completion time in milliseconds, then job ID). Without `after`, jobs
   are newest first and `nextCursor` goes in exclusive `before`. With only `after`, jobs are
@@ -145,10 +154,13 @@ has its `conclusion` (`success`, `failure`, `cancelled`, `skipped`, `timedOut`, 
   completions. The default limit is 50; the maximum is 200.
 
 `/v1/analytics` returns `analytics` for the window ending at `generatedAt`: `from`, `to`,
-`observedFrom` (start of recorded time in the window), `totals`, per-`machines` and
-per-`runners` busy seconds and `busyPercent`, `labelSets` (queue-wait median, p95 and maximum
+`observedFrom` (start of the first recorded time in the window), `coveredSecs` (recorded
+seconds), fleet `busySecs`, `capacitySecs` and `busyPercent`, `totals`, per-`machines` and
+per-`runners` busy seconds and `busyPercent` (recorded time only; `listed` runners are
+capacity), `labelSets` (queue-wait median, p95 and maximum
 per label set, slowest first), the top 10 `repos` and `workflows` by runner time, `buckets` for
-a chart (hourly, six-hourly or daily), and `hostedCost`, an estimate at the rates in Settings.
+a chart (hourly, six-hourly or daily, each with `coveredSecs` and `capacitySecs`; zero
+`coveredSecs` means no data), and `hostedCost`, an estimate at the rates in Settings.
 `busyPercent` is null with less than a minute of recorded time. Both routes read only local
 data; they never call GitHub. Jobs that started and finished between two scans can be missing
 unless the real-time job feed is on. In demo mode both return fictional data.

@@ -6,7 +6,7 @@ import { useNow } from "../../hooks";
 import { operationRunning, requestTargetsMachine } from "../../lib/desired";
 import { timeAgo } from "../../lib/format";
 import { activityCounts, machineStatus } from "../../lib/status";
-import { commands, isLive } from "../../lib/tauri";
+import { commands, isLive, isTauri } from "../../lib/tauri";
 import { useUi } from "../../store";
 import { Button, Callout, Card, ErrorText, Pill, Section } from "../ui";
 import { Icon } from "../icons";
@@ -14,6 +14,7 @@ import { OperationCard, useChange } from "./changes";
 import { ChangePanel } from "./ReviewCard";
 import { HealthMeters, PageHeader } from "./shared";
 import { MachineChanges } from "./MachineChanges";
+import { MachineMaintenance } from "./MachineMaintenance";
 import { MachineDiagnostics } from "./MachineDiagnostics";
 import { MachineFacts } from "./MachineFacts";
 import { MachineGlance } from "./MachineGlance";
@@ -66,6 +67,8 @@ export function MachineDetail({ machine: m, view }: { machine: MachineView; view
 
       {op && requestTargetsMachine(op.request, m) && <OperationCard op={op} />}
       {d && <MachineChanges d={d} change={change} live={live && !busy} />}
+      {/* Demo data opens fictional maintenance reviews that can't run. */}
+      <MachineMaintenance m={m} change={change} enabled={isTauri && !busy} />
       <ChangePanel change={change} busy={busy} />
       <ConnectionNotice m={m} />
       <WakeMachine key={`${view.source}:${m.id}`} machine={m} live={live} />

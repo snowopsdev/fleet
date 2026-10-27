@@ -10,9 +10,9 @@ use chrono::Utc;
 
 use super::Engine;
 use super::job_history::RoundResult;
+use crate::jobs::FleetJobSource;
 use crate::jobs::feed::{Backoff, ForwardSpec, GhLauncher, Launch, supervise};
 use crate::jobs::webhook::{self, DeliverySink, FeedAction, FeedDelivery};
-use crate::jobs::{FleetJobSource, ran_self_hosted};
 use crate::sync::{MutexExt, RwLockExt};
 
 /// How often the controller re-reads settings without a change notification (demo mode,
@@ -116,18 +116,34 @@ impl Engine {
     }
 
     /// Applies one validated `workflow_job` delivery to the observations and the journal.
+    ///
+    /// Only organizations with the feed turned on are accepted. A queued or running delivery
+    /// for a job already seen completed is ignored, so a late delivery can't revive it. The
+    /// in-flight scan only takes jobs from repositories in the organization's job scope;
+    /// completed self-hosted jobs are recorded from any repository, since they ran on the
+    /// organization's runners.
     pub async fn record_feed_delivery(&self, delivery: FeedDelivery) {
         let config = self.config();
         let org = delivery.org.clone();
-        if config.demo_mode
-            || !config.job_activity.feed_orgs.contains(&org)
-            || !config.orgs.iter().any(|o| o.login.to_lowercase() == org)
-        {
+        let Some(account) = config.orgs.iter().find(|o| o.login.to_lowercase() == org) else {
+            return;
+        };
+        if config.demo_mode || !config.job_activity.feed_orgs.contains(&org) {
             return;
         }
         let now = Utc::now();
         self.job_activity.feeds.delivered(&org, now);
         let job = delivery.job;
+        let completed = delivery.action == FeedAction::Completed;
+        {
+            let mut store = self.job_activity.store.locked();
+            if completed {
+                store.mark_completed(job.job.id);
+            } else if store.is_completed(job.job.id) {
+                return;
+            }
+        }
+        let in_scope = scope_includes(&account.repo_scope, &job.job.repo);
         let runners = {
             let mut obs = self.obs.write_locked();
             let Some(observed) = obs.github.get_mut(&org) else {
@@ -136,29 +152,34 @@ impl Engine {
             // Keep the in-flight scan current between polls; the next scan replaces it.
             if let Some(scan) = observed.jobs.as_mut() {
                 scan.value.jobs.retain(|j| j.id != job.job.id);
-                if delivery.action != FeedAction::Completed {
+                if !completed && in_scope {
                     scan.value.jobs.push(job.job.clone());
                     scan.value.jobs.sort_by_key(|j| j.id);
                 }
             }
-            observed.runners.as_ref().map(|r| r.value.clone()).unwrap_or_default()
+            crate::jobs::account_runners(observed)
         };
-        match delivery.action {
-            FeedAction::Queued | FeedAction::Waiting | FeedAction::InProgress => {
-                self.job_activity
-                    .store
-                    .locked()
-                    .track(&org, std::slice::from_ref(&job.job), now);
-                self.view_changed();
-            }
-            FeedAction::Completed => {
-                let mut result = RoundResult::default();
-                if ran_self_hosted(&job.job, &runners) {
-                    result.finished.push((org, runners, job));
-                }
-                self.apply_job_round(result, FleetJobSource::Webhook, now).await;
-                self.view_changed();
-            }
+        if completed {
+            let mut result = RoundResult::default();
+            result.finished.push((org, runners, job));
+            self.apply_job_round(result, FleetJobSource::Webhook, now).await;
+        } else if in_scope {
+            self.job_activity
+                .store
+                .locked()
+                .track(&org, std::slice::from_ref(&job.job), &runners, now);
         }
+        self.view_changed();
+    }
+}
+
+/// Whether the job scan covers `repo` (`owner/name`). A recent-repositories scope can reach
+/// any repository where self-hosted jobs run, so it takes them all.
+fn scope_includes(scope: &crate::model::RepoScope, repo: &str) -> bool {
+    let name = repo.rsplit_once('/').map_or(repo, |(_, name)| name);
+    match scope {
+        crate::model::RepoScope::Recent { .. } => true,
+        crate::model::RepoScope::Selected { repos } => repos.iter().any(|r| r.eq_ignore_ascii_case(name)),
+        crate::model::RepoScope::None => false,
     }
 }

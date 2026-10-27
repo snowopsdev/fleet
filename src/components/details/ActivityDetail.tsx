@@ -70,19 +70,22 @@ function FeedLine({ view }: { view: FleetView }) {
 export function ActivityContent({ a, view }: { a: FleetAnalytics; view: FleetView }) {
   const select = useUi((s) => s.select);
   const t = a.totals;
-  const busySecs = a.runners.reduce((sum, r) => sum + r.busySecs, 0);
-  const capacity = a.observedFrom ? (Date.parse(a.to) - Date.parse(a.observedFrom)) / 1000 * a.runners.length : 0;
+  const listedRunners = a.runners.filter((r) => r.listed).length;
+  const windowSecs = (Date.parse(a.to) - Date.parse(a.from)) / 1000;
   const window = WINDOWS.find((w) => w.value === a.window)!;
   const listed = new Set([...view.machines, ...view.otherMachines].flatMap((m) => m.runners.map((r) => r.key)).concat(view.unmatchedRunners.map((r) => r.key)));
   return (
     <>
       <div className="mt-8"><StatStrip>
         <Stat label="Jobs" value={t.jobs.toLocaleString("en-US")} sub={t.successRate == null ? "none finished" : `${formatShare(t.successRate * 100)} succeeded · ${t.failed} failed`} />
-        <Stat label="Runner time" value={formatHours(t.runSecs)} sub={capacity > 0 ? `${formatShare(busySecs / capacity * 100)} busy across ${plural(a.runners.length, "runner")}` : "no recorded time yet"} />
+        <Stat label="Runner time" value={formatHours(t.runSecs)} sub={a.busyPercent == null ? "no recorded time yet" : `${formatShare(a.busyPercent)} busy across ${plural(listedRunners || a.runners.length, "runner")}`} />
         <Stat label="Queue wait" value={formatDuration(t.queueP50Secs)} sub={t.queueP95Secs == null ? "median" : `median · p95 ${formatDuration(t.queueP95Secs)}`} />
         <Stat label="GitHub-hosted equivalent" value={formatUsd(a.hostedCost.usd)} sub={`estimate · rates as of ${a.hostedCost.rates.asOf}`} />
       </StatStrip></div>
-      {a.observedFrom && a.observedFrom !== a.from && <p className="mt-2 text-[12px] text-ink-2">History on this Mac covers only part of {window.long}; percentages use the recorded time since {new Date(a.observedFrom).toLocaleString()}.</p>}
+      {a.coveredSecs < windowSecs - 60 && <p className="mt-2 text-[12px] text-ink-2">
+        {a.coveredSecs === 0 ? `Nothing was recorded in ${window.long}.` : `This Mac recorded ${formatDuration(a.coveredSecs)} of ${window.long}.`} Time
+        without fresh job data (the app closed, or GitHub unreachable) is shown as no data and isn't counted as idle.
+      </p>}
 
       <Section title="Fleet busy time" action={<span className="text-[12px] text-ink-2">share of runner capacity per {a.window === "24h" ? "hour" : a.window === "7d" ? "6 hours" : "day"}</span>}>
         <BusyChart a={a} />
@@ -129,7 +132,7 @@ export function ActivityContent({ a, view }: { a: FleetAnalytics; view: FleetVie
                   {r.runnerKey && listed.has(r.runnerKey)
                     ? <button className="font-mono text-[12px] font-medium hover:underline" onClick={() => select({ kind: "runner", key: r.runnerKey! })}>{r.name}</button>
                     : <span className="font-mono text-[12px] font-medium">{r.name}</span>}
-                  <div className="text-[11.5px] text-ink-3">{r.machineName ?? "Not linked to a machine"}</div>
+                  <div className="text-[11.5px] text-ink-3">{r.machineName ?? "Not linked to a machine"}{!r.listed && " · no longer listed by GitHub"}</div>
                 </td>
                 <td className="w-[30%] px-3 py-2.5"><BusyMeter percent={r.busyPercent} /></td>
                 <td className="px-3 py-2.5 text-right tabular">{r.totals.jobs}</td>
@@ -198,11 +201,10 @@ function BusyMeter({ percent }: { percent: number | null }) {
   );
 }
 
-/** Columns of busy share per bucket; dependency-free SVG that follows the theme colors. */
+/** Columns of busy share of recorded capacity per bucket; buckets without recorded time are
+ * drawn as "no data", not as idle. Dependency-free SVG that follows the theme colors. */
 export function BusyChart({ a }: { a: FleetAnalytics }) {
-  const bucketSecs = a.buckets.length > 1 ? (Date.parse(a.buckets[1].start) - Date.parse(a.buckets[0].start)) / 1000 : 3600;
-  const capacity = Math.max(1, a.runners.length) * bucketSecs;
-  const shares = a.buckets.map((b) => Math.min(1, b.busySecs / capacity));
+  const shares = a.buckets.map((b) => (b.capacitySecs > 0 ? Math.min(1, b.busySecs / b.capacitySecs) : 0));
   const width = 100 / Math.max(1, a.buckets.length);
   const peak = Math.max(0, ...shares);
   const label = (iso: string) => a.window === "24h" ? formatClock(iso) : new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
@@ -212,11 +214,17 @@ export function BusyChart({ a }: { a: FleetAnalytics }) {
         {[0.25, 0.5, 0.75].map((y) => <line key={y} x1="0" x2="100" y1={40 - y * 40} y2={40 - y * 40} stroke="var(--border)" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />)}
         {shares.map((s, i) => {
           const b = a.buckets[i];
+          if (b.coveredSecs === 0) {
+            return <rect key={b.start} data-no-data x={i * width + width * 0.12} width={width * 0.76} y={0} height={40} rx="0.4" fill="var(--card-sunken)" opacity={0.7}>
+              <title>{`${new Date(b.start).toLocaleString()}: no data recorded`}</title>
+            </rect>;
+          }
           return <rect key={b.start} x={i * width + width * 0.12} width={width * 0.76} y={40 - s * 40} height={Math.max(s * 40, s > 0 ? 0.4 : 0)} rx="0.4" fill="var(--busy)" opacity={0.85}>
             <title>{`${new Date(b.start).toLocaleString()}: ${formatShare(s * 100)} busy, ${plural(b.jobs, "job")} finished`}</title>
           </rect>;
         })}
       </svg>
+      {a.buckets.some((b) => b.coveredSecs === 0) && <div className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-3"><span aria-hidden className="h-2.5 w-2 rounded-[2px] bg-sunken" />No data recorded</div>}
       <div className="mt-1 flex justify-between text-[11px] text-ink-3 tabular">
         {a.buckets.length > 0 && <><span>{label(a.buckets[0].start)}</span><span>{label(a.buckets[Math.floor(a.buckets.length / 2)].start)}</span><span>now</span></>}
       </div>
@@ -249,10 +257,10 @@ function JobHistory({ view }: { view: FleetView }) {
   const [ended, setEnded] = useState(false);
   const first = useQuery({
     queryKey: ["job-history", view.source, view.activity.recent[0]?.id ?? null],
-    queryFn: () => commands.getJobHistory({ machineKey: null, runnerKey: null, runnerName: null, repo: null, conclusion: null, before: null, after: null, limit: HISTORY_PAGE }),
+    queryFn: () => commands.getJobHistory({ org: null, machineKey: null, runnerKey: null, runnerName: null, repo: null, conclusion: null, before: null, after: null, limit: HISTORY_PAGE }),
   });
   const more = useMutation({
-    mutationFn: (before: string) => commands.getJobHistory({ machineKey: null, runnerKey: null, runnerName: null, repo: null, conclusion: null, before, after: null, limit: HISTORY_PAGE }),
+    mutationFn: (before: string) => commands.getJobHistory({ org: null, machineKey: null, runnerKey: null, runnerName: null, repo: null, conclusion: null, before, after: null, limit: HISTORY_PAGE }),
     onSuccess: (page) => {
       setPages((p) => [...p, page.jobs]);
       setCursor(page.nextCursor);

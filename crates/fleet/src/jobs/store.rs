@@ -3,15 +3,21 @@
 //! Writes only this dashboard's own file, atomically. A corrupt or newer-format file is
 //! preserved: jobs are still kept in memory for this session, and the view shows why
 //! they can't be saved.
+//!
+//! Saving is two steps so the lock the fleet view also takes is never held for disk I/O:
+//! [`JobStore::prepare_save`] serializes under the lock, the caller writes the bytes without
+//! it, then reports back with [`JobStore::finish_save`]. New jobs are saved at most every
+//! [`SAVE_INTERVAL`]; the next history round or app exit flushes anything newer.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
+use super::analytics::{Coverage, Span};
 use super::{FleetActivity, FleetCompletedJob};
-use crate::model::{GhJob, JobScan};
+use crate::model::{GhJob, GhRunner, JobScan};
 
 pub(crate) const JOB_RETENTION: Duration = Duration::days(30);
 pub(crate) const MAX_JOBS: usize = 20_000;
@@ -25,6 +31,15 @@ const PENDING_RETENTION: Duration = Duration::days(6);
 const RECHECK_AFTER: Duration = Duration::minutes(2);
 /// Changes that don't add or finish anything (a run seen again) are saved at most this often.
 const CHECKPOINT: Duration = Duration::minutes(10);
+/// New or finished jobs are saved at most this often, so a burst of feed deliveries is one write.
+pub(crate) const SAVE_INTERVAL: Duration = Duration::seconds(10);
+/// A run whose job listing stays truncated is given up after this many reads.
+const MAX_UNREADABLE: u32 = 10;
+/// Recording continues the previous span when the gap since it is at most this long.
+const COVERAGE_GAP: Duration = Duration::minutes(3);
+const MAX_SPANS_PER_ORG: usize = 10_000;
+/// Jobs seen completed, kept in memory so late deliveries can't bring them back.
+const RECENTLY_COMPLETED: usize = 5_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Journal {
@@ -35,6 +50,10 @@ struct Journal {
     jobs: Vec<FleetCompletedJob>,
     #[serde(default)]
     pending: BTreeMap<u64, PendingRun>,
+    /// Recorded time per organization: the app ran and the organization's job data was fresh.
+    /// Sorted, non-overlapping spans.
+    #[serde(default)]
+    coverage: BTreeMap<String, Vec<Span>>,
 }
 
 impl Journal {
@@ -44,6 +63,7 @@ impl Journal {
             started_at: now,
             jobs: Vec::new(),
             pending: BTreeMap::new(),
+            coverage: BTreeMap::new(),
         }
     }
 }
@@ -62,6 +82,27 @@ pub(crate) struct PendingRun {
     pub last_seen: DateTime<Utc>,
     #[serde(default)]
     pub checked_at: Option<DateTime<Utc>>,
+    /// Reads whose job listing was truncated.
+    #[serde(default)]
+    pub unreadable: u32,
+}
+
+/// What a final-state read learned about a followed run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RunCheck {
+    /// Still going, or couldn't be read this time: ask again later.
+    Pending,
+    /// The listing was cut short; after [`MAX_UNREADABLE`] of these the run is given up.
+    Truncated,
+}
+
+/// Serialized journal bytes to write outside the store's lock.
+#[derive(Debug)]
+pub(crate) struct PendingWrite {
+    pub path: PathBuf,
+    pub bytes: Vec<u8>,
+    /// Increases with every prepared write; a writer never replaces a newer one.
+    pub seq: u64,
 }
 
 #[derive(Debug)]
@@ -76,6 +117,9 @@ pub(crate) struct JobStore {
     /// Only timestamps changed since the last save.
     touched: bool,
     saved_at: Option<DateTime<Utc>>,
+    seq: u64,
+    completed: HashSet<u64>,
+    completed_order: VecDeque<u64>,
 }
 
 impl JobStore {
@@ -115,6 +159,9 @@ impl JobStore {
             dirty: false,
             touched: false,
             saved_at: None,
+            seq: 0,
+            completed: HashSet::new(),
+            completed_order: VecDeque::new(),
         }
     }
 
@@ -123,6 +170,7 @@ impl JobStore {
         self.storage_error.as_deref()
     }
 
+    #[cfg(test)]
     pub fn history_since(&self) -> DateTime<Utc> {
         self.journal.started_at
     }
@@ -132,13 +180,49 @@ impl JobStore {
         &self.journal.jobs
     }
 
+    /// Recorded time for analytics.
+    pub fn coverage(&self) -> Coverage {
+        Coverage::new(self.journal.coverage.clone())
+    }
+
+    /// Marks `org`'s job data as fresh since `fresh_at`, extending its recorded time to `now`.
+    pub fn cover(&mut self, org: &str, fresh_at: DateTime<Utc>, now: DateTime<Utc>) {
+        let spans = self.journal.coverage.entry(org.to_lowercase()).or_default();
+        match spans.last_mut() {
+            Some(last) if now - last.to <= COVERAGE_GAP => last.to = last.to.max(now),
+            last => {
+                let from = last.map_or(fresh_at, |l| fresh_at.max(l.to)).min(now);
+                spans.push(Span { from, to: now });
+            }
+        }
+        self.touched = true;
+    }
+
+    /// Whether the job finished: recorded, or seen completed this session.
+    pub fn is_completed(&self, id: u64) -> bool {
+        self.ids.contains(&id) || self.completed.contains(&id)
+    }
+
+    /// Remembers a job GitHub reported completed, whether or not it's recorded.
+    pub fn mark_completed(&mut self, id: u64) {
+        if self.completed.insert(id) {
+            self.completed_order.push_back(id);
+            while self.completed_order.len() > RECENTLY_COMPLETED {
+                if let Some(old) = self.completed_order.pop_front() {
+                    self.completed.remove(&old);
+                }
+            }
+        }
+    }
+
     /// Follows the runs of queued and running self-hosted jobs until they finish.
-    pub fn track(&mut self, org: &str, jobs: &[GhJob], now: DateTime<Utc>) {
+    pub fn track(&mut self, org: &str, jobs: &[GhJob], runners: &[GhRunner], now: DateTime<Utc>) {
         let org = org.to_lowercase();
-        for job in jobs
+        let followed: Vec<&GhJob> = jobs
             .iter()
-            .filter(|j| super::wants_self_hosted(j) && !self.ids.contains(&j.id))
-        {
+            .filter(|j| super::self_hosted(j, runners) && !self.is_completed(j.id))
+            .collect();
+        for job in followed {
             let run = self.journal.pending.entry(job.run_id).or_insert_with(|| PendingRun {
                 org: org.clone(),
                 repo: job.repo.clone(),
@@ -147,6 +231,7 @@ impl JobStore {
                 first_seen: now,
                 last_seen: now,
                 checked_at: None,
+                unreadable: 0,
             });
             run.last_seen = now;
             self.dirty |= run.jobs.insert(job.id);
@@ -171,11 +256,25 @@ impl JobStore {
         due
     }
 
-    /// The run is still going (or couldn't be read completely); ask again later.
-    pub fn checked(&mut self, run_id: u64, now: DateTime<Utc>) {
+    /// The run isn't finished, or couldn't be read completely; ask again later.
+    pub fn checked(&mut self, run_id: u64, check: RunCheck, now: DateTime<Utc>) {
+        let Some(run) = self.journal.pending.get_mut(&run_id) else {
+            return;
+        };
+        run.checked_at = Some(now);
+        self.touched = true;
+        if check == RunCheck::Truncated {
+            run.unreadable += 1;
+            if run.unreadable >= MAX_UNREADABLE {
+                self.finish(run_id);
+            }
+        }
+    }
+
+    /// A job seen in a run was read back completed (recorded or not): stop asking about it.
+    pub fn resolve(&mut self, run_id: u64, job_id: u64) {
         if let Some(run) = self.journal.pending.get_mut(&run_id) {
-            run.checked_at = Some(now);
-            self.touched = true;
+            self.dirty |= run.jobs.remove(&job_id);
         }
     }
 
@@ -223,34 +322,65 @@ impl JobStore {
             }
         }
         self.dirty |= self.journal.pending.len() != before;
+        let cutoff = now - JOB_RETENTION;
+        for spans in self.journal.coverage.values_mut() {
+            let expired = spans.partition_point(|s| s.to < cutoff);
+            let excess = (spans.len() - expired).saturating_sub(MAX_SPANS_PER_ORG);
+            spans.drain(..expired + excess);
+        }
+        self.journal.coverage.retain(|_, spans| !spans.is_empty());
     }
 
-    /// Writes the journal if it changed. Performs disk I/O; call off the async runtime.
-    pub fn save(&mut self, now: DateTime<Utc>) {
-        let checkpoint = self.touched && self.saved_at.is_none_or(|at| now - at >= CHECKPOINT);
-        if !self.dirty && !checkpoint {
-            return;
+    /// Serializes the journal if a save is due (`force` ignores the save interval). The
+    /// caller writes it without holding the store's lock, then calls [`Self::finish_save`].
+    pub fn prepare_save(&mut self, now: DateTime<Utc>, force: bool) -> Option<PendingWrite> {
+        let since = |interval| force || self.saved_at.is_none_or(|at| now - at >= interval);
+        let due = (self.dirty && since(SAVE_INTERVAL)) || (self.touched && since(CHECKPOINT));
+        // An unreadable file's load error already explains why nothing is saved.
+        if !due || !self.writable {
+            return None;
         }
-        if !self.writable {
-            // The load error already explains why; keep it visible.
-            return;
-        }
-        let write = || -> Result<(), Box<dyn std::error::Error>> {
-            crate::atomic_write::atomic_write(&self.path, &serde_json::to_vec(&self.journal)?)?;
-            Ok(())
-        };
-        match write() {
-            Ok(()) => {
-                self.dirty = false;
-                self.touched = false;
-                self.saved_at = Some(now);
-                self.storage_error = None;
-            }
+        let bytes = match serde_json::to_vec(&self.journal) {
+            Ok(bytes) => bytes,
             Err(e) => {
                 self.storage_error = Some(format!(
                     "Couldn't save job history: {e}. Recent jobs are kept in memory."
-                ))
+                ));
+                return None;
             }
+        };
+        self.dirty = false;
+        self.touched = false;
+        self.saved_at = Some(now);
+        self.seq += 1;
+        Some(PendingWrite {
+            path: self.path.clone(),
+            bytes,
+            seq: self.seq,
+        })
+    }
+
+    /// Records how a prepared write went. A failed write is retried by the next save.
+    pub fn finish_save(&mut self, seq: u64, result: Result<(), String>) {
+        match result {
+            Ok(()) if seq == self.seq => self.storage_error = None,
+            Ok(()) => {}
+            Err(e) => {
+                self.dirty = true;
+                self.saved_at = None;
+                self.storage_error = Some(format!(
+                    "Couldn't save job history: {e}. Recent jobs are kept in memory."
+                ));
+            }
+        }
+    }
+
+    /// Prepares and writes in one step, for tests.
+    #[cfg(test)]
+    pub fn save(&mut self, now: DateTime<Utc>) {
+        if let Some(write) = self.prepare_save(now, true) {
+            let result = crate::atomic_write::atomic_write(&write.path, &write.bytes).map_err(|e| e.to_string());
+            self.finish_save(write.seq, result);
         }
     }
 

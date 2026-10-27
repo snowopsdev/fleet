@@ -18,6 +18,8 @@ pub const MAX_JOB_PAGE: usize = 200;
 pub struct FleetJobHistoryFilter {
     /// A machine's history identity (`inv:<host>` or `ts:<node>`).
     pub machine_key: Option<String>,
+    /// Organization login, case-insensitive.
+    pub org: Option<String>,
     /// A runner key (`gh:<org>:<id>`).
     pub runner_key: Option<String>,
     /// A runner name, case-insensitive; matches runners GitHub no longer lists.
@@ -68,9 +70,11 @@ impl FleetJobHistoryFilter {
                     .split_once('/')
                     .is_some_and(|(_, name)| name.eq_ignore_ascii_case(filter))
         };
-        self.machine_key
-            .as_ref()
-            .is_none_or(|k| job.machine_key.as_ref() == Some(k))
+        self.org.as_ref().is_none_or(|o| job.org.eq_ignore_ascii_case(o))
+            && self
+                .machine_key
+                .as_ref()
+                .is_none_or(|k| job.machine_key.as_ref() == Some(k))
             && self
                 .runner_key
                 .as_ref()

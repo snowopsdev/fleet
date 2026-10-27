@@ -166,6 +166,11 @@ pub fn history_since(now: DateTime<Utc>) -> DateTime<Utc> {
     now - JOB_RETENTION
 }
 
+/// Demo history is recorded throughout the retention window, for every demo organization.
+pub fn coverage(view: &FleetView, now: DateTime<Utc>) -> super::analytics::Coverage {
+    super::analytics::Coverage::full(view.orgs.iter().map(|o| o.login.clone()), history_since(now), now)
+}
+
 /// Recent demo jobs for the runner and machine panes.
 pub(crate) fn attach(view: &mut FleetView, now: DateTime<Utc>) {
     let jobs = history(view, now - Duration::days(2), now);

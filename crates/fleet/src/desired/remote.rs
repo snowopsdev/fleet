@@ -7,6 +7,7 @@
 //! password, as arguments, so those do appear in the worker's process list
 //! while configuration runs.
 
+mod maintenance;
 mod scripts;
 
 use std::collections::BTreeMap;
@@ -17,10 +18,14 @@ use base64::Engine as _;
 use serde_json::Value;
 
 use super::github::ReleaseAsset;
+use super::maintenance::{CleanupCandidate, CleanupOptions, CleanupOutcome, CleanupTarget};
 use super::model::{CheckStatus, DoctorCheck, Host, LocalRunner, Runner, RunnerRole, SshTransport};
 use super::process::{CommandRunner, NonZeroExit};
 use super::py::{py_str, repr, splitlines, truthy};
 use super::windows_logon::ServiceAction;
+pub use maintenance::{CleanupSurvey, format_kib, parse_clean, parse_survey};
+#[cfg(test)]
+pub(crate) use maintenance::{clean_script, stop_script, survey_script};
 pub use scripts::probe_script;
 use scripts::{INSTALL, RETIRE, WorkerScript, logs_script, service_script, worker_payload};
 pub(crate) use scripts::{posix_doctor, windows_doctor};
@@ -119,6 +124,19 @@ pub trait FleetRemote: Send + Sync {
     fn restart(&self, host: &Host, runner: &Runner, role: RunnerRole, sudo_password: &Transient) -> Result<String>;
     fn logs(&self, host: &Host, runner: &Runner, role: RunnerRole, lines: u32) -> Result<String>;
     fn doctor(&self, host: &Host) -> Vec<DoctorCheck>;
+    /// Stops one declared runner's service; refuses while a job runs in its directory.
+    fn stop(&self, host: &Host, runner: &Runner, sudo_password: &Transient) -> Result<String>;
+    /// Read-only: which cleanup candidates exist on the host, and their sizes.
+    fn survey_cleanup(
+        &self,
+        host: &Host,
+        candidates: &[CleanupCandidate],
+        options: &CleanupOptions,
+    ) -> Result<CleanupSurvey>;
+    /// Removes exactly the reviewed targets, each re-resolved and re-checked on the host.
+    fn cleanup(&self, host: &Host, targets: &[CleanupTarget], options: &CleanupOptions) -> Result<Vec<CleanupOutcome>>;
+    /// Replaces a stopped runner's `bin/` and `externals/` with a verified release.
+    fn upgrade(&self, host: &Host, runner: &Runner, asset: &ReleaseAsset) -> Result<String>;
 }
 
 #[derive(Debug, Clone)]
@@ -408,6 +426,27 @@ impl FleetRemote for RemoteClient {
             Ok(checks) => checks,
             Err(e) => vec![DoctorCheck::new(&host.id, "ssh", CheckStatus::Fail, e.0)],
         }
+    }
+
+    fn stop(&self, host: &Host, runner: &Runner, sudo_password: &Transient) -> Result<String> {
+        self.stop_runner(host, runner, sudo_password)
+    }
+
+    fn survey_cleanup(
+        &self,
+        host: &Host,
+        candidates: &[CleanupCandidate],
+        options: &CleanupOptions,
+    ) -> Result<CleanupSurvey> {
+        self.survey(host, candidates, options)
+    }
+
+    fn cleanup(&self, host: &Host, targets: &[CleanupTarget], options: &CleanupOptions) -> Result<Vec<CleanupOutcome>> {
+        self.clean(host, targets, options)
+    }
+
+    fn upgrade(&self, host: &Host, runner: &Runner, asset: &ReleaseAsset) -> Result<String> {
+        self.replace_binaries(host, runner, asset)
     }
 }
 

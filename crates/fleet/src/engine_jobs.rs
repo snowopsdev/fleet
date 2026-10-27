@@ -11,7 +11,7 @@ use crate::github::{GithubClient, GithubError};
 use crate::jobs::analytics::{self, FleetAnalytics, FleetAnalyticsWindow};
 use crate::jobs::feed::FeedRegistry;
 use crate::jobs::history::{FleetJobHistoryFilter, FleetJobHistoryPage};
-use crate::jobs::{FinishedJob, FleetCompletedJob, FleetHostedRates, FleetJobSource, JobStore};
+use crate::jobs::{FinishedJob, FleetCompletedJob, FleetHostedRates, FleetJobSource, JobStore, RunCheck};
 use crate::model::{DataSource, FleetView, GhRunner, JobScan, RepoScope};
 use crate::sync::{MutexExt, RwLockExt};
 
@@ -32,6 +32,8 @@ pub(super) struct JobActivity {
     pub feeds: Arc<FeedRegistry>,
     /// Bumped when job feed settings change, so the feed controller reconciles at once.
     pub settings: tokio::sync::watch::Sender<u64>,
+    /// The sequence number of the last journal write, so an older one never lands last.
+    pub writer: Arc<Mutex<u64>>,
 }
 
 impl JobActivity {
@@ -43,8 +45,31 @@ impl JobActivity {
             ))),
             feeds: Arc::new(FeedRegistry::default()),
             settings: tokio::sync::watch::channel(0).0,
+            writer: Arc::new(Mutex::new(0)),
         }
     }
+}
+
+/// Writes the journal if a save is due, serializing under the store's lock and writing
+/// without it. Performs disk I/O; call off the async runtime.
+fn persist(store: &Mutex<JobStore>, writer: &Mutex<u64>, now: DateTime<Utc>, force: bool) {
+    let Some(write) = store.locked().prepare_save(now, force) else {
+        return;
+    };
+    let result = {
+        let mut written = writer.locked();
+        if write.seq <= *written {
+            // A newer snapshot is already on disk.
+            Ok(())
+        } else {
+            let result = crate::atomic_write::atomic_write(&write.path, &write.bytes).map_err(|e| e.to_string());
+            if result.is_ok() {
+                *written = write.seq;
+            }
+            result
+        }
+    };
+    store.locked().finish_save(write.seq, result);
 }
 
 /// One organization's inputs for a history round.
@@ -63,7 +88,9 @@ pub(super) struct RoundResult {
     /// Runs no longer worth following.
     pub done: Vec<u64>,
     /// Runs to ask about again later.
-    pub checked: Vec<u64>,
+    pub checked: Vec<(u64, RunCheck)>,
+    /// (run, job) pairs read back completed, recorded or not.
+    pub resolved: Vec<(u64, u64)>,
 }
 
 impl Engine {
@@ -122,18 +149,34 @@ impl Engine {
                     Some(OrgRound {
                         client,
                         scan: observed.jobs.as_ref()?.value.clone(),
-                        runners: observed.runners.as_ref().map(|r| r.value.clone()).unwrap_or_default(),
+                        runners: crate::jobs::account_runners(observed),
                         org,
                     })
                 })
                 .collect()
         };
+        // Recorded time: the app is running and the account's job data is fresh.
+        let fresh: Vec<(String, DateTime<Utc>)> = {
+            let obs = self.obs.read_locked();
+            config
+                .orgs
+                .iter()
+                .filter_map(|o| {
+                    let org = o.login.to_lowercase();
+                    let at = obs.github.get(&org)?.jobs.as_ref()?.at;
+                    (now - at <= crate::derive::JOBS_STALE_AFTER).then_some((org, at))
+                })
+                .collect()
+        };
         let due: Vec<_> = {
             let mut store = self.job_activity.store.locked();
+            for (org, at) in &fresh {
+                store.cover(org, *at, now);
+            }
             rounds
                 .iter()
                 .map(|round| {
-                    store.track(&round.org, &round.scan.jobs, now);
+                    store.track(&round.org, &round.scan.jobs, &round.runners, now);
                     store.due(&round.org, &round.scan, now, RUNS_PER_ROUND)
                 })
                 .collect()
@@ -145,21 +188,25 @@ impl Engine {
                     break;
                 }
                 match read_run(&round.client, &run.repo, run.run_id, &run.jobs).await {
-                    Ok((jobs, complete)) => {
+                    Ok(read) => {
                         result
-                            .finished
-                            .extend(jobs.into_iter().map(|j| (round.org.clone(), round.runners.clone(), j)));
-                        if complete {
-                            result.done.push(run.run_id);
-                        } else {
-                            result.checked.push(run.run_id);
+                            .resolved
+                            .extend(read.resolved.into_iter().map(|id| (run.run_id, id)));
+                        result.finished.extend(
+                            read.finished
+                                .into_iter()
+                                .map(|j| (round.org.clone(), round.runners.clone(), j)),
+                        );
+                        match read.state {
+                            None => result.done.push(run.run_id),
+                            Some(check) => result.checked.push((run.run_id, check)),
                         }
                     }
                     // The run was deleted, or the repository is no longer readable.
                     Err(GithubError::NotFound(_)) => result.done.push(run.run_id),
                     Err(error) => {
                         tracing::debug!(org = %round.org, run = run.run_id, "job history read failed: {error}");
-                        result.checked.push(run.run_id);
+                        result.checked.push((run.run_id, RunCheck::Pending));
                         if let GithubError::RateLimited { resets_at } = error {
                             self.back_off(&round.org, resets_at);
                             break;
@@ -186,7 +233,8 @@ impl Engine {
         }
     }
 
-    /// Records finished jobs and run outcomes, then saves off the async runtime.
+    /// Records finished jobs and run outcomes, then saves off the async runtime. New jobs reach
+    /// disk within the save interval (10 seconds) of the next round, or at app exit.
     pub(super) async fn apply_job_round(&self, result: RoundResult, source: FleetJobSource, now: DateTime<Utc>) {
         let records: Vec<FleetCompletedJob> = if result.finished.is_empty() {
             Vec::new()
@@ -199,20 +247,30 @@ impl Engine {
                 .collect()
         };
         let store = self.job_activity.store.clone();
+        let writer = self.job_activity.writer.clone();
         let saved = tokio::task::spawn_blocking(move || {
-            let mut store = store.locked();
-            let mut added = 0usize;
-            for record in records {
-                added += usize::from(store.record(record));
-            }
-            for run in result.done {
-                store.finish(run);
-            }
-            for run in result.checked {
-                store.checked(run, now);
-            }
-            store.prune(now);
-            store.save(now);
+            let added = {
+                let mut store = store.locked();
+                let mut added = 0usize;
+                for (_, _, job) in &result.finished {
+                    store.mark_completed(job.job.id);
+                }
+                for record in records {
+                    added += usize::from(store.record(record));
+                }
+                for (run, job) in result.resolved {
+                    store.resolve(run, job);
+                }
+                for run in result.done {
+                    store.finish(run);
+                }
+                for (run, check) in result.checked {
+                    store.checked(run, check, now);
+                }
+                store.prune(now);
+                added
+            };
+            persist(&store, &writer, now, false);
             added
         })
         .await;
@@ -221,6 +279,11 @@ impl Engine {
             Ok(_) => {}
             Err(error) => tracing::warn!("saving job history failed: {error}"),
         }
+    }
+
+    /// Writes any unsaved job history now. Performs disk I/O; the app calls it on exit.
+    pub fn flush_job_history(&self) {
+        persist(&self.job_activity.store, &self.job_activity.writer, Utc::now(), true);
     }
 
     pub(super) fn attach_job_activity(&self, view: &mut FleetView) {
@@ -254,13 +317,19 @@ impl Engine {
         let now = view.generated_at;
         match view.source {
             DataSource::Demo => {
-                let since = crate::jobs::demo::history_since(now);
                 let jobs = crate::jobs::demo::history(view, now - window.duration(), now);
-                analytics::summarize(&jobs, Some(since), view, &rates, window, now)
+                analytics::summarize(
+                    &jobs,
+                    &crate::jobs::demo::coverage(view, now),
+                    view,
+                    &rates,
+                    window,
+                    now,
+                )
             }
             DataSource::Live => {
                 let store = self.job_activity.store.locked();
-                analytics::summarize(store.jobs(), Some(store.history_since()), view, &rates, window, now)
+                analytics::summarize(store.jobs(), &store.coverage(), view, &rates, window, now)
             }
         }
     }
@@ -309,33 +378,63 @@ impl Engine {
     }
 }
 
-/// A run's finished jobs and whether nothing in it is still going.
+/// What one read of a followed run found.
+struct RunRead {
+    /// Jobs GitHub reports completed, recordable or not.
+    finished: Vec<FinishedJob>,
+    /// Jobs seen earlier that were read back completed or are gone.
+    resolved: Vec<u64>,
+    /// `None` when nothing in the run is left to follow.
+    state: Option<RunCheck>,
+}
+
+/// Reads a run's latest attempt, plus up to [`JOBS_PER_RUN`] jobs seen in earlier attempts.
 async fn read_run(
     client: &GithubClient,
     repo: &str,
     run_id: u64,
     seen: &BTreeSet<u64>,
-) -> Result<(Vec<FinishedJob>, bool), GithubError> {
+) -> Result<RunRead, GithubError> {
     let listing = client.finished_run_jobs(repo, run_id).await?;
-    let mut complete = !listing.truncated && listing.jobs.iter().all(|j| j.job.status == "completed");
+    let mut pending = listing.jobs.iter().any(|j| j.job.status != "completed");
     let listed: BTreeSet<u64> = listing.jobs.iter().map(|j| j.job.id).collect();
     let mut finished: Vec<FinishedJob> = listing
         .jobs
         .into_iter()
         .filter(|j| j.job.status == "completed")
         .collect();
-    // Jobs seen running in an earlier attempt aren't in the latest listing.
+    let mut resolved: Vec<u64> = finished
+        .iter()
+        .map(|j| j.job.id)
+        .filter(|id| seen.contains(id))
+        .collect();
+    // Jobs seen running in an earlier attempt aren't in the latest listing. Each is read once
+    // it's done; later rounds read the rest.
     for (index, id) in seen.iter().filter(|id| !listed.contains(id)).enumerate() {
         if index >= JOBS_PER_RUN {
-            complete = false;
+            pending = true;
             break;
         }
         match client.finished_job(repo, *id).await {
-            Ok(job) if job.job.status == "completed" => finished.push(job),
-            Ok(_) => complete = false,
-            Err(GithubError::NotFound(_)) => {}
+            Ok(job) if job.job.status == "completed" => {
+                resolved.push(*id);
+                finished.push(job);
+            }
+            Ok(_) => pending = true,
+            Err(GithubError::NotFound(_)) => resolved.push(*id),
             Err(error) => return Err(error),
         }
     }
-    Ok((finished, complete))
+    let state = if listing.truncated {
+        Some(RunCheck::Truncated)
+    } else if pending {
+        Some(RunCheck::Pending)
+    } else {
+        None
+    };
+    Ok(RunRead {
+        finished,
+        resolved,
+        state,
+    })
 }

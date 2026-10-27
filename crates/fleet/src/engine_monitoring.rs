@@ -26,6 +26,8 @@ impl Engine {
         if view.source == DataSource::Live {
             let (at, notifications) = (view.generated_at, view.monitoring.desktop_notifications);
             monitoring.attach(&mut view, at, notifications);
+            drop(monitoring);
+            self.attach_automation(&mut view, &self.config(), at);
             crate::issues::attach(&mut view);
         }
         (events, view)

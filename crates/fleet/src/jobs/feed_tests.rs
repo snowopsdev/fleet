@@ -248,3 +248,30 @@ async fn stopping_the_registry_ends_supervision() {
     supervise(&launcher, spec(), &registry, rx, quick()).await;
     assert_eq!(launcher.launches(), 0);
 }
+
+#[tokio::test]
+async fn an_old_supervisor_stopping_late_leaves_the_new_ones_status() {
+    let launcher = Arc::new(FakeLauncher::with(vec![
+        Ok(vec![line("Forwarding Webhook events from GitHub...")]),
+        Ok(vec![line("Forwarding Webhook events from GitHub...")]),
+    ]));
+    let registry = Arc::new(FeedRegistry::default());
+    let start = |rx| {
+        let (launcher, registry) = (launcher.clone(), registry.clone());
+        tokio::spawn(async move { supervise(&*launcher, spec(), &registry, rx, quick()).await })
+    };
+    let (stop_old, rx) = watch::channel(false);
+    let old = start(rx);
+    until("first forwarding", || registry.forwarding("acme")).await;
+    let (stop_new, rx) = watch::channel(false);
+    let new = start(rx);
+    until("second launch", || launcher.launches() == 2).await;
+    // The newer generation replaced the status before launching; wait for it to connect.
+    until("second forwarding", || registry.forwarding("acme")).await;
+    stop_old.send(true).unwrap();
+    old.await.unwrap();
+    assert!(registry.forwarding("acme"), "the newer supervisor's status stays");
+    stop_new.send(true).unwrap();
+    new.await.unwrap();
+    assert!(registry.statuses().is_empty());
+}

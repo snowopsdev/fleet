@@ -295,7 +295,7 @@
             "title": "linux-01-a",
             "status": "pass",
             "value": "Running",
-            "detail": "Service: active · version: 2.329.0 · ~/gh-runners/acme-demo/runner-01"
+            "detail": "Service: active · version: 2.328.0 · ~/gh-runners/acme-demo/runner-01"
           }
         ]
       },
@@ -304,6 +304,38 @@
         "maintenanceUntil": null,
         "alerts": [],
         "events": [
+          {
+            "id": "00000000000000000012",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:09:00Z",
+            "kind": "watchdogRecovered",
+            "detail": "linux-01-a is running again after an automatic restart."
+          },
+          {
+            "id": "00000000000000000011",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:09:00Z",
+            "kind": "runnerServiceChanged",
+            "detail": "linux-01-a: failed → running."
+          },
+          {
+            "id": "00000000000000000010",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:08:00Z",
+            "kind": "watchdogRestarted",
+            "detail": "Automatically restarted linux-01-a (attempt 1 of 3): its service was failed and GitHub showed it offline and idle."
+          },
+          {
+            "id": "00000000000000000009",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:06:00Z",
+            "kind": "runnerServiceChanged",
+            "detail": "linux-01-a: running → failed."
+          },
           {
             "id": "00000000000000000001",
             "machineKey": "inv:build-linux-01",
@@ -346,7 +378,7 @@
             "installDir": "~/gh-runners/acme-demo/runner-01",
             "configured": true,
             "serviceState": "active",
-            "version": "2.329.0",
+            "version": "2.328.0",
             "asOf": "2026-10-03T11:56:00Z",
             "stale": true
           },
@@ -368,7 +400,7 @@
               "githubState": "online",
               "serviceState": "unknown",
               "busy": false,
-              "version": "2.329.0",
+              "version": "2.328.0",
               "drift": "host unavailable",
               "desired": true
             },
@@ -796,7 +828,7 @@
         ],
         "events": [
           {
-            "id": "00000000000000000011",
+            "id": "00000000000000000015",
             "machineKey": "inv:mac-mini-02",
             "machineName": "mac-mini-02",
             "at": "2026-10-03T11:48:00Z",
@@ -1664,7 +1696,15 @@
         "alerts": [],
         "events": [
           {
-            "id": "00000000000000000010",
+            "id": "00000000000000000016",
+            "machineKey": "inv:studio",
+            "machineName": "studio",
+            "at": "2026-10-03T11:54:00Z",
+            "kind": "drainRequested",
+            "detail": "Draining studio-1: its service stops after the current job, as reviewed."
+          },
+          {
+            "id": "00000000000000000014",
             "machineKey": "inv:studio",
             "machineName": "studio",
             "at": "2026-10-03T11:23:00Z",
@@ -1672,7 +1712,7 @@
             "detail": "studio-1: inactive → running."
           },
           {
-            "id": "00000000000000000009",
+            "id": "00000000000000000013",
             "machineKey": "inv:studio",
             "machineName": "studio",
             "at": "2026-10-03T11:22:00Z",
@@ -2629,7 +2669,15 @@
     ],
     "events": [
       {
-        "id": "00000000000000000011",
+        "id": "00000000000000000016",
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "at": "2026-10-03T11:54:00Z",
+        "kind": "drainRequested",
+        "detail": "Draining studio-1: its service stops after the current job, as reviewed."
+      },
+      {
+        "id": "00000000000000000015",
         "machineKey": "inv:mac-mini-02",
         "machineName": "mac-mini-02",
         "at": "2026-10-03T11:48:00Z",
@@ -2637,7 +2685,7 @@
         "detail": "/: 5.7% free (13.0 GiB of 228.2 GiB)."
       },
       {
-        "id": "00000000000000000010",
+        "id": "00000000000000000014",
         "machineKey": "inv:studio",
         "machineName": "studio",
         "at": "2026-10-03T11:23:00Z",
@@ -2645,12 +2693,44 @@
         "detail": "studio-1: inactive → running."
       },
       {
-        "id": "00000000000000000009",
+        "id": "00000000000000000013",
         "machineKey": "inv:studio",
         "machineName": "studio",
         "at": "2026-10-03T11:22:00Z",
         "kind": "rebooted",
         "detail": "A different operating-system boot session was observed."
+      },
+      {
+        "id": "00000000000000000012",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:09:00Z",
+        "kind": "watchdogRecovered",
+        "detail": "linux-01-a is running again after an automatic restart."
+      },
+      {
+        "id": "00000000000000000011",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:09:00Z",
+        "kind": "runnerServiceChanged",
+        "detail": "linux-01-a: failed → running."
+      },
+      {
+        "id": "00000000000000000010",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:08:00Z",
+        "kind": "watchdogRestarted",
+        "detail": "Automatically restarted linux-01-a (attempt 1 of 3): its service was failed and GitHub showed it offline and idle."
+      },
+      {
+        "id": "00000000000000000009",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:06:00Z",
+        "kind": "runnerServiceChanged",
+        "detail": "linux-01-a: running → failed."
       },
       {
         "id": "00000000000000000008",
@@ -2717,6 +2797,56 @@
         "detail": "Started observing this machine. Earlier events are not known."
       }
     ]
+  },
+  "automation": {
+    "drains": [
+      {
+        "runner": "studio-1",
+        "hostId": "studio",
+        "state": "draining",
+        "requestedAt": "2026-10-03T11:54:00Z",
+        "stoppedAt": null,
+        "error": null
+      }
+    ],
+    "watchdog": {
+      "enabled": true,
+      "runners": [
+        {
+          "runner": "linux-01-a",
+          "hostId": "build-linux-01",
+          "attempts": [
+            "2026-10-03T11:08:00Z"
+          ],
+          "downSince": null,
+          "nextAttemptAt": null,
+          "gaveUpAt": null,
+          "lastError": null
+        }
+      ]
+    },
+    "destinations": [
+      {
+        "id": "demo-slack",
+        "name": "#ci-alerts",
+        "kind": "slack",
+        "enabled": true,
+        "summary": "hooks.slack.com",
+        "pending": 0,
+        "deliveredAt": "2026-10-03T11:48:00Z",
+        "error": null
+      }
+    ],
+    "publish": {
+      "enabled": true,
+      "organization": "acme-demo",
+      "variable": "RUNNER_FLEET_STATUS",
+      "intervalMinutes": 5,
+      "value": "{\"healthy\":false,\"online\":{\"linux-build\":1,\"linux-experimental\":1,\"macos-build\":3,\"macos-e2e\":1,\"raspberry-pi\":1,\"ubuntu\":1,\"windows-build\":0,\"xcode\":2},\"updatedAt\":\"2026-10-03T11:51:00Z\"}",
+      "publishedAt": "2026-10-03T11:51:00Z",
+      "error": null,
+      "waiting": null
+    }
   },
   "activity": {
     "historySince": "2026-09-03T12:00:00Z",

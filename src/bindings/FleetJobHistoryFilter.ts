@@ -10,6 +10,10 @@ export type FleetJobHistoryFilter = {
  */
 machineKey: string | null, 
 /**
+ * Organization login, case-insensitive.
+ */
+org: string | null, 
+/**
  * A runner key (`gh:<org>:<id>`).
  */
 runnerKey: string | null, 

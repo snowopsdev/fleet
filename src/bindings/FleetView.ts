@@ -2,6 +2,7 @@
 import type { DataSource } from "./DataSource";
 import type { DiscoveredPeerView } from "./DiscoveredPeerView";
 import type { FleetActivity } from "./FleetActivity";
+import type { FleetAutomation } from "./FleetAutomation";
 import type { FleetIssue } from "./FleetIssue";
 import type { FleetMonitoring } from "./FleetMonitoring";
 import type { FleetPlanStatus } from "./FleetPlanStatus";
@@ -34,6 +35,10 @@ unmatchedRunners: Array<RunnerView>, ignored: Array<DiscoveredPeerView>, queue: 
  * Desired state from `inventory/fleet.toml`: errors, last check, the current change.
  */
 plan: FleetPlanStatus, orgs: Array<OrgStatusView>, tailnet: TailnetStatusView, monitoring: FleetMonitoring, 
+/**
+ * Drains, watchdog restarts, alert destinations and published availability.
+ */
+automation: FleetAutomation, 
 /**
  * Recently completed jobs and the real-time job feed; analytics are a separate read.
  */

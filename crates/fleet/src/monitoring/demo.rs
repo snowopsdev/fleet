@@ -30,6 +30,25 @@ pub(crate) fn attach(view: &mut FleetView, now: DateTime<Utc>) {
                 "A different operating-system boot session was observed.".into(),
             );
             add(37, Kind::RunnerServiceChanged, "studio-1: inactive → running.".into());
+            add(
+                6,
+                Kind::DrainRequested,
+                "Draining studio-1: its service stops after the current job, as reviewed.".into(),
+            );
+        }
+        if key == inventory_machine_key("build-linux-01") {
+            add(54, Kind::RunnerServiceChanged, "linux-01-a: running → failed.".into());
+            add(
+                52,
+                Kind::WatchdogRestarted,
+                "Automatically restarted linux-01-a (attempt 1 of 3): its service was failed and GitHub showed it offline and idle.".into(),
+            );
+            add(51, Kind::RunnerServiceChanged, "linux-01-a: failed → running.".into());
+            add(
+                51,
+                Kind::WatchdogRecovered,
+                "linux-01-a is running again after an automatic restart.".into(),
+            );
         }
         if key == inventory_machine_key("mac-mini-02") {
             let detail = "/: 5.7% free (13.0 GiB of 228.2 GiB).".to_owned();

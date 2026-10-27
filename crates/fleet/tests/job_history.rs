@@ -175,7 +175,12 @@ async fn runs_that_leave_the_scan_are_read_once_and_recorded_with_their_runner()
     assert_eq!((failed.queue_secs, failed.run_secs), (Some(60), Some(300)));
     assert_eq!(failed.source, FleetJobSource::Poll);
     assert_eq!(engine.view().activity.recent.len(), 2);
-    let saved: Value = serde_json::from_slice(&std::fs::read(dir.path().join("job-history.json")).unwrap()).unwrap();
+    let read =
+        || -> Value { serde_json::from_slice(&std::fs::read(dir.path().join("job-history.json")).unwrap()).unwrap() };
+    // Saves are debounced: the first round saved the followed run moments ago.
+    assert_eq!(read()["jobs"], json!([]));
+    engine.flush_job_history();
+    let saved = read();
     assert_eq!(saved["version"], 1);
     assert_eq!(saved["jobs"].as_array().unwrap().len(), 2);
     assert_eq!(saved["pending"], json!({}), "the finished run is no longer followed");
@@ -304,6 +309,28 @@ async fn the_job_feed_records_deliveries_slows_polling_and_stops_its_forwarders(
     engine.poll_github_jobs_and_history().await;
     assert_eq!(run_lists.load(Ordering::SeqCst), before);
 
+    // A late delivery can't revive a completed job, and other repositories stay out of the scan.
+    for (id, repo) in [(333, "acme/web"), (555, "acme/other"), (444, "acme/web")] {
+        let body = json!({
+            "action": "queued",
+            "workflow_job": runner_job(id, "queued", None),
+            "repository": {"full_name": repo, "owner": {"login": "acme"}},
+            "organization": {"login": "acme"}
+        })
+        .to_string();
+        let response = reqwest::Client::new()
+            .post(&spec.url)
+            .header("x-github-event", "workflow_job")
+            .header("x-hub-signature-256", signature(&spec.secret, body.as_bytes()))
+            .body(body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+    }
+    let queued: Vec<u64> = engine.view().queue.jobs.iter().map(|q| q.job.id).collect();
+    assert_eq!(queued, [444]);
+
     engine.stop_job_feeds();
     eventually("forwarder terminated", || {
         launcher.terminated.load(Ordering::SeqCst) == 1
@@ -330,6 +357,10 @@ async fn feed_settings_and_rates_are_validated() {
     assert_eq!((saved.linux, saved.as_of.as_str()), (0.008, "2026-11-01"));
     engine.set_job_feed("acme", true).unwrap();
     engine.set_job_feed("acme", false).unwrap();
+    assert!(engine.config().job_activity.feed_orgs.is_empty());
+    // Removing an account forgets its opt-in, so adding it again starts without a forwarder.
+    engine.set_job_feed("acme", true).unwrap();
+    engine.remove_org("acme").await.unwrap();
     assert!(engine.config().job_activity.feed_orgs.is_empty());
 }
 
@@ -360,5 +391,74 @@ async fn history_reads_leave_a_low_budget_to_the_polls_and_honour_rate_limits() 
         budget.runner_lists.load(Ordering::SeqCst),
         before,
         "runner polls wait for the reset"
+    );
+}
+
+#[tokio::test]
+async fn earlier_attempt_jobs_are_read_once_even_when_they_cant_be_recorded() {
+    let finished = Arc::new(AtomicBool::new(false));
+    let single_reads = Arc::new(AtomicUsize::new(0));
+    let (runs_done, jobs_done, reads) = (finished.clone(), finished.clone(), single_reads.clone());
+    let router = Router::new()
+        .route(
+            "/orgs/{org}/actions/runners",
+            get(|| async {
+                Json(
+                    json!({"total_count": 1, "runners": [{"id": 7, "name": "fake-runner", "os": "Linux",
+                    "status": "online", "busy": true, "labels": [{"name": "self-hosted"}, {"name": "Linux"}]}]}),
+                )
+            }),
+        )
+        .route(
+            "/repos/{org}/{repo}/actions/runs",
+            get(move |Query(q): Query<HashMap<String, String>>| {
+                let running = q["status"] == "in_progress" && !runs_done.load(Ordering::SeqCst);
+                async move {
+                    let runs = if running { json!([{"id": 11}]) } else { json!([]) };
+                    Json(json!({"total_count": runs.as_array().unwrap().len(), "workflow_runs": runs}))
+                }
+            }),
+        )
+        .route(
+            "/repos/{org}/{repo}/actions/runs/{run}/jobs",
+            get(move || {
+                // Re-run: the latest attempt has a new job, still running.
+                let job = if jobs_done.load(Ordering::SeqCst) {
+                    runner_job(112, "in_progress", None)
+                } else {
+                    runner_job(111, "in_progress", None)
+                };
+                async move { Json(json!({"total_count": 1, "jobs": [job]})) }
+            }),
+        )
+        .route(
+            "/repos/{org}/{repo}/actions/jobs/{id}",
+            get(move || {
+                reads.fetch_add(1, Ordering::SeqCst);
+                async {
+                    // Cancelled before a runner took it: completed, but not runner work.
+                    let mut job = runner_job(111, "completed", Some("cancelled"));
+                    job["runner_id"] = Value::Null;
+                    job["runner_name"] = Value::Null;
+                    Json(job)
+                }
+            }),
+        );
+    let base = serve(router).await;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = engine(dir.path(), base);
+    engine.poll_github_runners().await;
+    engine.poll_github_jobs_and_history().await;
+    finished.store(true, Ordering::SeqCst);
+    engine.poll_github_jobs_and_history().await;
+    engine.flush_job_history();
+    assert_eq!(single_reads.load(Ordering::SeqCst), 1);
+    assert!(history(&engine).is_empty());
+    let saved: Value = serde_json::from_slice(&std::fs::read(dir.path().join("job-history.json")).unwrap()).unwrap();
+    assert_eq!(saved["pending"]["11"]["jobs"], json!([]), "111 isn't asked about again");
+    assert!(
+        saved["coverage"]["acme"]
+            .as_array()
+            .is_some_and(|spans| !spans.is_empty())
     );
 }

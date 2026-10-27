@@ -31,7 +31,8 @@ fn main() {
     }
     .page(&jobs);
     let rates = FleetHostedRates::default();
-    let analytics = |window| summarize(&jobs, Some(since), &view, &rates, window, now);
+    let coverage = demo::coverage(&view, now);
+    let analytics = |window| summarize(&jobs, &coverage, &view, &rates, window, now);
     let fixture = json!({
         "generatedAt": now,
         "history": { "jobs": page, "order": order, "hasMore": has_more, "nextCursor": next_cursor,

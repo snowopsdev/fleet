@@ -33,6 +33,7 @@ export function ActivitySettings({ config, view }: { config: AppConfig; view: Fl
       <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-ink-2">
         <li>While the app is open, it runs <code>gh webhook forward --org=ORG --events=workflow_job</code> for each organization you turn on. That creates a temporary webhook on the organization, which GitHub delivers to its forwarding service and relays to this Mac only. The app stops it when it quits.</li>
         <li>It needs the GitHub CLI extension (<CopyValue value={EXTENSION_INSTALL} label="Command"><code>{EXTENSION_INSTALL}</code></CopyValue>) and the <code>{HOOK_SCOPE}</code> scope on your gh login, as an organization owner.</li>
+        <li>Deliveries are checked against a secret generated each launch and never saved. The extension only accepts it on its command line, so other programs running as you on this Mac can see it while the feed runs. Only organizations with the feed on are accepted.</li>
         <li>GitHub allows one forwarder per organization at a time and describes it as a development tool. It disconnects every few minutes; the app restarts it, and keeps scanning every 3 minutes as a fallback.</li>
       </ul>
       <HookScope />

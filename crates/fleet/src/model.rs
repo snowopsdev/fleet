@@ -34,6 +34,9 @@ pub struct AppConfig {
     /// repository's `inventory/fleet.toml`.
     #[serde(default)]
     pub inventory_path: Option<String>,
+    /// Watchdog restarts, alert destinations and the availability variable.
+    #[serde(default)]
+    pub automation: crate::automation::AutomationSettings,
     /// Share one OpenSSH connection per machine across read-only monitoring checks
     /// (`ControlMaster`). Off by default; reviewed changes never use it.
     #[serde(default)]
@@ -54,6 +57,7 @@ impl Default for AppConfig {
             demo_mode: false,
             local_api: true,
             inventory_path: None,
+            automation: crate::automation::AutomationSettings::default(),
             ssh_connection_reuse: false,
             job_activity: crate::jobs::FleetJobSettings::default(),
         }
@@ -372,6 +376,8 @@ pub struct FleetView {
     pub orgs: Vec<OrgStatusView>,
     pub tailnet: TailnetStatusView,
     pub monitoring: crate::monitoring::FleetMonitoring,
+    /// Drains, watchdog restarts, alert destinations and published availability.
+    pub automation: crate::automation::FleetAutomation,
     /// Recently completed jobs and the real-time job feed; analytics are a separate read.
     pub activity: crate::jobs::FleetActivity,
     /// The latest `actions/runner` release, when releases have been read.

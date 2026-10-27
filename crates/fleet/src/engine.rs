@@ -50,6 +50,8 @@ pub struct Engine {
     desired_refresh_gate: tokio::sync::Mutex<()>,
     doctor_gate: tokio::sync::Mutex<()>,
     monitoring: Mutex<crate::monitoring::MonitorStore>,
+    automation: Mutex<crate::automation::AutomationStore>,
+    variables: Arc<dyn crate::automation::ActionsVariables>,
     job_activity: job_history::JobActivity,
 }
 
@@ -63,6 +65,9 @@ impl std::fmt::Debug for Engine {
 
 #[path = "engine_desired.rs"]
 pub mod desired;
+
+#[path = "engine_automation.rs"]
+mod automation;
 
 #[path = "engine_job_feed.rs"]
 mod job_feed;
@@ -92,6 +97,7 @@ impl Engine {
             Err(e) => return Err(EngineError::Storage(e.to_string())),
         };
         let monitoring = crate::monitoring::MonitorStore::load(config_path.with_file_name("monitoring.json"));
+        let automation = crate::automation::AutomationStore::load(config_path.with_file_name("automation.json"));
         let job_activity = job_history::JobActivity::load(&config_path);
         Ok(Self {
             config_path,
@@ -112,6 +118,8 @@ impl Engine {
             desired_refresh_gate: tokio::sync::Mutex::new(()),
             doctor_gate: tokio::sync::Mutex::new(()),
             monitoring: Mutex::new(monitoring),
+            automation: Mutex::new(automation),
+            variables: Arc::new(crate::automation::GhVariables::installed()),
             job_activity,
         })
     }
@@ -158,6 +166,7 @@ impl Engine {
         self.monitoring
             .locked()
             .attach(&mut view, now, config.desktop_notifications);
+        self.attach_automation(&mut view, &config, now);
         self.attach_job_activity(&mut view);
         crate::issues::attach(&mut view);
         view

@@ -4,13 +4,16 @@ import type { RunnerDesired } from "../../bindings/RunnerDesired";
 import type { Tri } from "../../bindings/Tri";
 import { useNow } from "../../hooks";
 import { timeAgo } from "../../lib/format";
-import { changes, driftText, hasLogs, labelDiff, operationRunning, requestTargetsRunner, roleLabel, runnerActions } from "../../lib/desired";
+import { changes, drainOf, driftText, hasLogs, isMaintenance, labelDiff, operationRunning, requestTargetsRunner, roleLabel, runnerActions } from "../../lib/desired";
 import { findMachine } from "../../lib/nav";
 import { busySince, runnerStatus } from "../../lib/status";
-import { isLive } from "../../lib/tauri";
+import { commands, isLive, isTauri } from "../../lib/tauri";
 import { versionText } from "../../lib/versions";
+import { useMutation } from "@tanstack/react-query";
+import type { FleetDrain } from "../../bindings/FleetDrain";
+import type { FleetWatchdogRunner } from "../../bindings/FleetWatchdogRunner";
 import { useUi } from "../../store";
-import { Button, Callout, Card, KeyValuePanel, Label, Pill, Section, Stat, StatStrip, type KeyValueRow } from "../ui";
+import { Button, Callout, Card, ErrorText, KeyValuePanel, Label, Pill, Section, Stat, StatStrip, type KeyValueRow } from "../ui";
 import { Icon } from "../icons";
 import { OperationCard, PlanItems, useChange } from "./changes";
 import { LogsPanel } from "./LogsPanel";
@@ -31,7 +34,10 @@ export function RunnerDetail({ runner: r, view }: { runner: RunnerView; view: Fl
   const op = view.plan.operation;
   const busy = operationRunning(view);
   const live = isLive(view);
-  const actions = live ? runnerActions(r) : [];
+  const drain = drainOf(view, r.name);
+  // Demo data still shows maintenance actions: their reviews are fictional and can't run.
+  const actions = live ? runnerActions(r, drain) : isTauri ? runnerActions(r, drain).filter((a) => isMaintenance(a.request)) : [];
+  const watchdog = view.automation.watchdog.runners.find((w) => w.runner === r.name && w.hostId === r.desired?.hostId);
   const labels = r.desired ? labelDiff(r).map((l) => l.label) : gh?.labels ?? [];
 
   return (
@@ -69,6 +75,8 @@ export function RunnerDetail({ runner: r, view }: { runner: RunnerView; view: Fl
       {r.versionStatus?.overdue && <Callout tone="warn" title={`Runner update overdue: ${r.versionStatus.latest}`}>
         This runner has {r.versionStatus.current}. GitHub can stop sending jobs to a runner that misses an update for 30 days.
       </Callout>}
+      {drain && <DrainNotice drain={drain} live={live} />}
+      {watchdog && <WatchdogNotice w={watchdog} enabled={view.automation.watchdog.enabled} />}
       {r.warnings.length > 0 && <div className="mt-4 space-y-2">{r.warnings.map((w) => <Callout key={w} tone="warn" className="">{w}</Callout>)}</div>}
 
       {r.activity.kind === "busy" && <div className="mt-6">
@@ -136,4 +144,37 @@ function Presence({ value, label, stale }: { value: boolean | null; label: strin
     <span className={value ? "text-ok" : undefined}><Icon name={value == null ? "dash" : value ? "check" : "alert"} size={12} /></span>{label}
     <span className="sr-only">{value == null ? "unknown" : value ? "present" : "missing"}{stale ? " (stale)" : ""}</span>
   </span>;
+}
+
+/** A reviewed drain: GitHub can't pause a runner, so its service is stopped on the machine. */
+function DrainNotice({ drain, live }: { drain: FleetDrain; live: boolean }) {
+  const now = useNow();
+  const cancel = useMutation({ mutationFn: () => commands.desiredCancelDrain(drain.runner) });
+  return <Callout tone="info" title={drain.state === "draining" ? "Draining after the current job" : "Stopped by a drain"}>
+    {drain.state === "draining"
+      ? <>Reviewed {timeAgo(drain.requestedAt, now)}. Its service stops on the machine once GitHub shows it idle; GitHub has no way to pause a runner. Until then it keeps working.</>
+      : <>Its service was stopped {drain.stoppedAt ? timeAgo(drain.stoppedAt, now) : ""} and stays stopped until you resume it, so GitHub shows it offline. The watchdog leaves it alone. A restart of the machine can start it again.</>}
+    {drain.error && <div className="mt-1 text-warn selectable">{drain.error}</div>}
+    {drain.state === "draining" && live && <div className="mt-2 flex items-center gap-2">
+      <Button small disabled={cancel.isPending} onClick={() => cancel.mutate()}>Cancel drain</Button>
+      {cancel.isError && <ErrorText error={cancel.error} />}
+    </div>}
+  </Callout>;
+}
+
+/** What the opt-in watchdog did for this runner in the last six hours. */
+function WatchdogNotice({ w, enabled }: { w: FleetWatchdogRunner; enabled: boolean }) {
+  const now = useNow();
+  if (w.gaveUpAt) {
+    return <Callout tone="bad" title="Automatic restarts stopped">
+      The watchdog restarted it {w.attempts.length} times in six hours and its service is still stopped. Check its diagnostic log, then restart it here.
+      {w.lastError && <div className="mt-1 selectable">{w.lastError}</div>}
+    </Callout>;
+  }
+  if (!w.attempts.length && !w.downSince) return null;
+  return <Callout tone={w.downSince ? "warn" : "info"} title={w.downSince ? "Service stopped; the watchdog will restart it" : "Restarted automatically"}>
+    {w.attempts.length} automatic restart{w.attempts.length === 1 ? "" : "s"} in the last six hours{w.attempts.length ? `, the last ${timeAgo(w.attempts[w.attempts.length - 1], now)}` : ""}.
+    {w.nextAttemptAt && enabled && <> Next attempt {timeAgo(w.nextAttemptAt, now)} if it's still stopped.</>}
+    {w.lastError && <div className="mt-1 text-warn selectable">{w.lastError}</div>}
+  </Callout>;
 }

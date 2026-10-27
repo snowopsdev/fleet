@@ -3,6 +3,7 @@
 use super::state::{MachineState, target};
 use super::{FleetEventKind, FleetMachineEvent, FleetMachineMonitoring};
 use crate::model::{DataSource, FleetView, MachineConnection, MachineView, tailnet_machine_key};
+use crate::outbound::{AlertDestination, FleetAlertDestinationView};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -16,7 +17,7 @@ pub(crate) const EVENT_PAGE_SIZE: usize = 50;
 const MAX_NOTIFICATIONS: usize = 256;
 const RETRY_INTERVAL: Duration = Duration::minutes(1);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Journal {
     version: u32,
     next_id: u64,
@@ -26,7 +27,30 @@ struct Journal {
     pending_notifications: VecDeque<FleetMachineEvent>,
     #[serde(default)]
     notification_retry_at: Option<DateTime<Utc>>,
+    /// Alerts saved for the alert destinations, delivered and retried by the engine.
+    #[serde(default)]
+    outbound: VecDeque<OutboundDelivery>,
+    /// The last delivery outcome per destination.
+    #[serde(default)]
+    outbound_status: BTreeMap<String, DeliveryStatus>,
 }
+
+/// One alert waiting for one destination.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct OutboundDelivery {
+    pub destination: String,
+    pub event: FleetMachineEvent,
+    pub attempts: u32,
+    /// Not before: a claimed delivery is pushed out so a restart retries it later.
+    pub next_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct DeliveryStatus {
+    delivered_at: Option<DateTime<Utc>>,
+    error: Option<String>,
+}
+
 impl Default for Journal {
     fn default() -> Self {
         Self {
@@ -36,6 +60,8 @@ impl Default for Journal {
             events: VecDeque::new(),
             pending_notifications: VecDeque::new(),
             notification_retry_at: None,
+            outbound: VecDeque::new(),
+            outbound_status: BTreeMap::new(),
         }
     }
 }
@@ -112,6 +138,14 @@ impl MonitorStore {
         self.journal
             .pending_notifications
             .retain(|e| !disabled.contains(&e.machine_key) && (!complete || eligible.contains(&e.machine_key)));
+        let destinations = enabled_destinations(view);
+        let outbound_before = self.journal.outbound.len();
+        self.journal.outbound.retain(|d| {
+            destinations.contains(&d.destination)
+                && !disabled.contains(&d.event.machine_key)
+                && (!complete || eligible.contains(&d.event.machine_key))
+        });
+        changed |= self.journal.outbound.len() != outbound_before;
         if !view.monitoring.desktop_notifications && !self.journal.pending_notifications.is_empty() {
             self.journal.pending_notifications.clear();
             self.journal.notification_retry_at = None;
@@ -153,6 +187,9 @@ impl MonitorStore {
             }
             for change in state.observe(machine, network_at, now) {
                 let event = self.event(&key, &machine.display_name, now, change.kind, change.detail);
+                if change.notify {
+                    self.queue_outbound(&destinations, &event, now);
+                }
                 if change.notify && view.monitoring.desktop_notifications {
                     self.journal.pending_notifications.push_back(event);
                 }
@@ -168,6 +205,9 @@ impl MonitorStore {
         self.journal.pending_notifications.retain(|e| e.at >= cutoff);
         while self.journal.pending_notifications.len() > MAX_NOTIFICATIONS {
             self.journal.pending_notifications.pop_front();
+        }
+        while self.journal.outbound.len() > MAX_NOTIFICATIONS {
+            self.journal.outbound.pop_front();
         }
         changed |= self.journal.pending_notifications.len() != pending_before;
         if self.journal.pending_notifications.is_empty() {
@@ -355,6 +395,7 @@ impl MonitorStore {
         state.last_seen = Some(now);
         state.maintenance_until = until;
         if until.is_some() {
+            self.journal.outbound.retain(|d| d.event.machine_key != key);
             self.journal.pending_notifications.retain(|e| e.machine_key != key);
             if self.journal.pending_notifications.is_empty() {
                 self.journal.notification_retry_at = None;
@@ -386,6 +427,57 @@ impl MonitorStore {
         Ok(())
     }
 
+    fn queue_outbound(&mut self, destinations: &BTreeSet<String>, event: &FleetMachineEvent, now: DateTime<Utc>) {
+        for destination in destinations {
+            self.journal.outbound.push_back(OutboundDelivery {
+                destination: destination.clone(),
+                event: event.clone(),
+                attempts: 0,
+                next_at: now,
+            });
+        }
+    }
+
+    /// Records an event the app caused (a drain, resume or watchdog action) in
+    /// the machine's history, and queues it for notification when `notify` is
+    /// set and the machine isn't in maintenance. Saved before returning.
+    #[expect(clippy::too_many_arguments, reason = "one event with its delivery preferences")]
+    pub fn record_external(
+        &mut self,
+        machine_key: &str,
+        machine_name: &str,
+        kind: FleetEventKind,
+        detail: String,
+        notify: bool,
+        desktop: bool,
+        destinations: &BTreeSet<String>,
+        now: DateTime<Utc>,
+    ) -> Result<(), String> {
+        let original = self.journal.clone();
+        let muted = self
+            .journal
+            .machines
+            .get(machine_key)
+            .and_then(|m| m.maintenance_until)
+            .is_some_and(|until| until > now);
+        let event = self.event(machine_key, machine_name, now, kind, detail);
+        if notify && !muted {
+            self.queue_outbound(destinations, &event, now);
+            if desktop {
+                self.journal.pending_notifications.push_back(event);
+                self.journal.notification_retry_at = None;
+            }
+        }
+        if let Err(e) = self.save() {
+            self.journal = original;
+            self.storage_error = Some(e.clone());
+            return Err(e);
+        }
+        self.storage_error = None;
+        self.saved_at = Some(now);
+        Ok(())
+    }
+
     /// Records something the user did to a machine, such as sending a wake packet.
     pub fn note(
         &mut self,
@@ -407,6 +499,121 @@ impl MonitorStore {
         Ok(())
     }
 
+    /// Up to `limit` deliveries due now. Each is pushed out by a few minutes
+    /// and saved before it is returned, so a crash mid-send retries it later
+    /// rather than immediately (it can be delivered twice, never lost).
+    pub fn claim_outbound(&mut self, now: DateTime<Utc>, limit: usize) -> Result<Vec<OutboundDelivery>, String> {
+        let due: Vec<usize> = self
+            .journal
+            .outbound
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.next_at <= now)
+            .map(|(i, _)| i)
+            .take(limit)
+            .collect();
+        if due.is_empty() {
+            return Ok(Vec::new());
+        }
+        let original = self.journal.clone();
+        let mut claimed = Vec::new();
+        for index in due {
+            if let Some(delivery) = self.journal.outbound.get_mut(index) {
+                claimed.push(delivery.clone());
+                delivery.next_at = now + crate::outbound::retry_after(delivery.attempts.saturating_add(1));
+            }
+        }
+        if let Err(e) = self.save() {
+            self.journal = original;
+            self.storage_error = Some(e.clone());
+            return Err(e);
+        }
+        Ok(claimed)
+    }
+
+    /// Records how claimed deliveries went: accepted ones are removed, failed
+    /// ones retried with backoff until they are a day old.
+    pub fn finish_outbound(
+        &mut self,
+        results: &[(OutboundDelivery, Result<(), String>)],
+        now: DateTime<Utc>,
+    ) -> Result<(), String> {
+        let original = self.journal.clone();
+        let same =
+            |a: &OutboundDelivery, b: &OutboundDelivery| a.destination == b.destination && a.event.id == b.event.id;
+        for (delivery, result) in results {
+            let status = self
+                .journal
+                .outbound_status
+                .entry(delivery.destination.clone())
+                .or_default();
+            match result {
+                Ok(()) => {
+                    status.delivered_at = Some(now);
+                    status.error = None;
+                    self.journal.outbound.retain(|d| !same(d, delivery));
+                }
+                Err(error) => {
+                    let expired = now - delivery.event.at > Duration::hours(crate::outbound::GIVE_UP_AFTER_HOURS);
+                    status.error = Some(if expired {
+                        format!("Gave up on an alert after a day of failures: {error}")
+                    } else {
+                        error.clone()
+                    });
+                    if expired {
+                        self.journal.outbound.retain(|d| !same(d, delivery));
+                    } else if let Some(pending) = self.journal.outbound.iter_mut().find(|d| same(d, delivery)) {
+                        pending.attempts = pending.attempts.saturating_add(1);
+                        pending.next_at = now + crate::outbound::retry_after(pending.attempts);
+                    }
+                }
+            }
+        }
+        if let Err(e) = self.save() {
+            self.journal = original;
+            self.storage_error = Some(e.clone());
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    /// Forgets a removed destination's queue and status.
+    pub fn discard_outbound(&mut self, destination: &str) -> Result<(), String> {
+        let original = self.journal.clone();
+        self.journal.outbound.retain(|d| d.destination != destination);
+        self.journal.outbound_status.remove(destination);
+        if self.journal == original {
+            return Ok(());
+        }
+        if let Err(e) = self.save() {
+            self.journal = original;
+            self.storage_error = Some(e.clone());
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    /// A destination with its queue length and last outcome, for Settings.
+    pub fn destination_view(&self, destination: &AlertDestination) -> FleetAlertDestinationView {
+        let status = self.journal.outbound_status.get(&destination.id);
+        FleetAlertDestinationView {
+            id: destination.id.clone(),
+            name: destination.name.clone(),
+            kind: destination.kind,
+            enabled: destination.enabled,
+            summary: destination.summary.clone(),
+            pending: crate::model::count_u32(
+                self.journal
+                    .outbound
+                    .iter()
+                    .filter(|d| d.destination == destination.id)
+                    .count(),
+            ),
+            delivered_at: status.and_then(|s| s.delivered_at),
+            error: status.and_then(|s| s.error.clone()),
+        }
+    }
+
     fn save(&self) -> Result<(), String> {
         if !self.writable {
             return Err(self
@@ -420,6 +627,16 @@ impl MonitorStore {
         };
         save().map_err(|e| format!("Couldn't save machine history: {e}"))
     }
+}
+
+/// Destinations alerts are queued for: enabled ones, as the view lists them.
+fn enabled_destinations(view: &FleetView) -> BTreeSet<String> {
+    view.automation
+        .destinations
+        .iter()
+        .filter(|d| d.enabled)
+        .map(|d| d.id.clone())
+        .collect()
 }
 
 fn fresh_network(view: &FleetView, now: DateTime<Utc>) -> Option<DateTime<Utc>> {

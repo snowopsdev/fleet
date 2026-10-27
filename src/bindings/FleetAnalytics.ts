@@ -13,9 +13,25 @@ import type { FleetRunnerTimeShare } from "./FleetRunnerTimeShare";
  */
 export type FleetAnalytics = { window: FleetAnalyticsWindow, from: string, to: string, 
 /**
- * Start of recorded time within the window; null when history began after `to`.
+ * Start of the first recorded time within the window; null without any.
  */
-observedFrom: string | null, totals: FleetJobTotals, machines: Array<FleetMachineActivity>, runners: Array<FleetRunnerActivity>, 
+observedFrom: string | null, 
+/**
+ * Seconds of the window recorded for any organization.
+ */
+coveredSecs: number, 
+/**
+ * Runner-seconds busy, across all runners.
+ */
+busySecs: number, 
+/**
+ * Runner-seconds of recorded capacity: listed runners times their organization's recorded time.
+ */
+capacitySecs: number, 
+/**
+ * `busy_secs / capacity_secs`, 0–100; null with less than a minute of capacity.
+ */
+busyPercent: number | null, totals: FleetJobTotals, machines: Array<FleetMachineActivity>, runners: Array<FleetRunnerActivity>, 
 /**
  * Slowest median wait first.
  */

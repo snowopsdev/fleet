@@ -3,10 +3,12 @@
 
 use std::sync::Arc;
 
+use fleet::automation::PublishSettings;
 use fleet::engine::desired::{ChangeSecrets, ReviewView};
 use fleet::engine::{AccountSetup, Engine, EngineError};
 use fleet::fleet_plan::ChangeRequest;
 use fleet::model::{AccountKind, AppConfig, FleetView, OrgAuth, RepoScope};
+use fleet::outbound::AlertDestinationInput;
 use fleet::sync::MutexExt;
 use tauri::{AppHandle, State};
 
@@ -314,4 +316,54 @@ pub fn set_job_feed(app: AppHandle, engine: EngineState, org: String, enabled: b
     engine.set_job_feed(&org, enabled)?;
     emit_view(&app, &engine);
     Ok(())
+}
+
+// Automatic and deferred changes. Each is opt-in or authorised by a review; none runs in demo mode.
+
+/// Cancels a reviewed drain that hasn't stopped its runner yet. Nothing on the machine changes.
+#[tauri::command]
+pub fn desired_cancel_drain(app: AppHandle, engine: EngineState, runner: String) -> Result<()> {
+    engine.cancel_drain(&runner)?;
+    emit_view(&app, &engine);
+    Ok(())
+}
+
+/// Turning the watchdog on is the standing approval for its restarts.
+#[tauri::command]
+pub fn set_watchdog(app: AppHandle, engine: EngineState, enabled: bool) -> Result<()> {
+    engine.set_watchdog(enabled)?;
+    emit_view(&app, &engine);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_publish_settings(app: AppHandle, engine: EngineState, settings: PublishSettings) -> Result<()> {
+    engine.set_publish_settings(settings)?;
+    emit_view(&app, &engine);
+    Ok(())
+}
+
+/// Secrets in `destination` go to the Keychain and are never returned.
+#[tauri::command]
+pub async fn save_alert_destination(
+    app: AppHandle,
+    engine: EngineState<'_>,
+    destination: AlertDestinationInput,
+) -> Result<String> {
+    let id = engine.save_alert_destination(destination).await?;
+    emit_view(&app, &engine);
+    Ok(id)
+}
+
+#[tauri::command]
+pub async fn remove_alert_destination(app: AppHandle, engine: EngineState<'_>, id: String) -> Result<()> {
+    engine.inner().remove_alert_destination(&id).await?;
+    emit_view(&app, &engine);
+    Ok(())
+}
+
+/// Sends one test message, only when the user clicks.
+#[tauri::command]
+pub async fn test_alert_destination(engine: EngineState<'_>, id: String) -> Result<()> {
+    Ok(engine.test_alert_destination(&id).await?)
 }

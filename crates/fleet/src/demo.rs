@@ -36,6 +36,7 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         inventory_path: None,
         ssh_connection_reuse: false,
         machine_preferences: Default::default(),
+        automation: Default::default(),
         job_activity: Default::default(),
     };
 

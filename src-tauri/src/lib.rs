@@ -198,6 +198,12 @@ pub fn run() {
             commands::wake_execute,
             commands::desired_execute,
             commands::desired_dismiss_operation,
+            commands::desired_cancel_drain,
+            commands::set_watchdog,
+            commands::set_publish_settings,
+            commands::save_alert_destination,
+            commands::remove_alert_destination,
+            commands::test_alert_destination,
             commands::get_job_history,
             commands::get_analytics,
             commands::set_hosted_rates,
@@ -211,6 +217,7 @@ pub fn run() {
                 && let Some(engine) = app.try_state::<Arc<Engine>>()
             {
                 engine.stop_job_feeds();
+                engine.flush_job_history();
                 // Leave no socket another program running as this user could use.
                 engine.close_shared_ssh();
             }

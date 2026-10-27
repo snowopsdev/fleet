@@ -12,7 +12,9 @@ const WORKER_RETIRE_SH: &str = include_str!("../../../scripts/worker-retire.sh")
 const WORKER_RETIRE_PS1: &str = include_str!("../../../scripts/worker-retire.ps1");
 const WORKER_NIXOS_SERVICE: &str = include_str!("../../../scripts/worker-nixos-service.py");
 /// `run_as_root`, defined ahead of every POSIX script that changes services.
-const RUN_AS_ROOT_SH: &str = include_str!("../../../scripts/run-as-root.sh");
+pub(super) const RUN_AS_ROOT_SH: &str = include_str!("../../../scripts/run-as-root.sh");
+const WORKER_UPGRADE_SH: &str = include_str!("../../../scripts/worker-upgrade.sh");
+const WORKER_UPGRADE_PS1: &str = include_str!("../../../scripts/worker-upgrade.ps1");
 
 /// A guarded worker script, in each host shell.
 #[derive(Debug, Clone, Copy)]
@@ -30,6 +32,12 @@ pub(super) const INSTALL: WorkerScript = WorkerScript {
 pub(super) const RETIRE: WorkerScript = WorkerScript {
     posix: WORKER_RETIRE_SH,
     powershell: WORKER_RETIRE_PS1,
+};
+
+/// Replaces one stopped runner's `bin/` and `externals/` with a verified release.
+pub(super) const UPGRADE: WorkerScript = WorkerScript {
+    posix: WORKER_UPGRADE_SH,
+    powershell: WORKER_UPGRADE_PS1,
 };
 
 /// `script` for the host's shell, preceded by its RF_* values. POSIX hosts
@@ -64,7 +72,7 @@ fn powershell_preamble(values: &[(&str, String)]) -> String {
 }
 
 /// Finds the Actions runner service whose executable lives under `$path`.
-const WIN_FIND_SERVICE: &str = "$needle = $path.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar\n\
+pub(super) const WIN_FIND_SERVICE: &str = "$needle = $path.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar\n\
 $service = Get-CimInstance Win32_Service | Where-Object { $_.PathName.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $_.Name -like 'actions.runner.*' } | Select-Object -First 1\n";
 
 /// The name and exact directory `role` refers to.

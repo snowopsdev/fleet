@@ -34,7 +34,7 @@ export function ActiveAlerts({ alerts, view, showMachine = false, embedded = fal
             {showMachine && (machine
               ? <button className="text-left hover:underline" onClick={() => select({ kind: "machine", id: machine.id })}>{machine.displayName}</button>
               : <span>{alert.machineName}</span>)}
-            <span>{alert.kind === "offline" ? "Offline" : "Low disk space"}</span>
+            <span>{alert.kind === "offline" ? "Offline" : alert.kind === "lowDisk" ? "Low disk space" : "Automatic restarts stopped"}</span>
             {alert.muted && <Pill tone="muted">Notifications paused</Pill>}
             {alert.stale && <Pill tone="muted" hollow>Awaiting fresh data</Pill>}
           </div>

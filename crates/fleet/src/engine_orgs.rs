@@ -608,7 +608,11 @@ impl Engine {
                 .map_err(EngineError::Storage)?;
         }
         self.install_client(&key, client);
-        self.update_config(|c| c.orgs.push(org))?;
+        self.update_config(|c| {
+            c.orgs.push(org);
+            // An account starts without the real-time job feed, whatever older settings say.
+            c.job_activity.feed_orgs.retain(|o| *o != key);
+        })?;
         let mut obs = self.obs.write_locked();
         let entry = obs.github.entry(key).or_default();
         store_runners(entry, Utc::now(), runners);
@@ -705,7 +709,11 @@ impl Engine {
 
     pub async fn remove_org(&self, login: &str) -> Result<(), EngineError> {
         let key = login.to_lowercase();
-        self.update_config(|c| c.orgs.retain(|o| o.login.to_lowercase() != key))?;
+        self.update_config(|c| {
+            c.orgs.retain(|o| o.login.to_lowercase() != key);
+            // Re-adding the account later must not start a webhook forwarder without a new opt-in.
+            c.job_activity.feed_orgs.retain(|o| *o != key);
+        })?;
         self.delete_token(&key).await;
         self.github.locked().remove(&key);
         self.obs.write_locked().github.remove(&key);

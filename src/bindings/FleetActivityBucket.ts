@@ -8,4 +8,12 @@ jobs: number,
 /**
  * Runner-seconds busy in this bucket, across all runners.
  */
-busySecs: number, };
+busySecs: number, 
+/**
+ * Seconds of this bucket recorded for any organization; 0 means no data, not idle.
+ */
+coveredSecs: number, 
+/**
+ * Runner-seconds of recorded capacity in this bucket.
+ */
+capacitySecs: number, };
