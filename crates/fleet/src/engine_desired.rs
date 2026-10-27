@@ -16,6 +16,8 @@ use chrono::Utc;
 
 use super::{Engine, EngineError};
 
+#[path = "engine_desired_maintenance.rs"]
+mod maintenance;
 #[path = "engine_desired_review.rs"]
 mod review;
 #[path = "engine_desired_ssh.rs"]
@@ -26,14 +28,16 @@ pub use review::{ChangeSecrets, ReviewView};
 pub use ssh::SshTransportIdentity;
 pub use store::DesiredStore;
 
-use crate::desired::github::FleetGithub;
+use crate::desired::github::{FleetGithub, ReleaseAsset};
 use crate::desired::inventory::{default_inventory_path, load_inventory_from_env};
-use crate::desired::model::{FleetSnapshot, Inventory, PlanItem, SshTransport};
+use crate::desired::maintenance::{CleanupTarget, StopOutcome};
+use crate::desired::model::{FleetPlanAction, FleetSnapshot, Inventory, PlanItem, SshTransport};
 use crate::desired::operations::{self, Ops, Secrets};
 use crate::desired::remote::{FleetRemote, Transient};
 use crate::desired::state::collect_snapshot;
 use crate::fleet_plan::{ChangeRequest, DoctorView, OperationStatus, OperationView, host_identity_conflicts};
 use crate::sync::{MutexExt, RwLockExt};
+use maintenance::{ReviewFacts, demo_facts, runnable_targets};
 use review::{build_review, request_host};
 use store::{Review, runner_identities};
 
@@ -284,6 +288,9 @@ impl Engine {
 
     /// Read-only: re-reads the host and builds the review for one change.
     pub async fn desired_review(self: &Arc<Self>, request: ChangeRequest) -> Result<ReviewView, EngineError> {
+        if self.config().demo_mode && is_maintenance(&request) {
+            return demo_review(&request);
+        }
         self.ensure_live_desired()?;
         let inventory = self.read_inventory().await?;
         let host_id = request_host(&request, &inventory)?;
@@ -295,7 +302,15 @@ impl Engine {
             .merge_snapshot(&inventory, snapshot.clone(), Some(&host_id));
         self.view_changed();
 
-        let mut review = build_review(&inventory, host, &request, &snapshot)?;
+        let facts = self.review_facts(&inventory, &request).await?;
+        let mut review = build_review(&inventory, host, &request, &snapshot, &facts)?;
+        if let ChangeRequest::Drain { runner } = &request
+            && self.drain_state(runner).is_some()
+        {
+            review.blockers.push(format!(
+                "{runner} is already drained or draining; resume it or cancel the drain first."
+            ));
+        }
         let ssh_transport = host
             .ssh_target
             .as_ref()
@@ -346,7 +361,7 @@ impl Engine {
         self.ensure_live_desired()?;
         let review = self.take_review(review_id, confirmation.as_deref())?;
         let starting = Starting(self);
-        let (inventory, host_id) = self.recheck(&review).await?;
+        let (inventory, host_id, facts) = self.recheck(&review).await?;
         self.start_operation(&review.view);
         drop(starting);
         self.view_changed();
@@ -354,7 +369,19 @@ impl Engine {
             windows_service_password: Transient::new(secrets.service_password),
             linux_sudo_password: Transient::new(secrets.sudo_password),
         };
-        self.spawn_change(inventory, review.view.request, host_id, secrets);
+        let reviewed = Reviewed {
+            id: review.view.id.clone(),
+            cleanup: runnable_targets(&review.view.cleanup, &review.view.items),
+            upgrade: review
+                .view
+                .items
+                .iter()
+                .filter(|i| i.action == FleetPlanAction::Upgrade && !i.blocked)
+                .map(|i| i.runner.clone())
+                .collect(),
+            asset: facts.asset().cloned(),
+        };
+        self.spawn_change(inventory, review.view.request, host_id, secrets, reviewed);
         Ok(())
     }
 
@@ -383,7 +410,7 @@ impl Engine {
 
     /// Re-reads the inventory, SSH, GitHub and the host, and returns the
     /// inventory and host to change only if all of them match the review.
-    async fn recheck(&self, review: &Review) -> Result<(Inventory, String), EngineError> {
+    async fn recheck(&self, review: &Review) -> Result<(Inventory, String, ReviewFacts), EngineError> {
         let reviewed = &review.view;
         let inventory = self.read_inventory().await?;
         if inventory != review.inventory || self.inventory_path() != review.inventory_path {
@@ -408,7 +435,8 @@ impl Engine {
         self.desired
             .locked()
             .merge_snapshot(&inventory, snapshot.clone(), Some(&host_id));
-        let mut now = build_review(&inventory, host, &reviewed.request, &snapshot)?;
+        let facts = self.review_facts(&inventory, &reviewed.request).await?;
+        let mut now = build_review(&inventory, host, &reviewed.request, &snapshot, &facts)?;
         if let Some(conflict) = self.host_identity_conflict(&inventory, &host_id) {
             now.blockers.push(conflict);
             now.ready = false;
@@ -419,6 +447,7 @@ impl Engine {
             || now.confirm_phrase != reviewed.confirm_phrase
             || now.needs_service_password != reviewed.needs_service_password
             || now.accepts_sudo_password != reviewed.accepts_sudo_password
+            || now.upgrade_to != reviewed.upgrade_to
             || runner_identities(host, &snapshot) != review.identities
             || ssh_hosts != review.ssh_hosts
         {
@@ -428,7 +457,7 @@ impl Engine {
                 host.id
             )));
         }
-        Ok((inventory, host_id))
+        Ok((inventory, host_id, facts))
     }
 
     fn start_operation(&self, review: &ReviewView) {
@@ -445,11 +474,26 @@ impl Engine {
     }
 
     /// Carries out the change, records how it ended, then checks the host again.
-    fn spawn_change(self: &Arc<Self>, inventory: Inventory, request: ChangeRequest, host_id: String, secrets: Secrets) {
+    fn spawn_change(
+        self: &Arc<Self>,
+        inventory: Inventory,
+        request: ChangeRequest,
+        host_id: String,
+        secrets: Secrets,
+        reviewed: Reviewed,
+    ) {
         let engine = self.clone();
         tokio::spawn(async move {
             let (github, remote) = (engine.desired_io.boundaries)(&inventory);
             let sleep = engine.desired_io.sleep;
+            let drain_path = match &request {
+                ChangeRequest::Drain { runner } => inventory
+                    .find_runner(runner)
+                    .ok()
+                    .map(|(host, declared, _)| host.runner_path(declared)),
+                _ => None,
+            };
+            let ran = request.clone();
             let result = run_blocking("finish the change", move || {
                 let ops = Ops {
                     inventory: &inventory,
@@ -458,18 +502,52 @@ impl Engine {
                     secrets,
                     sleep: &sleep,
                 };
+                let done = |messages: Vec<String>| Done { messages, stop: None };
                 match &request {
-                    ChangeRequest::Apply { host, runner } => ops.apply_host(host, runner.as_deref()),
-                    ChangeRequest::Retire { host, runner } => ops.retire_legacy(host, runner).map(|m| vec![m]),
+                    ChangeRequest::Apply { host, runner } => ops.apply_host(host, runner.as_deref()).map(done),
+                    ChangeRequest::Retire { host, runner } => ops.retire_legacy(host, runner).map(|m| done(vec![m])),
                     ChangeRequest::Decommission { host, runner } => {
-                        ops.decommission_runner(host, runner).map(|m| vec![m])
+                        ops.decommission_runner(host, runner).map(|m| done(vec![m]))
                     }
-                    ChangeRequest::Restart { runner } => ops.restart_runner(runner).map(|m| vec![m]),
+                    ChangeRequest::Restart { runner } => ops.restart_runner(runner).map(|m| done(vec![m])),
+                    ChangeRequest::Cleanup { host, options } => {
+                        ops.cleanup_host(host, options, &reviewed.cleanup).map(done)
+                    }
+                    ChangeRequest::Upgrade { host, .. } => match &reviewed.asset {
+                        Some(asset) => ops.upgrade_runners(host, &reviewed.upgrade, asset).map(done),
+                        None => Err(operations::OperationError(
+                            "the reviewed runner release is no longer available; review the upgrade again".into(),
+                        )),
+                    },
+                    ChangeRequest::Drain { runner } => ops.stop_if_idle(runner, None).map(|outcome| Done {
+                        messages: vec![match &outcome {
+                            StopOutcome::Stopped { message, .. } => message.clone(),
+                            StopOutcome::Busy { .. } => {
+                                format!("{runner} is busy; its service stops after the current job finishes")
+                            }
+                        }],
+                        stop: Some(outcome),
+                    }),
+                    ChangeRequest::Resume { runner } => ops.resume_runner(runner).map(|m| done(vec![m])),
                 }
             })
             .await
             .map_err(|e| e.to_string())
             .and_then(|r| r.map_err(|e| e.0));
+            match (&ran, &result) {
+                (
+                    ChangeRequest::Drain { runner },
+                    Ok(Done {
+                        stop: Some(outcome), ..
+                    }),
+                ) => {
+                    let path = drain_path.unwrap_or_default();
+                    engine.record_drain(&host_id, runner, path, &reviewed.id, outcome);
+                }
+                (ChangeRequest::Resume { runner }, Ok(_)) => engine.record_resume(&host_id, runner),
+                _ => {}
+            }
+            let result = result.map(|done| done.messages);
 
             if let Some(op) = engine.desired.locked().operation.as_mut() {
                 op.finished_at = Some(Utc::now());
@@ -505,4 +583,50 @@ impl Engine {
         }
         self.view_changed();
     }
+}
+
+/// What a change produced: its messages, and for a drain whether it stopped.
+struct Done {
+    messages: Vec<String>,
+    stop: Option<StopOutcome>,
+}
+
+/// The reviewed details a change runs with, beyond its request.
+struct Reviewed {
+    id: String,
+    /// Cleanup: the targets whose items could run.
+    cleanup: Vec<CleanupTarget>,
+    /// Upgrade: the runners whose items could run, in order.
+    upgrade: Vec<String>,
+    /// Upgrade: the release reviewed and re-checked.
+    asset: Option<ReleaseAsset>,
+}
+
+/// Maintenance changes have fictional reviews with demo data.
+fn is_maintenance(request: &ChangeRequest) -> bool {
+    match request {
+        ChangeRequest::Cleanup { .. }
+        | ChangeRequest::Upgrade { .. }
+        | ChangeRequest::Drain { .. }
+        | ChangeRequest::Resume { .. } => true,
+        ChangeRequest::Apply { .. }
+        | ChangeRequest::Retire { .. }
+        | ChangeRequest::Decommission { .. }
+        | ChangeRequest::Restart { .. } => false,
+    }
+}
+
+/// A maintenance review of the demo fleet, through the real review builder.
+/// It always has a blocker and is never stored, so it can't be run.
+fn demo_review(request: &ChangeRequest) -> Result<ReviewView, EngineError> {
+    let inventory = crate::demo_desired::inventory();
+    let host_id = request_host(request, &inventory)?;
+    let host = inventory.find_host(&host_id).map_err(|e| EngineError::NotFound(e.0))?;
+    let snapshot = crate::demo_desired::snapshot();
+    let mut review = build_review(&inventory, host, request, &snapshot, &demo_facts(host, request))?;
+    review
+        .blockers
+        .push("Demo data: this review is fictional and can't run. Turn off demo data to change real machines.".into());
+    review.ready = false;
+    Ok(review)
 }

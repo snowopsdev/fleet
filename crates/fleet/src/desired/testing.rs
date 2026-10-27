@@ -6,9 +6,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use super::github::{FleetGithub, GithubError, ReleaseAsset};
+use super::maintenance::{CleanupCandidate, CleanupOptions, CleanupOutcome, CleanupTarget, JOB_RUNNING};
 use super::model::{CheckStatus, DoctorCheck, GithubRunner, Host, LocalRunner, Runner, RunnerRole};
 use super::process::{CommandError, CommandResult, CommandRunner, NonZeroExit};
-use super::remote::{FleetRemote, InstallRequest, RemoteError, Transient};
+use super::remote::{CleanupSurvey, FleetRemote, InstallRequest, RemoteError, Transient};
 use crate::sync::MutexExt;
 
 /// The registration token the fake GitHub mints.
@@ -41,6 +42,14 @@ pub struct World {
     pub group_id: i64,
     /// Deregistered runners stay registered on GitHub.
     pub survives_removal: bool,
+    /// What a cleanup survey finds on every host (filtered to the host's runners).
+    pub cleanup_targets: Vec<CleanupTarget>,
+    /// Runners with a job running on the host itself (stop and cleanup refuse them).
+    pub jobs_on_host: Vec<String>,
+    /// The runner release the fake GitHub publishes.
+    pub latest_version: String,
+    /// Upgrading one of these runners fails on the host.
+    pub upgrade_failures: Vec<String>,
 }
 
 impl Default for World {
@@ -55,6 +64,10 @@ impl Default for World {
             log_output: None,
             group_id: 5,
             survives_removal: false,
+            cleanup_targets: Vec::new(),
+            jobs_on_host: Vec::new(),
+            latest_version: "2.999.0".into(),
+            upgrade_failures: Vec::new(),
         }
     }
 }
@@ -103,7 +116,7 @@ impl FleetGithub for FakeFleet {
     }
     fn latest_asset(&self, _: &str) -> Result<ReleaseAsset, GithubError> {
         Ok(ReleaseAsset {
-            version: "2.999.0".into(),
+            version: self.world().latest_version.clone(),
             name: "runner.tar.gz".into(),
             url: "https://example.invalid".into(),
             sha256: Some("a".repeat(64)),
@@ -220,6 +233,9 @@ impl FleetRemote for FakeFleet {
         if let Some(local) = world.local.get_mut(&runner.name) {
             local.service_state = "active".into();
         }
+        if let Some(github) = world.github.get_mut(&runner.name) {
+            github.status = "online".into();
+        }
         Ok(String::new())
     }
     fn restart(&self, host: &Host, runner: &Runner, _: RunnerRole, _: &Transient) -> Result<String, RemoteError> {
@@ -239,6 +255,103 @@ impl FleetRemote for FakeFleet {
     fn doctor(&self, host: &Host) -> Vec<DoctorCheck> {
         self.world().reads.push(format!("doctor {}", host.id));
         vec![DoctorCheck::new(&host.id, "ssh", CheckStatus::Pass, "connected")]
+    }
+    fn stop(&self, host: &Host, runner: &Runner, sudo: &Transient) -> Result<String, RemoteError> {
+        let mut world = self.world();
+        if world.jobs_on_host.contains(&runner.name) {
+            return Err(RemoteError(format!("{JOB_RUNNING} in the runner directory")));
+        }
+        world.calls.push(format!(
+            "stop {} {}{}",
+            host.id,
+            runner.name,
+            password("sudo-password", sudo)
+        ));
+        if let Some(local) = world.local.get_mut(&runner.name) {
+            local.service_state = "inactive".into();
+        }
+        if let Some(github) = world.github.get_mut(&runner.name) {
+            github.status = "offline".into();
+        }
+        Ok(String::new())
+    }
+    fn survey_cleanup(
+        &self,
+        host: &Host,
+        candidates: &[CleanupCandidate],
+        _: &CleanupOptions,
+    ) -> Result<CleanupSurvey, RemoteError> {
+        let mut world = self.world();
+        world.reads.push(format!("survey {}", host.id));
+        if let Some(error) = world.host_errors.get(&host.id) {
+            return Err(RemoteError(error.clone()));
+        }
+        let targets = world
+            .cleanup_targets
+            .iter()
+            .filter(|t| {
+                candidates
+                    .iter()
+                    .any(|c| c.kind == t.kind && c.runner.as_ref().map(|(n, _)| n) == t.runner.as_ref())
+            })
+            .cloned()
+            .collect();
+        Ok(CleanupSurvey {
+            targets,
+            refused: Vec::new(),
+        })
+    }
+    fn cleanup(
+        &self,
+        host: &Host,
+        targets: &[CleanupTarget],
+        _: &CleanupOptions,
+    ) -> Result<Vec<CleanupOutcome>, RemoteError> {
+        let mut world = self.world();
+        let mut outcomes = Vec::new();
+        for target in targets {
+            let busy = match &target.runner {
+                Some(name) => world.jobs_on_host.contains(name),
+                None => !world.jobs_on_host.is_empty(),
+            };
+            let path = target.path.clone().unwrap_or_default();
+            if busy {
+                outcomes.push(CleanupOutcome {
+                    kind: target.kind,
+                    runner: target.runner.clone(),
+                    message: format!("{JOB_RUNNING} in {path}; left it alone"),
+                    ok: false,
+                });
+                continue;
+            }
+            world.calls.push(format!(
+                "cleanup {} {} {}",
+                host.id,
+                target.kind.as_str(),
+                target.path.as_deref().unwrap_or("-")
+            ));
+            outcomes.push(CleanupOutcome {
+                kind: target.kind,
+                runner: target.runner.clone(),
+                message: format!("emptied {path}"),
+                ok: true,
+            });
+        }
+        world.cleanup_targets.retain(|t| !targets.contains(t));
+        Ok(outcomes)
+    }
+    fn upgrade(&self, host: &Host, runner: &Runner, asset: &ReleaseAsset) -> Result<String, RemoteError> {
+        let mut world = self.world();
+        world
+            .calls
+            .push(format!("upgrade {} {} {}", host.id, runner.name, asset.version));
+        if world.upgrade_failures.contains(&runner.name) {
+            return Err(RemoteError("SHA-256 mismatch for runner.tar.gz".into()));
+        }
+        if let Some(local) = world.local.get_mut(&runner.name) {
+            local.version = Some(asset.version.clone());
+        }
+        Ok(String::new())
     }
 }
 

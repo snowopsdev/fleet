@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::super::EngineError;
+use super::maintenance::{ReviewFacts, review_cleanup, review_drain, review_resume, review_upgrade};
+use crate::desired::maintenance::CleanupTarget;
 use crate::desired::model::{FleetPlanAction, FleetSnapshot, Host, Inventory, LookupError, NO_VALUE, PlanItem};
 use crate::desired::operations::{
     OperationError, check_declared_for_decommission, check_enabled, check_idle, check_one_runner_at_a_time,
@@ -24,11 +26,15 @@ pub(super) fn request_host(request: &ChangeRequest, inventory: &Inventory) -> Re
     match request {
         ChangeRequest::Apply { host, .. }
         | ChangeRequest::Retire { host, .. }
-        | ChangeRequest::Decommission { host, .. } => Ok(host.clone()),
-        ChangeRequest::Restart { runner } => inventory
-            .find_runner(runner)
-            .map(|(h, _, _)| h.id.clone())
-            .map_err(|e| EngineError::NotFound(e.0)),
+        | ChangeRequest::Decommission { host, .. }
+        | ChangeRequest::Cleanup { host, .. }
+        | ChangeRequest::Upgrade { host, .. } => Ok(host.clone()),
+        ChangeRequest::Restart { runner } | ChangeRequest::Drain { runner } | ChangeRequest::Resume { runner } => {
+            inventory
+                .find_runner(runner)
+                .map(|(h, _, _)| h.id.clone())
+                .map_err(|e| EngineError::NotFound(e.0))
+        }
     }
 }
 
@@ -51,6 +57,11 @@ pub struct ReviewView {
     pub confirm_phrase: Option<String>,
     pub checked_at: DateTime<Utc>,
     pub ready: bool,
+    /// Cleanup: what was found, with its measured size. The first
+    /// `cleanup.len()` items correspond to these, in order.
+    pub cleanup: Vec<CleanupTarget>,
+    /// Upgrade: the release runners would be upgraded to.
+    pub upgrade_to: Option<String>,
 }
 
 // Deserialize only: passwords come from the UI and are never sent back.
@@ -75,13 +86,16 @@ impl std::fmt::Debug for ChangeSecrets {
 }
 
 /// What one kind of change would do.
-struct Proposal {
-    title: String,
-    items: Vec<PlanItem>,
-    confirm_phrase: Option<String>,
+#[derive(Default)]
+pub(super) struct Proposal {
+    pub(super) title: String,
+    pub(super) items: Vec<PlanItem>,
+    pub(super) confirm_phrase: Option<String>,
+    pub(super) cleanup: Vec<CleanupTarget>,
+    pub(super) upgrade_to: Option<String>,
 }
 
-fn not_found(e: LookupError) -> EngineError {
+pub(super) fn not_found(e: LookupError) -> EngineError {
     EngineError::NotFound(e.0)
 }
 
@@ -89,12 +103,12 @@ fn refused(e: OperationError) -> EngineError {
     EngineError::Invalid(e.0)
 }
 
-fn missing(e: OperationError) -> EngineError {
+pub(super) fn missing(e: OperationError) -> EngineError {
     EngineError::NotFound(e.0)
 }
 
 /// Collects the message of a failed guard as a blocker.
-fn block(blockers: &mut Vec<String>, guard: Result<(), OperationError>) {
+pub(super) fn block(blockers: &mut Vec<String>, guard: Result<(), OperationError>) {
     if let Err(e) = guard {
         blockers.push(e.0);
     }
@@ -105,6 +119,7 @@ pub(super) fn build_review(
     host: &Host,
     request: &ChangeRequest,
     snapshot: &FleetSnapshot,
+    facts: &ReviewFacts,
 ) -> Result<ReviewView, EngineError> {
     let mut blockers = Vec::new();
     if let Some(e) = &snapshot.github_error {
@@ -122,11 +137,19 @@ pub(super) fn build_review(
             review_decommission(inventory, host, runner, snapshot, &mut blockers)?
         }
         ChangeRequest::Restart { runner } => review_restart(inventory, host, runner, snapshot, &mut blockers)?,
+        ChangeRequest::Cleanup { options, .. } => review_cleanup(host, options, snapshot, facts, &mut blockers),
+        ChangeRequest::Upgrade { runner, .. } => {
+            review_upgrade(host, runner.as_deref(), snapshot, facts, &mut blockers)?
+        }
+        ChangeRequest::Drain { runner } => review_drain(inventory, host, runner, snapshot, &mut blockers)?,
+        ChangeRequest::Resume { runner } => review_resume(inventory, host, runner, snapshot, &mut blockers)?,
     };
     let Proposal {
         title,
         items,
         confirm_phrase,
+        cleanup,
+        upgrade_to,
     } = proposal;
     let installs = items.iter().any(|i| i.action == FleetPlanAction::Install && !i.blocked);
     let needs_service_password = match (&host.service_account, host.needs_service_password() && installs) {
@@ -136,7 +159,12 @@ pub(super) fn build_review(
     let accepts_sudo_password = host.uses_sudo()
         && (matches!(
             request,
-            ChangeRequest::Retire { .. } | ChangeRequest::Decommission { .. } | ChangeRequest::Restart { .. }
+            ChangeRequest::Retire { .. }
+                | ChangeRequest::Decommission { .. }
+                | ChangeRequest::Restart { .. }
+                | ChangeRequest::Upgrade { .. }
+                | ChangeRequest::Drain { .. }
+                | ChangeRequest::Resume { .. }
         ) || items.iter().any(|i| {
             !i.blocked && (i.action == FleetPlanAction::Install || i.action == FleetPlanAction::StartService)
         }));
@@ -156,6 +184,8 @@ pub(super) fn build_review(
         accepts_sudo_password,
         confirm_phrase,
         checked_at: Utc::now(),
+        cleanup,
+        upgrade_to,
     })
 }
 
@@ -186,6 +216,7 @@ fn review_apply(
         title,
         items,
         confirm_phrase: None,
+        ..Proposal::default()
     })
 }
 
@@ -213,6 +244,7 @@ fn review_retire(
         title: format!("Retire {}", legacy.name),
         items,
         confirm_phrase: Some(format!("retire {}", legacy.name)),
+        ..Proposal::default()
     })
 }
 
@@ -237,6 +269,7 @@ fn review_decommission(
         title: format!("Decommission {runner}"),
         items,
         confirm_phrase: Some(format!("decommission {runner}")),
+        ..Proposal::default()
     })
 }
 
@@ -275,5 +308,6 @@ fn review_restart(
         title: format!("Restart {runner}"),
         items,
         confirm_phrase: None,
+        ..Proposal::default()
     })
 }

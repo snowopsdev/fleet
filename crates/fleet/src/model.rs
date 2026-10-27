@@ -34,6 +34,9 @@ pub struct AppConfig {
     /// repository's `inventory/fleet.toml`.
     #[serde(default)]
     pub inventory_path: Option<String>,
+    /// Watchdog restarts, alert destinations and the availability variable.
+    #[serde(default)]
+    pub automation: crate::automation::AutomationSettings,
 }
 
 /// Matches the serde defaults, so a missing settings file and an empty one mean the same.
@@ -47,6 +50,7 @@ impl Default for AppConfig {
             demo_mode: false,
             local_api: true,
             inventory_path: None,
+            automation: crate::automation::AutomationSettings::default(),
         }
     }
 }
@@ -300,6 +304,8 @@ pub struct FleetView {
     pub orgs: Vec<OrgStatusView>,
     pub tailnet: TailnetStatusView,
     pub monitoring: crate::monitoring::FleetMonitoring,
+    /// Drains, watchdog restarts, alert destinations and published availability.
+    pub automation: crate::automation::FleetAutomation,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]

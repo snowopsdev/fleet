@@ -446,6 +446,11 @@ pub enum FleetPlanAction {
     RepairRegistration,
     RecoverLocal,
     HardenGroup,
+    /// Reviewed maintenance (not part of apply or Runner Fleet's plan).
+    Cleanup,
+    Upgrade,
+    Drain,
+    Resume,
 }
 
 impl FleetPlanAction {
@@ -469,6 +474,10 @@ impl FleetPlanAction {
             Self::RepairRegistration => "repair-registration",
             Self::RecoverLocal => "recover-local",
             Self::HardenGroup => "harden-group",
+            Self::Cleanup => "cleanup",
+            Self::Upgrade => "upgrade",
+            Self::Drain => "drain",
+            Self::Resume => "resume",
         }
     }
 
@@ -488,7 +497,11 @@ impl FleetPlanAction {
             | Self::PreserveDecommission
             | Self::RepairRegistration
             | Self::RecoverLocal
-            | Self::HardenGroup => false,
+            | Self::HardenGroup
+            | Self::Cleanup
+            | Self::Upgrade
+            | Self::Drain
+            | Self::Resume => false,
         }
     }
 }

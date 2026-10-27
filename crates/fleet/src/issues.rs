@@ -109,6 +109,7 @@ fn alert_issues(view: &FleetView) -> Vec<FleetIssue> {
                     match alert.kind {
                         FleetAlertKind::Offline => "offline",
                         FleetAlertKind::LowDisk => "low disk space",
+                        FleetAlertKind::WatchdogGaveUp => "automatic restarts stopped",
                     }
                 ),
                 &alert.detail,

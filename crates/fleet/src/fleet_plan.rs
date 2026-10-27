@@ -33,6 +33,25 @@ pub enum ChangeRequest {
     Restart {
         runner: String,
     },
+    /// Remove reviewed caches and old logs on one host; busy runners are left alone.
+    Cleanup {
+        host: String,
+        options: crate::desired::maintenance::CleanupOptions,
+    },
+    /// Upgrade one runner, or every idle runner on the host behind the latest
+    /// release, one at a time.
+    Upgrade {
+        host: String,
+        runner: Option<String>,
+    },
+    /// Stop one runner's service once it is idle (now, or after its current job).
+    Drain {
+        runner: String,
+    },
+    /// Start one stopped runner's service.
+    Resume {
+        runner: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]

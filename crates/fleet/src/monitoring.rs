@@ -28,6 +28,22 @@ pub enum FleetEventKind {
     MaintenanceStarted,
     MaintenanceEnded,
     AlertsResumed,
+    /// A reviewed drain is waiting for the runner's job to finish.
+    DrainRequested,
+    /// A reviewed drain stopped the runner's service.
+    Drained,
+    /// A drain was cancelled, or its runner changed since the review.
+    DrainCancelled,
+    /// A reviewed resume started the runner's service.
+    Resumed,
+    /// The watchdog restarted a stopped runner service.
+    WatchdogRestarted,
+    /// A watchdog restart failed.
+    WatchdogRestartFailed,
+    /// The watchdog reached its attempt limit and stopped trying.
+    WatchdogGaveUp,
+    /// A service the watchdog acted on runs again.
+    WatchdogRecovered,
 }
 
 /// A timestamped observation, not a claim about events between polling samples.
@@ -50,6 +66,8 @@ pub struct FleetMachineEvent {
 pub enum FleetAlertKind {
     Offline,
     LowDisk,
+    /// The watchdog gave up restarting a runner service.
+    WatchdogGaveUp,
 }
 
 /// An unresolved condition; missing data never implies recovery.
