@@ -1,7 +1,9 @@
 //! The bounded local journal: finished jobs, runs still being followed, and recorded time.
 //!
 //! Writes only this dashboard's own file, atomically; a malformed or newer-format file is
-//! preserved and new jobs are kept in memory only.
+//! preserved and new jobs are kept in memory only. New jobs and spans are saved after the
+//! round that found them; other changes (longer spans, followed runs) at five-minute
+//! checkpoints, so quitting can lose up to five minutes of them.
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
@@ -23,7 +25,7 @@ const PENDING_RETENTION: Duration = Duration::days(1);
 const RECHECK_AFTER: Duration = Duration::minutes(5);
 /// Recording continues the previous span across gaps up to this long (a few job polls).
 const SPAN_GAP: Duration = Duration::minutes(3);
-/// Extended spans and refreshed runs are saved at least this often.
+/// Changes other than new jobs and spans are saved at least this often.
 const CHECKPOINT: Duration = Duration::minutes(5);
 
 /// Time the app was recording: running, with every organization's job scan succeeding.
@@ -44,13 +46,15 @@ struct PendingRun {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
 struct Journal {
     version: u32,
     /// Oldest first by completion time.
+    #[serde(default)]
     jobs: Vec<FleetFinishedJob>,
+    #[serde(default)]
     pending: BTreeMap<u64, PendingRun>,
     /// Sorted and non-overlapping.
+    #[serde(default)]
     recorded: Vec<Span>,
 }
 
@@ -71,8 +75,10 @@ pub(crate) struct JobHistory {
     journal: Journal,
     storage_error: Option<String>,
     writable: bool,
-    dirty: bool,
-    saved_at: Option<DateTime<Utc>>,
+    /// New jobs or spans: save after this round.
+    urgent: bool,
+    /// When the oldest unsaved change was made.
+    unsaved_since: Option<DateTime<Utc>>,
 }
 
 impl JobHistory {
@@ -105,9 +111,13 @@ impl JobHistory {
             journal,
             storage_error,
             writable,
-            dirty: false,
-            saved_at: None,
+            urgent: false,
+            unsaved_since: None,
         }
+    }
+
+    fn changed(&mut self, now: DateTime<Utc>) {
+        self.unsaved_since.get_or_insert(now);
     }
 
     /// Extends recorded time to `now`, or starts a new span after a gap.
@@ -117,25 +127,24 @@ impl JobHistory {
             Some(last) if now - last.to <= SPAN_GAP => last.to = now,
             _ => {
                 self.journal.recorded.push(Span { from: now, to: now });
-                self.dirty = true;
+                self.urgent = true;
             }
         }
+        self.changed(now);
     }
 
     /// Follows the runs of queued and running self-hosted jobs in a fresh scan.
     pub fn track(&mut self, org: &str, scan: &JobScan, runners: &[GhRunner], now: DateTime<Utc>) {
         for job in scan.jobs.iter().filter(|j| is_self_hosted(j, runners)) {
-            let run = self.journal.pending.entry(job.run_id).or_insert_with(|| {
-                self.dirty = true;
-                PendingRun {
-                    org: org.to_lowercase(),
-                    repo: job.repo.clone(),
-                    last_seen: now,
-                    checked_at: None,
-                }
+            let run = self.journal.pending.entry(job.run_id).or_insert_with(|| PendingRun {
+                org: org.to_lowercase(),
+                repo: job.repo.clone(),
+                last_seen: now,
+                checked_at: None,
             });
             run.last_seen = now;
             run.checked_at = None;
+            self.changed(now);
         }
     }
 
@@ -172,25 +181,28 @@ impl JobHistory {
                 && let Some(record) = FleetFinishedJob::from_github(&org, job, runners)
             {
                 self.journal.jobs.push(record);
-                self.dirty = true;
+                self.urgent = true;
             }
         }
         if finished {
-            self.forget_run(run_id);
+            self.forget_run(run_id, now);
         } else {
             self.checked(run_id, now);
         }
     }
 
-    /// Stops following a run GitHub no longer has.
-    pub fn forget_run(&mut self, run_id: u64) {
-        self.dirty |= self.journal.pending.remove(&run_id).is_some();
+    /// Stops following a run: it finished, or GitHub no longer has it.
+    pub fn forget_run(&mut self, run_id: u64, now: DateTime<Utc>) {
+        if self.journal.pending.remove(&run_id).is_some() {
+            self.changed(now);
+        }
     }
 
     /// A read failed or found the run unfinished: wait before reading it again.
     pub fn checked(&mut self, run_id: u64, now: DateTime<Utc>) {
         if let Some(run) = self.journal.pending.get_mut(&run_id) {
             run.checked_at = Some(now);
+            self.changed(now);
         }
     }
 
@@ -198,7 +210,6 @@ impl JobHistory {
     fn prune(&mut self, now: DateTime<Utc>) {
         let cutoff = now - RETENTION;
         let j = &mut self.journal;
-        let before = (j.jobs.len(), j.pending.len(), j.recorded.len());
         j.jobs.retain(|job| job.completed_at >= cutoff);
         j.jobs.sort_by_key(|job| (job.completed_at, job.id));
         j.jobs.drain(..j.jobs.len().saturating_sub(MAX_JOBS));
@@ -212,35 +223,40 @@ impl JobHistory {
                 j.pending.remove(id);
             }
         }
-        self.dirty |= before != (j.jobs.len(), j.pending.len(), j.recorded.len());
     }
 
-    /// Prunes, then saves new jobs and runs at once and other changes at checkpoints.
-    /// Performs disk I/O; call off the async runtime.
-    pub fn save_due(&mut self, now: DateTime<Utc>) {
+    /// Prunes, then returns the file's path and contents if a save is due. Serialized under the
+    /// caller's lock; write without it, then report with [`Self::saved`].
+    pub fn save_due(&mut self, now: DateTime<Utc>) -> Option<(PathBuf, Vec<u8>)> {
         self.prune(now);
-        if !self.dirty && self.saved_at.is_some_and(|at| now - at < CHECKPOINT) {
-            return;
+        let due = self.urgent || self.unsaved_since.is_some_and(|at| now - at >= CHECKPOINT);
+        // An unreadable file's load error already explains why nothing is saved.
+        if !due || !self.writable {
+            return None;
         }
-        match self.save() {
-            Ok(()) => {
-                self.dirty = false;
-                self.saved_at = Some(now);
-                self.storage_error = None;
+        match serde_json::to_vec(&self.journal) {
+            Ok(bytes) => {
+                self.urgent = false;
+                self.unsaved_since = None;
+                Some((self.path.clone(), bytes))
             }
-            Err(e) => self.storage_error = Some(e),
+            Err(e) => {
+                self.storage_error = Some(format!("Couldn't save job history: {e}."));
+                None
+            }
         }
     }
 
-    fn save(&self) -> Result<(), String> {
-        if !self.writable {
-            return Err(self
-                .storage_error
-                .clone()
-                .unwrap_or_else(|| "Job history cannot be saved.".into()));
+    /// Records how a write from [`Self::save_due`] went; a failed one is retried next round.
+    pub fn saved(&mut self, result: std::io::Result<()>, now: DateTime<Utc>) {
+        match result {
+            Ok(()) => self.storage_error = None,
+            Err(e) => {
+                self.urgent = true;
+                self.changed(now);
+                self.storage_error = Some(format!("Couldn't save job history: {e}."));
+            }
         }
-        let bytes = serde_json::to_vec(&self.journal).map_err(|e| format!("Couldn't save job history: {e}."))?;
-        crate::atomic_write::atomic_write(&self.path, &bytes).map_err(|e| format!("Couldn't save job history: {e}."))
     }
 
     pub fn attach(&self, view: &mut FleetView, now: DateTime<Utc>) {

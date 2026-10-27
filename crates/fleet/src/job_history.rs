@@ -17,6 +17,7 @@ mod summary;
 pub(crate) use store::JobHistory;
 
 /// How a finished job ended. Timed-out and startup failures count as failures.
+/// Skipped jobs never get a runner, so they're never recorded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -24,7 +25,6 @@ pub enum FleetJobConclusion {
     Success,
     Failure,
     Cancelled,
-    Skipped,
     Other,
 }
 
@@ -34,7 +34,6 @@ impl FleetJobConclusion {
             Some("success") => Self::Success,
             Some("failure" | "timed_out" | "startup_failure") => Self::Failure,
             Some("cancelled") => Self::Cancelled,
-            Some("skipped") => Self::Skipped,
             _ => Self::Other,
         }
     }
@@ -61,15 +60,13 @@ impl FleetJobOs {
     }
 }
 
-/// A completed job that ran on (or asked for) a self-hosted runner.
+/// A completed self-hosted job that a runner picked up.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct FleetFinishedJob {
     #[ts(type = "number")]
     pub id: u64,
-    #[ts(type = "number")]
-    pub run_id: u64,
     /// Organization login, lowercase.
     pub org: String,
     /// `owner/name`
@@ -93,14 +90,17 @@ impl FleetFinishedJob {
             .map_or(0, |at| (self.completed_at - at).num_seconds().max(0))
     }
 
-    /// The record for a completed job, or `None` if GitHub gave no completion time.
+    /// The record for a completed job, or `None` if it never got a runner (skipped, or
+    /// cancelled while queued) or GitHub gave no completion time.
     fn from_github(org: &str, job: &GhJob, runners: &[GhRunner]) -> Option<Self> {
+        if job.runner_id.is_none() && job.runner_name.is_none() {
+            return None;
+        }
         let runner = runners
             .iter()
             .find(|r| Some(r.id) == job.runner_id || job.runner_name.as_ref() == Some(&r.name));
         Some(Self {
             id: job.id,
-            run_id: job.run_id,
             org: org.to_lowercase(),
             repo: job.repo.clone(),
             name: job.name.clone(),
@@ -136,10 +136,8 @@ pub(crate) fn is_self_hosted(job: &GhJob, runners: &[GhRunner]) -> bool {
 pub struct FleetActivity {
     /// When recording began (within the 30-day retention).
     pub recording_since: Option<DateTime<Utc>>,
-    /// The latest recorded moment; every window ends here.
-    pub as_of: Option<DateTime<Utc>>,
     pub storage_error: Option<String>,
-    /// The last 24 hours, 7 days and 30 days.
+    /// The 24 hours, 7 days and 30 days up to now.
     pub windows: Vec<FleetActivityWindow>,
     /// The most recently finished jobs, newest first.
     pub recent: Vec<FleetFinishedJob>,
@@ -147,7 +145,7 @@ pub struct FleetActivity {
     pub rates_as_of: String,
 }
 
-/// Totals for jobs that finished within `days` of `as_of`.
+/// Totals for jobs that finished in the last `days` days.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]

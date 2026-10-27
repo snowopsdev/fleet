@@ -3,9 +3,9 @@ import type { FleetJobConclusion } from "./FleetJobConclusion";
 import type { FleetJobOs } from "./FleetJobOs";
 
 /**
- * A completed job that ran on (or asked for) a self-hosted runner.
+ * A completed self-hosted job that a runner picked up.
  */
-export type FleetFinishedJob = { id: number, runId: number, 
+export type FleetFinishedJob = { id: number, 
 /**
  * Organization login, lowercase.
  */

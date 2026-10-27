@@ -320,11 +320,17 @@ impl GithubClient {
         })
     }
 
-    /// Jobs in a run's latest attempt.
-    pub(crate) async fn run_jobs(&self, org: &str, repo: &str, run_id: u64) -> Result<Collection<GhJob>, GithubError> {
+    /// Jobs of a run: GitHub's `filter` is `latest` (the latest attempt) or `all` (every attempt).
+    pub(crate) async fn run_jobs(
+        &self,
+        org: &str,
+        repo: &str,
+        run_id: u64,
+        filter: &str,
+    ) -> Result<Collection<GhJob>, GithubError> {
         let jobs = self
             .collection::<RawJob>(
-                &format!("/repos/{org}/{repo}/actions/runs/{run_id}/jobs?filter=latest"),
+                &format!("/repos/{org}/{repo}/actions/runs/{run_id}/jobs?filter={filter}"),
                 "jobs",
                 100,
                 MAX_JOB_PAGES,
@@ -362,7 +368,7 @@ impl GithubClient {
                 run_ids.dedup();
                 let mut jobs = Vec::new();
                 for id in run_ids {
-                    let batch = self.run_jobs(org, &repo, id).await?;
+                    let batch = self.run_jobs(org, &repo, id, "latest").await?;
                     truncated |= batch.truncated;
                     jobs.extend(
                         batch

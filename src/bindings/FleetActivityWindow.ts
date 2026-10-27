@@ -4,7 +4,7 @@ import type { FleetMachineBusy } from "./FleetMachineBusy";
 import type { FleetRepoTime } from "./FleetRepoTime";
 
 /**
- * Totals for jobs that finished within `days` of `as_of`.
+ * Totals for jobs that finished in the last `days` days.
  */
 export type FleetActivityWindow = { days: number, 
 /**

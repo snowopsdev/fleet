@@ -60,7 +60,8 @@ impl Engine {
                 let Some((owner, name)) = repo.split_once('/') else {
                     continue;
                 };
-                let result = client.run_jobs(owner, name, run_id).await;
+                // Every attempt, so a quick re-run can't hide the first attempt's jobs.
+                let result = client.run_jobs(owner, name, run_id, "all").await;
                 let stop = matches!(&result, Err(e) if !matches!(e, GithubError::NotFound(_)));
                 reads.push((run_id, runners.clone(), result));
                 if stop {
@@ -71,18 +72,25 @@ impl Engine {
         }
         let history = self.job_history.clone();
         let saved = tokio::task::spawn_blocking(move || {
-            let mut history = history.locked();
-            for (run_id, runners, result) in reads {
-                match result {
-                    Ok(jobs) => history.read_run(run_id, &jobs.items, jobs.truncated, &runners, now),
-                    Err(GithubError::NotFound(_)) => history.forget_run(run_id),
-                    Err(e) => {
-                        tracing::debug!(run = run_id, "job history read failed: {e}");
-                        history.checked(run_id, now);
+            let save = {
+                let mut history = history.locked();
+                for (run_id, runners, result) in reads {
+                    match result {
+                        Ok(jobs) => history.read_run(run_id, &jobs.items, jobs.truncated, &runners, now),
+                        Err(GithubError::NotFound(_)) => history.forget_run(run_id, now),
+                        Err(e) => {
+                            tracing::debug!(run = run_id, "job history read failed: {e}");
+                            history.checked(run_id, now);
+                        }
                     }
                 }
+                history.save_due(now)
+            };
+            // Written without the lock `view()` takes; this round's lock keeps writes in order.
+            if let Some((path, bytes)) = save {
+                let result = crate::atomic_write::atomic_write(&path, &bytes);
+                history.locked().saved(result, now);
             }
-            history.save_due(now);
         })
         .await;
         if let Err(e) = saved {

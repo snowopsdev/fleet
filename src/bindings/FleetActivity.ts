@@ -9,13 +9,9 @@ export type FleetActivity = {
 /**
  * When recording began (within the 30-day retention).
  */
-recordingSince: string | null, 
+recordingSince: string | null, storageError: string | null, 
 /**
- * The latest recorded moment; every window ends here.
- */
-asOf: string | null, storageError: string | null, 
-/**
- * The last 24 hours, 7 days and 30 days.
+ * The 24 hours, 7 days and 30 days up to now.
  */
 windows: Array<FleetActivityWindow>, 
 /**

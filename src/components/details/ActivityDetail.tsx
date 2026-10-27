@@ -18,7 +18,6 @@ const CONCLUSION: Record<FleetJobConclusion, { label: string; tone: Tone }> = {
   success: { label: "Succeeded", tone: "ok" },
   failure: { label: "Failed", tone: "bad" },
   cancelled: { label: "Cancelled", tone: "muted" },
-  skipped: { label: "Skipped", tone: "muted" },
   other: { label: "Finished", tone: "muted" },
 };
 
@@ -33,8 +32,8 @@ export function ActivityDetail({ view }: { view: FleetView }) {
       <PageHeader
         title="Activity"
         subtitle={a.recordingSince
-          ? `Finished self-hosted jobs recorded on this Mac since ${new Date(a.recordingSince).toLocaleDateString()}, while the app was running.`
-          : "Finished self-hosted jobs, recorded on this Mac while the app is running."}
+          ? `Finished self-hosted jobs from scanned repositories, recorded on this Mac since ${new Date(a.recordingSince).toLocaleDateString()} while the app was running.`
+          : "Finished self-hosted jobs from scanned repositories, recorded on this Mac while the app is running."}
         actions={<div role="group" aria-label="Time window" className="flex rounded-[6px] border border-line bg-card p-0.5">
           {WINDOWS.map((o) => <button key={o.days} type="button" aria-pressed={days === o.days} onClick={() => setDays(o.days)}
             className={`h-6 rounded-[4px] px-2.5 text-[12.5px] font-medium ${days === o.days ? "bg-selected text-ink" : "text-ink-2 hover:text-ink"}`}>{o.label}</button>)}
@@ -79,7 +78,7 @@ function WindowSummary({ w, ratesAsOf }: { w: FleetActivityWindow; ratesAsOf: st
           </div>
         ))}
       </Card>
-      <p className="mt-2 text-[12px] text-ink-2">Share of each machine's runner capacity (runners GitHub lists now) spent on jobs during the {formatSeconds(w.recordedSecs)} the app was recording. Time it wasn't running doesn't count as idle.</p>
+      <p className="mt-2 text-[12px] text-ink-2">Share of each machine's runner capacity (runners GitHub lists now) spent on jobs from scanned repositories during the {formatSeconds(w.recordedSecs)} the app was recording. Time it wasn't running doesn't count as idle.</p>
     </Section>
 
     <div className="grid grid-cols-1 gap-x-6 min-[1100px]:grid-cols-2">

@@ -44,21 +44,19 @@ pub(super) fn percentile(sorted: &[u32], p: usize) -> Option<u32> {
     sorted.get(rank - 1).copied()
 }
 
-/// Windows end at the latest recorded moment, so the summary changes only with the journal.
+/// Windows end now; time the app wasn't recording only lowers their recorded time.
 pub(super) fn activity(
     jobs: &[FleetFinishedJob],
     spans: &[Span],
     view: &FleetView,
     now: DateTime<Utc>,
 ) -> FleetActivity {
-    let end = spans.last().map_or(now, |s| s.to);
     FleetActivity {
         recording_since: spans.first().map(|s| s.from),
-        as_of: spans.last().map(|s| s.to),
         storage_error: None,
         windows: WINDOW_DAYS
             .iter()
-            .map(|&days| window(jobs, spans, view, end, days))
+            .map(|&days| window(jobs, spans, view, now, days))
             .collect(),
         recent: jobs.iter().rev().take(RECENT_JOBS).cloned().collect(),
         rates_as_of: RATES_AS_OF.into(),
@@ -73,7 +71,10 @@ fn window(
     days: u32,
 ) -> FleetActivityWindow {
     let start = end - Duration::days(i64::from(days));
-    let jobs: Vec<&FleetFinishedJob> = jobs.iter().filter(|j| j.completed_at >= start).collect();
+    let jobs: Vec<&FleetFinishedJob> = jobs
+        .iter()
+        .filter(|j| (start..=end).contains(&j.completed_at))
+        .collect();
     let recorded = recorded_overlap(spans, start, end);
 
     // Runners GitHub lists now, by (org, name), and how many each machine has.
@@ -110,9 +111,7 @@ fn window(
         repo.1 += run;
         let Some(started) = job.started_at else { continue };
         *minutes.entry(job.os.unwrap_or(FleetJobOs::Linux)).or_default() += secs_u32((run + 59) / 60);
-        if let Some(created) = job.created_at
-            && job.conclusion != FleetJobConclusion::Skipped
-        {
+        if let Some(created) = job.created_at {
             waits.push(secs_u32((started - created).num_seconds()));
         }
         if let Some(name) = &job.runner_name

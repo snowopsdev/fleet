@@ -2,5 +2,6 @@
 
 /**
  * How a finished job ended. Timed-out and startup failures count as failures.
+ * Skipped jobs never get a runner, so they're never recorded.
  */
-export type FleetJobConclusion = "success" | "failure" | "cancelled" | "skipped" | "other";
+export type FleetJobConclusion = "success" | "failure" | "cancelled" | "other";

@@ -47,7 +47,6 @@ pub(crate) fn attach(view: &mut FleetView, now: DateTime<Utc>) {
                 let repo = REPOS[usize::try_from(seed % 4).unwrap_or(0)];
                 jobs.push(FleetFinishedJob {
                     id,
-                    run_id: id * 10,
                     org: org.clone(),
                     repo: repo.into(),
                     name: if k % 2 == 0 { "build" } else { "test" }.into(),

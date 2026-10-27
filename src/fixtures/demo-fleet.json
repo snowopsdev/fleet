@@ -2058,7 +2058,6 @@
   },
   "activity": {
     "recordingSince": "2026-09-03T22:00:00Z",
-    "asOf": "2026-10-03T12:00:00Z",
     "storageError": null,
     "windows": [
       {
@@ -2311,7 +2310,6 @@
     "recent": [
       {
         "id": 51553,
-        "runId": 515530,
         "org": "acme-demo",
         "repo": "acme-demo/ios-app",
         "name": "test",
@@ -2330,7 +2328,6 @@
       },
       {
         "id": 51532,
-        "runId": 515320,
         "org": "acme-demo",
         "repo": "acme-demo/web",
         "name": "test",
@@ -2349,7 +2346,6 @@
       },
       {
         "id": 51522,
-        "runId": 515220,
         "org": "acme-demo",
         "repo": "acme-demo/web",
         "name": "build",
@@ -2368,7 +2364,6 @@
       },
       {
         "id": 51543,
-        "runId": 515430,
         "org": "acme-demo",
         "repo": "acme-demo/ios-app",
         "name": "build",
@@ -2387,7 +2382,6 @@
       },
       {
         "id": 51531,
-        "runId": 515310,
         "org": "acme-demo",
         "repo": "acme-demo/ios-app",
         "name": "build",
@@ -2406,7 +2400,6 @@
       },
       {
         "id": 51552,
-        "runId": 515520,
         "org": "acme-demo",
         "repo": "acme-demo/api",
         "name": "build",
@@ -2425,7 +2418,6 @@
       },
       {
         "id": 51557,
-        "runId": 515570,
         "org": "acme-demo",
         "repo": "acme-demo/api",
         "name": "test",
@@ -2444,7 +2436,6 @@
       },
       {
         "id": 51515,
-        "runId": 515150,
         "org": "acme-demo",
         "repo": "acme-demo/web",
         "name": "test",
@@ -2463,7 +2454,6 @@
       },
       {
         "id": 51521,
-        "runId": 515210,
         "org": "acme-demo",
         "repo": "acme-demo/ios-app",
         "name": "test",
@@ -2482,7 +2472,6 @@
       },
       {
         "id": 51536,
-        "runId": 515360,
         "org": "acme-demo",
         "repo": "acme-demo/ios-app",
         "name": "test",
@@ -2501,7 +2490,6 @@
       },
       {
         "id": 51542,
-        "runId": 515420,
         "org": "acme-demo",
         "repo": "acme-demo/api",
         "name": "test",
@@ -2520,7 +2508,6 @@
       },
       {
         "id": 51551,
-        "runId": 515510,
         "org": "acme-demo",
         "repo": "acme-demo/infra",
         "name": "test",
@@ -2539,7 +2526,6 @@
       },
       {
         "id": 51530,
-        "runId": 515300,
         "org": "acme-demo",
         "repo": "acme-demo/api",
         "name": "test",
@@ -2558,7 +2544,6 @@
       },
       {
         "id": 51550,
-        "runId": 515500,
         "org": "acme-demo",
         "repo": "acme-demo/web",
         "name": "build",
@@ -2577,7 +2562,6 @@
       },
       {
         "id": 51529,
-        "runId": 515290,
         "org": "acme-demo",
         "repo": "acme-demo/infra",
         "name": "build",
@@ -2596,7 +2580,6 @@
       },
       {
         "id": 51541,
-        "runId": 515410,
         "org": "acme-demo",
         "repo": "acme-demo/infra",
         "name": "build",
@@ -2615,7 +2598,6 @@
       },
       {
         "id": 51520,
-        "runId": 515200,
         "org": "acme-demo",
         "repo": "acme-demo/api",
         "name": "build",
@@ -2634,7 +2616,6 @@
       },
       {
         "id": 51549,
-        "runId": 515490,
         "org": "acme-demo",
         "repo": "acme-demo/ios-app",
         "name": "test",
@@ -2653,7 +2634,6 @@
       },
       {
         "id": 51528,
-        "runId": 515280,
         "org": "acme-demo",
         "repo": "acme-demo/web",
         "name": "test",
@@ -2672,7 +2652,6 @@
       },
       {
         "id": 51556,
-        "runId": 515560,
         "org": "acme-demo",
         "repo": "acme-demo/infra",
         "name": "build",
