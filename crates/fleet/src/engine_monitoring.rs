@@ -2,6 +2,7 @@
 
 use super::{Engine, EngineError};
 use crate::local_api::MAX_PAGE_SIZE;
+use crate::model::{DataSource, FleetView};
 use crate::monitoring::FleetMachineEvent;
 use crate::sync::MutexExt;
 use chrono::{DateTime, Duration, Utc};
@@ -10,11 +11,24 @@ impl Engine {
     /// Record transitions and return durable notification requests due for delivery or retry.
     /// Performs local disk I/O; call off the async runtime.
     pub fn record_monitoring(&self, now: DateTime<Utc>) -> Vec<FleetMachineEvent> {
+        self.monitoring_round(now).0
+    }
+
+    /// [`Self::record_monitoring`], also returning the view it evaluated, including the alerts
+    /// this round raised or cleared, so a periodic caller derives the fleet once.
+    /// Performs local disk I/O; call off the async runtime.
+    pub fn monitoring_round(&self, now: DateTime<Utc>) -> (Vec<FleetMachineEvent>, FleetView) {
         let mut view = self.view();
         let mut monitoring = self.monitoring.locked();
         // Read the preference under the same lock as preference changes and outbox updates.
         view.monitoring.desktop_notifications = self.config().desktop_notifications;
-        monitoring.record(&view, now)
+        let events = monitoring.record(&view, now);
+        if view.source == DataSource::Live {
+            let (at, notifications) = (view.generated_at, view.monitoring.desktop_notifications);
+            monitoring.attach(&mut view, at, notifications);
+            crate::issues::attach(&mut view);
+        }
+        (events, view)
     }
 
     /// Persist native API request acceptance; this does not confirm OS display.
