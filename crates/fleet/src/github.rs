@@ -81,8 +81,8 @@ impl EtagCache {
 /// One poll of an account's runners.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AccountRunners {
-    /// Organization runners; empty for a personal account.
-    pub org: Vec<GhRunner>,
+    /// Organization runners, or why they couldn't be listed; empty for a personal account.
+    pub org: Result<Vec<GhRunner>, GithubError>,
     /// Each runner repository (`owner/name`) with its runners, or why they couldn't be listed.
     pub repos: Vec<(String, Result<Vec<GhRunner>, GithubError>)>,
 }
@@ -273,17 +273,22 @@ impl GithubClient {
     pub async fn org_runners(&self, org: &str) -> Result<Vec<GhRunner>, GithubError> {
         self.runners(&format!("/orgs/{org}/actions/runners"), org)
             .await
-            .map_err(|e| {
-                hint_permission(e, &format!("Listing {org}'s runners needs a fine-grained token with the organization permission \"Self-hosted runners: read\" (classic tokens: admin:org), from an org owner."))
-            })
+            .map_err(|e| hint_runner_permission(e, org))
     }
 
     /// Repository-level runners of `repo` (`owner/name`).
     pub async fn repo_runners(&self, repo: &str) -> Result<Vec<GhRunner>, GithubError> {
+        let needs = format!(
+            "Listing {repo}'s runners needs repository admin access: a fine-grained token with the repository permission \"Administration: read\" (classic tokens: repo)."
+        );
         self.runners(&format!("/repos/{repo}/actions/runners"), repo)
             .await
-            .map_err(|e| {
-                hint_permission(e, &format!("Listing {repo}'s runners needs repository admin access: a fine-grained token with the repository permission \"Administration: read\" (classic tokens: repo)."))
+            .map_err(|e| match e {
+                GithubError::Forbidden(msg) => GithubError::Forbidden(format!("{msg}. {needs}")),
+                GithubError::NotFound(msg) => {
+                    GithubError::NotFound(format!("{msg}. Check the repository name. {needs}"))
+                }
+                other => other,
             })
     }
 
@@ -299,12 +304,12 @@ impl GithubClient {
         Ok(runners.items.into_iter().map(RawRunner::into_model).collect())
     }
 
-    /// Organization and repository runners. A repository that can't be listed is reported
-    /// beside the others; only a rejected token or a rate limit fails the whole account.
+    /// Organization and repository runners. A list that can't be read is reported beside the
+    /// others; only a rejected token or a rate limit fails the whole account.
     pub async fn account_runners(&self, account: &OrgConfig) -> Result<AccountRunners, GithubError> {
         let org = match account.kind {
-            AccountKind::Organization => self.org_runners(&account.login).await?,
-            AccountKind::User => Vec::new(),
+            AccountKind::Organization => self.org_runners(&account.login).await,
+            AccountKind::User => Ok(Vec::new()),
         };
         // Owned items keep the stream's future `Send` for the poller's spawned task.
         let names: Vec<String> = account
@@ -320,9 +325,9 @@ impl GithubClient {
             .buffered(CONCURRENCY)
             .collect()
             .await;
-        if let Some((_, Err(e))) = repos
-            .iter()
-            .find(|(_, r)| matches!(r, Err(GithubError::Unauthorized | GithubError::RateLimited(_))))
+        if let Some(Err(e)) = std::iter::once(&org)
+            .chain(repos.iter().map(|(_, r)| r))
+            .find(|r| matches!(r, Err(GithubError::Unauthorized | GithubError::RateLimited(_))))
         {
             return Err(e.clone());
         }
@@ -480,9 +485,11 @@ impl GithubClient {
     }
 }
 
-fn hint_permission(e: GithubError, needs: &str) -> GithubError {
+fn hint_runner_permission(e: GithubError, org: &str) -> GithubError {
     match e {
-        GithubError::Forbidden(msg) | GithubError::NotFound(msg) => GithubError::Forbidden(format!("{msg}. {needs}")),
+        GithubError::Forbidden(msg) | GithubError::NotFound(msg) => GithubError::Forbidden(format!(
+            "{msg}. Listing {org}'s runners needs a fine-grained token with the organization permission \"Self-hosted runners: read\" (classic tokens: admin:org), from an org owner."
+        )),
         other => other,
     }
 }
@@ -661,8 +668,10 @@ mod tests {
             .route(
                 "/repos/{owner}/{repo}/actions/runners",
                 get(|Path((_owner, repo)): Path<(String, String)>| async move {
-                    if repo == "private" {
-                        return (AxStatus::NOT_FOUND, Json(json!({"message": "Not Found"})));
+                    match repo.as_str() {
+                        "private" => return (AxStatus::NOT_FOUND, Json(json!({"message": "Not Found"}))),
+                        "revoked" => return (AxStatus::UNAUTHORIZED, Json(json!({"message": "Bad credentials"}))),
+                        _ => {}
                     }
                     (
                         AxStatus::OK,
@@ -682,19 +691,26 @@ mod tests {
             runner_repos: vec!["private".into(), "web".into()],
         };
         let listed = client.account_runners(&account).await.unwrap();
-        assert_eq!(listed.org.iter().map(|r| r.id).collect::<Vec<_>>(), vec![1]);
-        let [(private, Err(GithubError::Forbidden(why))), (web, Ok(web_runners))] = listed.repos.as_slice() else {
+        assert_eq!(listed.org.unwrap().iter().map(|r| r.id).collect::<Vec<_>>(), vec![1]);
+        let [(private, Err(GithubError::NotFound(why))), (web, Ok(web_runners))] = listed.repos.as_slice() else {
             panic!("{:?}", listed.repos)
         };
         assert_eq!((private.as_str(), web.as_str()), ("acme/private", "acme/web"));
-        assert!(why.contains("Administration: read"), "{why}");
+        assert!(
+            why.contains("Check the repository name") && why.contains("Administration: read"),
+            "{why}"
+        );
         assert_eq!(web_runners.iter().map(|r| r.id).collect::<Vec<_>>(), vec![2]);
 
         // A personal account has no organization list to read.
         account.kind = AccountKind::User;
         let listed = client.account_runners(&account).await.unwrap();
-        assert!(listed.org.is_empty());
+        assert_eq!(listed.org, Ok(Vec::new()));
         assert_eq!(listed.repos.len(), 2);
+
+        // A rejected token fails the whole account, wherever GitHub reports it.
+        account.runner_repos.push("revoked".into());
+        assert_eq!(client.account_runners(&account).await, Err(GithubError::Unauthorized));
     }
 
     #[tokio::test]

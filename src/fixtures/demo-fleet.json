@@ -4,13 +4,13 @@
   "summary": {
     "machines": 5,
     "machinesConnected": 2,
-    "runners": 9,
-    "runnersOnline": 6,
+    "runners": 10,
+    "runnersOnline": 7,
     "runnersBusy": 2,
     "runnersOffline": 1,
     "runnersUnknown": 2,
     "queuedJobs": 2,
-    "attention": 8
+    "attention": 7
   },
   "issues": [
     {
@@ -75,17 +75,6 @@
       "detail": "Host unreachable.",
       "machineId": "ts:nWin",
       "runnerKey": null,
-      "stale": false,
-      "muted": false,
-      "fix": null
-    },
-    {
-      "id": "gh:acme-demo:401:update",
-      "category": "runner",
-      "title": "win-builder: runner update available",
-      "detail": "Runs 2.328.0; the latest release is 2.329.0. An update has been available since 2026-09-21, and GitHub stops sending jobs to runners that miss one for 30 days.",
-      "machineId": "ts:nWin",
-      "runnerKey": "gh:acme-demo:401",
       "stale": false,
       "muted": false,
       "fix": null
@@ -1855,6 +1844,38 @@
           "Linux",
           "X64",
           "gpu"
+        ],
+        "os": "Linux",
+        "version": "2.329.0",
+        "ephemeral": false,
+        "asOf": "2026-10-03T11:59:51Z",
+        "stale": false,
+        "repo": null,
+        "update": null
+      },
+      "local": null,
+      "currentJob": null,
+      "warnings": [],
+      "desired": null
+    },
+    {
+      "key": "gh:acme-demo:601",
+      "name": "ml-notebooks",
+      "org": "acme-demo",
+      "machineId": null,
+      "installed": "unknown",
+      "connected": "yes",
+      "activity": {
+        "kind": "idle"
+      },
+      "github": {
+        "id": 601,
+        "status": "online",
+        "busy": false,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "X64"
         ],
         "os": "Linux",
         "version": "2.329.0",

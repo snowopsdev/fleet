@@ -307,18 +307,18 @@ fn runner_issues(view: &FleetView) -> Vec<FleetIssue> {
                     runner.warnings.join(" · "),
                 )
             });
-            let update = runner.github.as_ref().and_then(|g| Some((g.version.as_deref()?, g.update.as_ref()?)));
-            let update = update.map(|(version, update)| {
+            // Runners update themselves, so only an overdue update needs attention.
+            let overdue = runner.github.as_ref().and_then(|g| {
+                let update = g.update.as_ref().filter(|u| u.overdue)?;
+                Some((g.version.as_deref()?, update))
+            });
+            let update = overdue.map(|(version, update)| {
                 FleetIssue::new(
                     format!("{}:update", runner.key),
                     Runner,
+                    format!("{}: runner update overdue", runner.name),
                     format!(
-                        "{}: runner update {}",
-                        runner.name,
-                        if update.overdue { "overdue" } else { "available" }
-                    ),
-                    format!(
-                        "Runs {version}; the latest release is {}. An update has been available since {}, and GitHub stops sending jobs to runners that miss one for 30 days.",
+                        "Runs {version}; the latest release is {}. It has missed an update since {}, and GitHub stops sending jobs to runners that miss one for 30 days.",
                         update.latest,
                         update.missing_since.format("%Y-%m-%d"),
                     ),

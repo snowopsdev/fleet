@@ -39,12 +39,8 @@ function scopeText(s: RepoScope): string {
   }
 }
 
-/** Repository names from free text, without owners. */
-const parseRepos = (t: string) =>
-  t
-    .split(/[\s,]+/)
-    .map((r) => r.trim().split("/").pop()!)
-    .filter(Boolean);
+/** Runner repositories from free text; the app checks each `name` or `owner/name`. */
+const splitRepos = (t: string) => t.split(/[\s,]+/).filter(Boolean);
 
 function RunnerReposField({ value, onChange, kind }: { value: string; onChange: (v: string) => void; kind: AccountKind }) {
   return (
@@ -82,7 +78,7 @@ function OrgRow({ org, status }: { org: OrgConfig; status?: OrgStatusView }) {
     <Card className="px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <CopyValue value={org.login} label={org.kind === "user" ? "Account" : "Organization"} className="font-medium" truncate />
-        {status?.error || status?.runnerRepoErrors.length ? <Pill tone="bad">Error</Pill> : status?.runnersAsOf ? <Pill tone="ok">Connected</Pill> : <Pill tone="muted">Pending</Pill>}
+        {status?.error ? <Pill tone="bad">Error</Pill> : status?.runnerRepoErrors.length ? <Pill tone="warn">Repository error</Pill> : status?.runnersAsOf ? <Pill tone="ok">Connected</Pill> : <Pill tone="muted">Pending</Pill>}
         <div className="ml-auto flex flex-wrap gap-1">
           {org.auth === "token" ? (
             <Button small variant="ghost" disabled={save.isPending} onClick={() => save.mutate(() => commands.useGhForOrg(org.login))}>
@@ -124,7 +120,7 @@ function OrgRow({ org, status }: { org: OrgConfig; status?: OrgStatusView }) {
         </form>
       )}
       {mode === "scope" && (
-        <form className="mt-3 space-y-3" onSubmit={(e) => { e.preventDefault(); save.mutate(() => commands.setOrgScope(org.login, scope, parseRepos(repos))); }}>
+        <form className="mt-3 space-y-3" onSubmit={(e) => { e.preventDefault(); save.mutate(() => commands.setOrgScope(org.login, scope, splitRepos(repos))); }}>
           {org.kind === "organization" && <ScopePicker value={scope} onChange={setScope} />}
           <RunnerReposField value={repos} onChange={setRepos} kind={org.kind} />
           <div className="mt-2 flex gap-2">
@@ -156,6 +152,11 @@ function OrgRow({ org, status }: { org: OrgConfig; status?: OrgStatusView }) {
 function ScopePicker({ value, onChange }: { value: RepoScope; onChange: (s: RepoScope) => void }) {
   const [max, setMax] = useState(value.kind === "recent" ? value.maxRepos : 20);
   const [repos, setRepos] = useState(value.kind === "selected" ? value.repos.join("\n") : "");
+  const parseRepos = (t: string) =>
+    t
+      .split(/[\s,]+/)
+      .map((r) => r.trim().split("/").pop()!)
+      .filter(Boolean);
   return (
     <div className="space-y-1.5 text-[12.5px]">
       <label className="flex items-center gap-2">
@@ -241,7 +242,7 @@ function AddOrg() {
   const [kind, setKind] = useState<AccountKind>("organization");
   const [repos, setRepos] = useState("");
   const add = useMutation({
-    mutationFn: () => commands.addOrg(login, auth, auth === "token" ? token : null, { kind, repoScope: scope, runnerRepos: parseRepos(repos) }),
+    mutationFn: () => commands.addOrg(login, auth, auth === "token" ? token : null, { kind, repoScope: scope, runnerRepos: splitRepos(repos) }),
     onSuccess: () => {
       setOpen(false);
       setLogin("");
@@ -309,7 +310,7 @@ function AddOrg() {
           <ScopePicker value={scope} onChange={setScope} />
         </Field>}
         <div className="flex items-center gap-2">
-          <Button type="submit" variant="primary" disabled={!login || (auth === "token" && !token) || (kind === "user" && !parseRepos(repos).length) || add.isPending}>
+          <Button type="submit" variant="primary" disabled={!login || (auth === "token" && !token) || (kind === "user" && !splitRepos(repos).length) || add.isPending}>
             {add.isPending ? "Checking access…" : "Add"}
           </Button>
           <Button variant="ghost" onClick={() => setOpen(false)}>

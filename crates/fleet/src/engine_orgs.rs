@@ -28,10 +28,16 @@ enum GithubAuthError {
 /// Where the latest error fetching one kind of GitHub data lives in an org's observations.
 type ErrorSlot = fn(&mut OrgObservation) -> &mut Option<Timed<String>>;
 
-/// Records the organization runners and each runner repository's runners or error. A
-/// repository that fails keeps its last runners, which age into stale.
-fn store_runners(o: &mut OrgObservation, at: DateTime<Utc>, fetched: AccountRunners) {
-    o.runners = Some(Timed::new(at, fetched.org));
+/// Records one poll of an account's runners and returns the organization list's error. A list
+/// that fails keeps its last runners, which age into stale, and hides no others.
+fn store_runners(o: &mut OrgObservation, at: DateTime<Utc>, fetched: AccountRunners) -> Option<GithubError> {
+    let org_error = match fetched.org {
+        Ok(runners) => {
+            o.runners = Some(Timed::new(at, runners));
+            None
+        }
+        Err(e) => Some(e),
+    };
     o.repo_runners
         .retain(|repo, _| fetched.repos.iter().any(|(r, _)| r == repo));
     o.repo_errors.clear();
@@ -45,15 +51,29 @@ fn store_runners(o: &mut OrgObservation, at: DateTime<Utc>, fetched: AccountRunn
             }
         }
     }
+    org_error
 }
 
-/// Runner repository names without owners. A personal account needs at least one.
-fn runner_repos(kind: AccountKind, repos: &[String]) -> Result<Vec<String>, EngineError> {
-    let names: Vec<String> = repos
-        .iter()
-        .filter_map(|r| r.trim().rsplit('/').next().filter(|n| !n.is_empty()))
-        .map(str::to_string)
-        .collect();
+/// Runner repository names of `owner`, without the owner. A personal account needs at least one.
+fn runner_repos(owner: &str, kind: AccountKind, repos: &[String]) -> Result<Vec<String>, EngineError> {
+    let mut names: Vec<String> = Vec::new();
+    for entry in repos.iter().map(|r| r.trim()).filter(|r| !r.is_empty()) {
+        let name = match entry.split_once('/') {
+            Some((o, name)) if o.eq_ignore_ascii_case(owner) => name,
+            Some(_) => {
+                return Err(EngineError::Invalid(format!(
+                    "{entry} isn't one of {owner}'s repositories."
+                )));
+            }
+            None => entry,
+        };
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) {
+            return Err(EngineError::Invalid(format!("{entry} isn't a repository name.")));
+        }
+        if !names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+            names.push(name.to_string());
+        }
+    }
     if kind == AccountKind::User && names.is_empty() {
         return Err(EngineError::Invalid(
             "A personal account only has repository runners. List at least one repository.".into(),
@@ -141,7 +161,7 @@ impl Engine {
         fetch: impl AsyncFn(&GithubClient, &OrgConfig) -> Result<T, GithubError>,
         refetch_token_on: fn(&GithubError) -> bool,
         error_slot: ErrorSlot,
-        store: fn(&mut OrgObservation, DateTime<Utc>, T),
+        store: fn(&mut OrgObservation, DateTime<Utc>, T) -> Option<GithubError>,
     ) {
         let orgs = self.config().orgs;
         join_all(orgs.iter().map(|org| async {
@@ -157,19 +177,20 @@ impl Engine {
                 }
             };
             let result = fetch(&client, org).await;
-            if result.as_ref().is_err_and(refetch_token_on) {
-                self.drop_github_client(org);
-            }
             let mut obs = self.obs.write_locked();
             let entry = obs.github.entry(key).or_default();
             entry.missing_token = false;
             entry.rate_limit = client.rate_limit();
-            match result {
-                Ok(fetched) => {
-                    store(entry, Utc::now(), fetched);
-                    *error_slot(entry) = None;
-                }
-                Err(e) => *error_slot(entry) = Some(Timed::new(Utc::now(), self.github_error_text(org, &e))),
+            let error = match result {
+                Ok(fetched) => store(entry, Utc::now(), fetched),
+                Err(e) => Some(e),
+            };
+            *error_slot(entry) = error
+                .as_ref()
+                .map(|e| Timed::new(Utc::now(), self.github_error_text(org, e)));
+            drop(obs);
+            if error.as_ref().is_some_and(refetch_token_on) {
+                self.drop_github_client(org);
             }
         }))
         .await;
@@ -197,13 +218,16 @@ impl Engine {
             // says nothing about the credential. Keeping the client keeps its ETag cache.
             |e| matches!(e, GithubError::Unauthorized),
             |org| &mut org.jobs_error,
-            |org, at, scan| org.jobs = Some(Timed::new(at, scan)),
+            |org, at, scan| {
+                org.jobs = Some(Timed::new(at, scan));
+                None
+            },
         )
         .await;
     }
 
     /// Reads recent `actions/runner` releases at most hourly, through the first github.com
-    /// account. GitHub Enterprise Server accounts are never used.
+    /// account that can. GitHub Enterprise Server accounts are never used.
     async fn poll_runner_releases(&self) {
         let now = Utc::now();
         if self
@@ -214,34 +238,42 @@ impl Engine {
         {
             return;
         }
-        let Some(org) = self
+        let accounts: Vec<OrgConfig> = self
             .config()
             .orgs
             .into_iter()
-            .find(|o| o.api_base.trim_end_matches('/') == default_api_base())
-        else {
+            .filter(|o| o.api_base.trim_end_matches('/') == default_api_base())
+            .collect();
+        if accounts.is_empty() {
             return;
-        };
-        // Without a credential there's nothing to read; the next poll tries again.
-        let Ok(client) = self.github_client(&org).await else {
-            return;
-        };
-        let result = client.runner_releases().await;
-        let mut obs = self.obs.write_locked();
-        obs.runner_releases_checked_at = Some(now);
-        match result {
-            Ok(releases) => obs.runner_releases = Some(Timed::new(now, releases)),
-            Err(e) => tracing::warn!("couldn't read the actions/runner releases: {e}"),
+        }
+        self.obs.write_locked().runner_releases_checked_at = Some(now);
+        for org in &accounts {
+            let Ok(client) = self.github_client(org).await else {
+                continue;
+            };
+            match client.runner_releases().await {
+                Ok(releases) => {
+                    self.obs.write_locked().runner_releases = Some(Timed::new(now, releases));
+                    return;
+                }
+                Err(e) => tracing::warn!("couldn't read the actions/runner releases through {}: {e}", org.login),
+            }
         }
     }
 
-    /// Lists the account's runners with `client`, refusing a credential that can't read all of them.
+    /// Checks a credential before it's saved: it must list the organization's runners, or a
+    /// personal account's runners in at least one repository.
     async fn check_access(&self, client: &GithubClient, org: &OrgConfig) -> Result<AccountRunners, EngineError> {
-        let runners = client
-            .account_runners(org)
-            .await
-            .map_err(|e| EngineError::Invalid(self.github_error_text(org, &e)))?;
-        if let Some((_, Err(e))) = runners.repos.iter().find(|(_, r)| r.is_err()) {
+        let invalid = |e: &GithubError| EngineError::Invalid(self.github_error_text(org, e));
+        let runners = client.account_runners(org).await.map_err(|e| invalid(&e))?;
+        if let Err(e) = &runners.org {
+            return Err(invalid(e));
+        }
+        if org.kind == AccountKind::User
+            && let Some((_, Err(e))) = runners.repos.iter().find(|(_, r)| r.is_err())
+            && runners.repos.iter().all(|(_, r)| r.is_err())
+        {
             return Err(EngineError::Invalid(e.to_string()));
         }
         Ok(runners)
@@ -263,7 +295,7 @@ impl Engine {
                 "Enter an organization or user login, like `acme`.".into(),
             ));
         }
-        let runner_repos = runner_repos(setup.kind, &setup.runner_repos)?;
+        let runner_repos = runner_repos(&login, setup.kind, &setup.runner_repos)?;
         let key = login.to_lowercase();
         if self.config().orgs.iter().any(|o| o.login.to_lowercase() == key) {
             return Err(EngineError::Invalid(format!("{login} is already added.")));
@@ -292,6 +324,10 @@ impl Engine {
         };
         let client = GithubClient::new(&api_base, &token);
         let runners = self.check_access(&client, &org).await?;
+        // Repositories added later only show their errors; a new account must list them all.
+        if let Some(e) = runners.repos.iter().find_map(|(_, r)| r.as_ref().err()) {
+            return Err(EngineError::Invalid(e.to_string()));
+        }
 
         if auth == OrgAuth::Token {
             let account = key.clone();
@@ -303,7 +339,8 @@ impl Engine {
         self.update_config(|c| c.orgs.push(org))?;
         let mut obs = self.obs.write_locked();
         let entry = obs.github.entry(key).or_default();
-        store_runners(entry, Utc::now(), runners);
+        // check_access refused an organization list error.
+        let _ = store_runners(entry, Utc::now(), runners);
         entry.missing_token = false;
         entry.error = None;
         Ok(())
@@ -360,16 +397,23 @@ impl Engine {
     }
 
     /// Sets the job scope and runner repositories. Repositories that can't be listed show
-    /// their own errors on the next poll.
+    /// their own errors on the next poll; removed ones are forgotten now.
     pub fn set_org_scope(&self, login: &str, scope: RepoScope, repos: &[String]) -> Result<(), EngineError> {
         let key = login.to_lowercase();
-        let repos = runner_repos(self.find_org(login)?.kind, repos)?;
+        let org = self.find_org(login)?;
+        let repos = runner_repos(&org.login, org.kind, repos)?;
+        let kept: Vec<String> = repos.iter().map(|n| format!("{}/{n}", org.login)).collect();
         self.update_config(|c| {
             if let Some(o) = c.orgs.iter_mut().find(|o| o.login.to_lowercase() == key) {
                 o.repo_scope = scope;
                 o.runner_repos = repos;
             }
-        })
+        })?;
+        if let Some(o) = self.obs.write_locked().github.get_mut(&key) {
+            o.repo_runners.retain(|repo, _| kept.contains(repo));
+            o.repo_errors.retain(|repo, _| kept.contains(repo));
+        }
+        Ok(())
     }
 
     pub async fn remove_org(&self, login: &str) -> Result<(), EngineError> {

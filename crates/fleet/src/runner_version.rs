@@ -10,6 +10,8 @@ use ts_rs::TS;
 
 /// After this, GitHub may stop sending jobs to a runner missing a release.
 pub const UPDATE_DEADLINE: Duration = Duration::days(30);
+/// Releases read longer ago than this aren't compared: they may miss newer ones.
+pub const RELEASES_USABLE_FOR: Duration = Duration::days(1);
 
 /// A published, non-pre-release `actions/runner` release.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -191,6 +191,7 @@ impl GithubIndex {
         let releases = obs
             .runner_releases
             .as_ref()
+            .filter(|r| now - r.at <= crate::runner_version::RELEASES_USABLE_FOR)
             .map(|r| r.value.as_slice())
             .unwrap_or_default();
         for org_cfg in &config.orgs {

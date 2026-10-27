@@ -59,6 +59,7 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
             version: Some("2.328.0".into()),
             ..gh(401, "win-builder", false, &["self-hosted", "Windows", "X64"])
         }),
+        gh(501, "cloud-gpu-1", false, &["self-hosted", "Linux", "X64", "gpu"]),
     ];
 
     let jobs = vec![
@@ -164,7 +165,7 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
                 format!("{ORG}/ml"),
                 Timed::new(
                     ago(9),
-                    vec![gh(501, "cloud-gpu-1", false, &["self-hosted", "Linux", "X64", "gpu"])],
+                    vec![gh(601, "ml-notebooks", false, &["self-hosted", "Linux", "X64"])],
                 ),
             )]
             .into(),

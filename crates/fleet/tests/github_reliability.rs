@@ -13,7 +13,7 @@ use axum::{Json, Router};
 use chrono::Utc;
 use fleet::engine::{Engine, MemorySecrets, SecretStore};
 use fleet::github::{GithubClient, GithubError};
-use fleet::model::{AccountKind, AppConfig, OrgAuth, OrgConfig, RepoScope};
+use fleet::model::{AccountKind, AccountSetup, AppConfig, OrgAuth, OrgConfig, RepoScope};
 use serde_json::{Value, json};
 
 mod common;
@@ -383,15 +383,24 @@ async fn a_repository_that_cant_be_listed_shows_its_own_error_and_hides_no_other
         }));
     let base = serve(app).await;
     let dir = tempfile::tempdir().unwrap();
-    // Settings saved before accounts had a kind.
+    // Settings saved before accounts had a kind or runner repositories.
     let path = dir.path().join("config.json");
     let config = json!({"orgs": [{"login": "acme", "apiBase": base, "repoScope": {"kind": "none"},
-        "addedAt": "2026-10-01T00:00:00Z", "runnerRepos": ["private", "web"]}]});
+        "addedAt": "2026-10-01T00:00:00Z", "auth": "token"}]});
     std::fs::write(&path, config.to_string()).unwrap();
     let secrets = Arc::new(MemorySecrets::default());
     secrets.set("acme", "fake").unwrap();
     let engine = Engine::load(path, secrets).unwrap();
-    assert_eq!(engine.config().orgs[0].kind, AccountKind::Organization);
+    let org = &engine.config().orgs[0];
+    assert_eq!((org.kind, org.runner_repos.len()), (AccountKind::Organization, 0));
+    let invalid = engine.set_org_scope("acme", RepoScope::None, &["other/web".into()]);
+    assert_eq!(
+        invalid.unwrap_err().to_string(),
+        "other/web isn't one of acme's repositories."
+    );
+    let repos = ["acme/private".to_string(), "web".into(), "WEB".into()];
+    engine.set_org_scope("acme", RepoScope::None, &repos).unwrap();
+    assert_eq!(engine.config().orgs[0].runner_repos, ["private", "web"]);
 
     engine.poll_github_runners().await;
     let view = engine.view();
@@ -408,4 +417,17 @@ async fn a_repository_that_cant_be_listed_shows_its_own_error_and_hides_no_other
             .starts_with("acme/private: GitHub refused access (403): Must have admin rights")
     );
     assert!(view.issues.iter().any(|i| i.id == "org:acme:repos"));
+
+    // Fixing sign-in only needs the organization list; adding an account needs every repository.
+    engine.update_org_token("acme", "replacement").await.unwrap();
+    let setup = AccountSetup {
+        kind: AccountKind::Organization,
+        repo_scope: RepoScope::None,
+        runner_repos: vec!["private".into()],
+    };
+    let refused = engine
+        .add_org("other", OrgAuth::Token, Some("fake"), setup, Some(base))
+        .await;
+    assert!(refused.unwrap_err().to_string().contains("Must have admin rights"));
+    assert_eq!(engine.config().orgs.len(), 1);
 }

@@ -136,17 +136,6 @@ pub struct AccountSetup {
     pub runner_repos: Vec<String>,
 }
 
-/// An organization scanned with this scope and no runner repositories.
-impl From<RepoScope> for AccountSetup {
-    fn from(repo_scope: RepoScope) -> Self {
-        Self {
-            kind: AccountKind::Organization,
-            repo_scope,
-            runner_repos: Vec::new(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]

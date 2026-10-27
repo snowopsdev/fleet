@@ -393,7 +393,8 @@ fn discovery_and_demo_cover_current_stale_offline_and_failed_ssh() {
     assert!(kinds.iter().any(|c| matches!(c, MachineConnection::Error { .. })));
     assert_eq!(view.other_machines.len(), 2);
     assert_eq!(view.ignored.len(), 1);
-    assert_eq!(view.unmatched_runners.len(), 1);
+    // The hosted pool runner and a repository runner.
+    assert_eq!(view.unmatched_runners.len(), 2);
     assert_eq!(view.queue.jobs.len(), 2);
     assert!(view.machines.iter().all(|m| m.desired.is_some()));
     let names: Vec<_> = view.machines.iter().map(|m| m.display_name.as_str()).collect();
@@ -650,4 +651,19 @@ fn repository_runners_take_only_their_repository_jobs_and_show_version_drift() {
     assert_eq!(compatible, [(11, vec![]), (10, vec!["gh:acme:5".to_string()])]);
     let update = v.issues.iter().find(|i| i.id == "gh:acme:5:update").unwrap();
     assert_eq!(update.title, "web-mac: runner update overdue");
+}
+
+#[test]
+fn repository_runners_never_join_inventory_hosts() {
+    let mut f = Fixture::new();
+    with_inventory(&mut f);
+    f.gh_runners(ago(10), vec![]);
+    let same_name = gh(1, "mini-01", "online", false, MAC);
+    let host_label = gh(2, "stray", "online", false, &["self-hosted", "host-mini"]);
+    f.obs.github.get_mut("acme").unwrap().repo_runners =
+        [("Acme/web".into(), Timed::new(ago(10), vec![same_name, host_label]))].into();
+    let v = f.view();
+    let unmatched: Vec<&str> = v.unmatched_runners.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(unmatched, ["mini-01", "stray"]);
+    assert!(v.machines[0].runners.iter().all(|r| r.github.is_none()));
 }
