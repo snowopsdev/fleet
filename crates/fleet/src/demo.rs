@@ -60,12 +60,12 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         },
         gh(302, "linux-01-b", false, &["self-hosted", "Linux", "X64", "docker"]),
         offline(gh(401, "win-builder", false, &["self-hosted", "Windows", "X64"])),
-        // Registered to the acme-demo/ml repository rather than the organization.
-        GhRunner {
-            repo: Some(format!("{ORG}/ml")),
-            ..gh(501, "cloud-gpu-1", false, &["self-hosted", "Linux", "X64", "gpu"])
-        },
     ];
+    // Registered to the acme-demo/ml repository rather than the organization.
+    let ml_runners = vec![GhRunner {
+        repo: Some(format!("{ORG}/ml")),
+        ..gh(501, "cloud-gpu-1", false, &["self-hosted", "Linux", "X64", "gpu"])
+    }];
 
     let jobs = vec![
         job(
@@ -169,15 +169,19 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
                 resets_at: Some(now + Duration::minutes(38)),
             }),
             missing_token: false,
+            repo_runners: [("ml".to_string(), Timed::new(ago(9), ml_runners))].into(),
             ..Default::default()
         },
     );
-    obs.runner_release = Some(Timed::new(
+    obs.runner_releases = Some(Timed::new(
         ago(25 * 60),
-        RunnerRelease {
-            version: "2.329.0".into(),
-            published_at: Some(now - Duration::days(12)),
-        },
+        [("2.329.0", 12), ("2.328.0", 47), ("2.327.1", 70)]
+            .into_iter()
+            .map(|(version, days)| RunnerRelease {
+                version: version.into(),
+                published_at: Some(now - Duration::days(days)),
+            })
+            .collect(),
     ));
     obs.runner_release_checked_at = Some(ago(25 * 60));
 

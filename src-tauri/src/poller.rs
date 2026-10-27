@@ -50,10 +50,10 @@ fn push(app: &AppHandle, view: FleetView, when: Push) {
         });
         let now = Instant::now();
         let mut pushes = poller.pushes.locked();
-        if when == Push::IfChanged && !pushes.due(&revision, now) {
+        if when == Push::IfChanged && !pushes.due(&revision, view.generated_at, now) {
             return;
         }
-        pushes.pushed(revision, now);
+        pushes.pushed(revision, view.generated_at, now);
     }
     if let Err(e) = app.emit(FLEET_UPDATED, view) {
         tracing::warn!("emit failed: {e}");
@@ -91,8 +91,9 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
                 let monitor = engine.clone();
                 match tauri::async_runtime::spawn_blocking(move || monitor.monitoring_round(chrono::Utc::now())).await {
                     Ok((events, view)) => {
-                        deliver_notifications(&app, &engine, events).await;
+                        // Push before delivery waits on the OS; a poll may push newer data meanwhile.
                         push(&app, view, Push::IfChanged);
+                        deliver_notifications(&app, &engine, events).await;
                     }
                     Err(error) => {
                         tracing::warn!("recording machine history failed: {error}");

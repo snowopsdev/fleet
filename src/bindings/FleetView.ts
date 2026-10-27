@@ -34,6 +34,6 @@ unmatchedRunners: Array<RunnerView>, ignored: Array<DiscoveredPeerView>, queue: 
  */
 plan: FleetPlanStatus, orgs: Array<OrgStatusView>, tailnet: TailnetStatusView, monitoring: FleetMonitoring, 
 /**
- * The latest `actions/runner` release, when it has been read.
+ * The latest `actions/runner` release, when releases have been read.
  */
 runnerRelease: RunnerReleaseView | null, };

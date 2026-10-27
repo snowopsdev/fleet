@@ -86,7 +86,10 @@ fleet-wide.
 Runners and organizations carry GitHub details for monitoring: `github.repo` is set on
 repository runners (monitoring only, never matched to inventory hosts), `versionStatus` compares
 the runner's version with the latest release in the fleet's `runnerRelease`, and
-`orgs[].rateLimitedUntil` is set while GitHub polls for that account are paused. The queue's
+`orgs[].rateLimitedUntil` is set while GitHub polls for that account are paused.
+`orgs[].runnerRepoErrors` lists runner repositories that couldn't be listed; their runners keep
+their last listing and age into stale. `versionStatus.missingSince` is when the oldest release
+the runner lacks was published; `overdue` counts from it. The queue's
 `held` counts self-hosted jobs GitHub holds for an approval or concurrency group.
 
 `/v1/issues` is the desktop's attention feed. `summary.attention` equals the full

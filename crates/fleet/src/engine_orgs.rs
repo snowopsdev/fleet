@@ -15,7 +15,7 @@ use futures::future::{BoxFuture, join_all};
 
 use super::{Engine, EngineError, SecretStore};
 use crate::derive::GITHUB_STALE_AFTER;
-use crate::github::{GithubClient, GithubError, MAX_REPOS};
+use crate::github::{AccountRunners, GithubClient, GithubError, MAX_REPOS};
 use crate::model::{AccountKind, JobScan, OrgAuth, OrgConfig, OrgObservation, RepoScope, Timed, default_api_base};
 use crate::sync::{MutexExt, RwLockExt};
 use crate::{gh, labels};
@@ -64,8 +64,59 @@ pub(super) struct AccountState {
 /// Fetches one kind of GitHub data for an org. Boxed, so the poll future is provably `Send`.
 type GithubFetch<T> = for<'a> fn(&'a Engine, &'a GithubClient, &'a OrgConfig) -> BoxFuture<'a, Result<T, GithubError>>;
 
-/// Where one kind of GitHub data, and the latest error fetching it, live in an org's observations.
-type ObservationSlot<T> = fn(&mut OrgObservation) -> (&mut Option<Timed<T>>, &mut Option<Timed<String>>);
+/// Where an org's latest error fetching one kind of GitHub data lives.
+type ErrorSlot = fn(&mut OrgObservation) -> &mut Option<Timed<String>>;
+
+/// Records one kind of GitHub data, fetched at the given time, in an org's observations.
+type Store<T> = fn(&mut OrgObservation, DateTime<Utc>, T);
+
+/// A page of repositories probed for a busy runner's job.
+#[derive(Debug)]
+struct Probe {
+    page: u32,
+    more: bool,
+    repos: Vec<String>,
+}
+
+/// The account's pause after a poll that started at `started` and finished at `now`, given
+/// the current pause `(until, observed at)`. A rate limit extends the pause; any other outcome
+/// lifts only a pause observed before this poll started, since a poll running alongside may
+/// have just hit the limit.
+fn next_pause(
+    current: Option<(DateTime<Utc>, DateTime<Utc>)>,
+    limited: Option<DateTime<Utc>>,
+    started: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+    match limited {
+        Some(resets_at) => {
+            let until = resets_at.max(now) + resume_jitter(now);
+            Some((current.map_or(until, |(previous, _)| previous.max(until)), now))
+        }
+        None => current.filter(|(_, at)| *at > started),
+    }
+}
+
+/// Keeps the organization's runners and each runner repository's latest listing. A repository
+/// that couldn't be listed keeps its last runners (aging into stale) beside its error.
+fn store_runners(o: &mut OrgObservation, at: DateTime<Utc>, listing: AccountRunners) {
+    o.runners = Some(Timed::new(at, listing.org));
+    let listed: HashSet<String> = listing.repos.iter().map(|(repo, _)| repo.to_lowercase()).collect();
+    o.repo_runners.retain(|repo, _| listed.contains(repo));
+    o.repo_runner_errors.retain(|repo, _| listed.contains(repo));
+    for (repo, result) in listing.repos {
+        let key = repo.to_lowercase();
+        match result {
+            Ok(runners) => {
+                o.repo_runners.insert(key.clone(), Timed::new(at, runners));
+                o.repo_runner_errors.remove(&key);
+            }
+            Err(e) => {
+                o.repo_runner_errors.insert(key, Timed::new(at, e.to_string()));
+            }
+        }
+    }
+}
 
 /// Resumes a rate-limited account a few seconds after GitHub's reset, spread so that
 /// several accounts sharing a login don't all retry at once.
@@ -169,16 +220,16 @@ impl Engine {
         let token = self.read_token(org).await?;
         let mut accounts = self.github.locked();
         let state = accounts.entry(key).or_default();
-        if let (None, Some(current)) = (&existing, &state.client) {
-            // Signed in again while the token was read.
-            return Ok(current.clone());
-        }
-        let client = match existing {
-            Some(client) => {
+        let client = match (existing, &state.client) {
+            // Signed in again (Settings installed a checked client) while the token was read.
+            (existing, Some(current)) if existing.as_ref().is_none_or(|e| !Arc::ptr_eq(e, current)) => {
+                return Ok(current.clone());
+            }
+            (Some(client), _) => {
                 client.set_token(&token);
                 client
             }
-            None => Arc::new(GithubClient::new(&org.api_base, &token)),
+            (None, _) => Arc::new(GithubClient::new(&org.api_base, &token)),
         };
         state.client = Some(client.clone());
         state.reread_token = false;
@@ -191,6 +242,19 @@ impl Engine {
         let state = accounts.entry(key.to_string()).or_default();
         state.client = Some(Arc::new(client));
         state.reread_token = false;
+    }
+
+    /// Every runner listing for a new or edited account, failing on any repository that can't
+    /// be listed, so a mistyped repository is caught before it's saved.
+    async fn checked_runners(&self, client: &GithubClient, org: &OrgConfig) -> Result<AccountRunners, EngineError> {
+        let listing = client
+            .account_runners(org)
+            .await
+            .map_err(|e| EngineError::Invalid(self.github_error_text(org, &e)))?;
+        if let Some((_, Err(e))) = listing.repos.iter().find(|(_, listed)| listed.is_err()) {
+            return Err(EngineError::Invalid(e.to_string()));
+        }
+        Ok(listing)
     }
 
     /// GitHub errors, reworded for how this org signs in.
@@ -231,12 +295,14 @@ impl Engine {
         &self,
         fetch: GithubFetch<T>,
         distrust_token_on: fn(&GithubError) -> bool,
-        slot: ObservationSlot<T>,
+        error_slot: ErrorSlot,
+        store: Store<T>,
     ) {
         let orgs = self.config().orgs;
         join_all(orgs.iter().map(|org| async {
             let key = org.login.to_lowercase();
-            if self.rate_limited(&key, Utc::now()) {
+            let started = Utc::now();
+            if self.rate_limited(&key, started) {
                 return;
             }
             let client = match self.github_client(org).await {
@@ -245,7 +311,7 @@ impl Engine {
                     let mut obs = self.obs.write_locked();
                     let entry = obs.github.entry(key).or_default();
                     entry.missing_token = matches!(reason, GithubAuthError::MissingToken);
-                    *slot(entry).1 = Some(Timed::new(Utc::now(), reason.to_string()));
+                    *error_slot(entry) = Some(Timed::new(Utc::now(), reason.to_string()));
                     return;
                 }
             };
@@ -258,17 +324,19 @@ impl Engine {
             let entry = obs.github.entry(key).or_default();
             entry.missing_token = false;
             entry.rate_limit = client.rate_limit();
-            entry.rate_limited_until = match &result {
-                Err(GithubError::RateLimited { resets_at }) => Some((*resets_at).max(now) + resume_jitter(now)),
+            let limited = match &result {
+                Err(GithubError::RateLimited { resets_at }) => Some(*resets_at),
                 _ => None,
             };
-            let (value, error) = slot(entry);
+            let current = entry.rate_limited_until.zip(entry.rate_limited_at);
+            let pause = next_pause(current, limited, started, now);
+            (entry.rate_limited_until, entry.rate_limited_at) = (pause.map(|p| p.0), pause.map(|p| p.1));
             match result {
                 Ok(fetched) => {
-                    *value = Some(Timed::new(now, fetched));
-                    *error = None;
+                    store(entry, now, fetched);
+                    *error_slot(entry) = None;
                 }
-                Err(e) => *error = Some(Timed::new(now, self.github_error_text(org, &e))),
+                Err(e) => *error_slot(entry) = Some(Timed::new(now, self.github_error_text(org, &e))),
             }
         }))
         .await;
@@ -278,15 +346,12 @@ impl Engine {
     pub async fn poll_github_runners(&self) {
         self.poll_github(
             |_, client, org| client.account_runners(org).boxed(),
-            // A 403 here means the credential can't list runners. Fetching the token
-            // again picks up a fix such as `gh auth refresh --scopes admin:org`.
-            |e| {
-                matches!(
-                    e,
-                    GithubError::Unauthorized | GithubError::Forbidden(_) | GithubError::RepoRunners(_)
-                )
-            },
-            |org| (&mut org.runners, &mut org.error),
+            // A 403 on the organization's list means the credential can't list runners.
+            // Fetching the token again picks up a fix such as `gh auth refresh --scopes admin:org`.
+            // A repository that can't be listed is recorded beside it and isn't a credential problem.
+            |e| matches!(e, GithubError::Unauthorized | GithubError::Forbidden(_)),
+            |org| &mut org.error,
+            store_runners,
         )
         .await;
         self.poll_runner_release().await;
@@ -296,9 +361,12 @@ impl Engine {
         self.poll_github(
             |engine, client, org| {
                 async move {
-                    let extra = engine.scan_extras(client, org).await?;
+                    let (extra, probe) = engine.scan_extras(client, org).await?;
                     let scan = client.scan_account_jobs(org, &extra).await?;
                     engine.remember_active_repos(org, &scan);
+                    if let Some(probe) = probe {
+                        engine.advance_probe(org, &probe, &scan);
+                    }
                     Ok(scan)
                 }
                 .boxed()
@@ -306,7 +374,8 @@ impl Engine {
             // Repositories the token can't read only mark the scan incomplete, so a 403
             // says nothing about the credential.
             |e| matches!(e, GithubError::Unauthorized),
-            |org| (&mut org.jobs, &mut org.jobs_error),
+            |org| &mut org.jobs_error,
+            |org, at, scan| org.jobs = Some(Timed::new(at, scan)),
         )
         .await;
     }
@@ -315,9 +384,13 @@ impl Engine {
     /// runner repositories, repositories where self-hosted jobs ran in the last week, and,
     /// while a busy runner's job hasn't been found, the next page of its other repositories.
     /// Scheduled and manually started workflows often run in repositories nobody pushed to.
-    async fn scan_extras(&self, client: &GithubClient, org: &OrgConfig) -> Result<Vec<String>, GithubError> {
+    async fn scan_extras(
+        &self,
+        client: &GithubClient,
+        org: &OrgConfig,
+    ) -> Result<(Vec<String>, Option<Probe>), GithubError> {
         if !matches!(org.repo_scope, RepoScope::Recent { max_repos } if max_repos > 0) {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), None));
         }
         let key = org.login.to_lowercase();
         let now = Utc::now();
@@ -332,16 +405,30 @@ impl Engine {
             repos.extend(state.active_repos.values().map(|(name, _)| name.clone()));
             probe.then_some(state.probe_page.max(1))
         };
+        let mut probe = None;
         if let Some(page) = page {
             let listing = client
                 .account_repos(&org.login, org.kind, "full_name", page, PROBE_REPOS)
                 .await?;
-            if let Some(state) = self.github.locked().get_mut(&key) {
-                state.probe_page = if listing.more { page + 1 } else { 1 };
-            }
-            repos.extend(listing.repos);
+            repos.extend(listing.repos.iter().cloned());
+            probe = Some(Probe {
+                page,
+                more: listing.more,
+                repos: listing.repos,
+            });
         }
-        Ok(repos)
+        Ok((repos, probe))
+    }
+
+    /// Move on to the next probe page only once this one was actually scanned.
+    fn advance_probe(&self, org: &OrgConfig, probe: &Probe, scan: &JobScan) {
+        let scanned = probe
+            .repos
+            .iter()
+            .all(|repo| scan.repos_scanned.iter().any(|r| r.eq_ignore_ascii_case(repo)));
+        if scanned && let Some(state) = self.github.locked().get_mut(&org.login.to_lowercase()) {
+            state.probe_page = if probe.more { probe.page + 1 } else { 1 };
+        }
     }
 
     /// Whether fresh GitHub data shows a busy runner that the last job scan doesn't link to a job.
@@ -350,11 +437,12 @@ impl Engine {
         let Some(org) = obs.github.get(key) else {
             return false;
         };
-        let Some(runners) = org.runners.as_ref().filter(|r| now - r.at <= GITHUB_STALE_AFTER) else {
-            return false;
-        };
         let jobs = org.jobs.as_ref().map(|j| j.value.jobs.as_slice()).unwrap_or_default();
-        runners.value.iter().any(|runner| {
+        let mut fresh = org
+            .runner_lists()
+            .filter(|r| now - r.at <= GITHUB_STALE_AFTER)
+            .flat_map(|r| &r.value);
+        fresh.any(|runner| {
             runner.busy
                 && !jobs
                     .iter()
@@ -371,8 +459,7 @@ impl Engine {
             .read_locked()
             .github
             .get(&key)
-            .and_then(|o| o.runners.as_ref())
-            .map(|r| r.value.iter().map(|r| r.id).collect())
+            .map(|o| o.runner_lists().flat_map(|r| &r.value).map(|r| r.id).collect())
             .unwrap_or_default();
         let mut accounts = self.github.locked();
         let state = accounts.entry(key).or_default();
@@ -384,7 +471,7 @@ impl Engine {
         }
     }
 
-    /// Read the latest `actions/runner` release at most hourly, through the first github.com
+    /// Read recent `actions/runner` releases at most hourly, through the first github.com
     /// account that isn't rate-limited. GitHub Enterprise Server accounts are never used.
     pub async fn poll_runner_release(&self) {
         let now = Utc::now();
@@ -404,12 +491,12 @@ impl Engine {
         let Ok(client) = self.github_client(&org).await else {
             return;
         };
-        let result = client.latest_runner_release().await;
+        let result = client.runner_releases().await;
         let mut obs = self.obs.write_locked();
         obs.runner_release_checked_at = Some(Utc::now());
         match result {
-            Ok(release) => obs.runner_release = Some(Timed::new(Utc::now(), release)),
-            Err(e) => tracing::warn!("couldn't read the latest runner release: {e}"),
+            Ok(releases) => obs.runner_releases = Some(Timed::new(Utc::now(), releases)),
+            Err(e) => tracing::warn!("couldn't read the runner releases: {e}"),
         }
     }
 
@@ -476,10 +563,7 @@ impl Engine {
             }
         };
         let client = GithubClient::new(&api_base, &token);
-        let runners = client
-            .account_runners(&org)
-            .await
-            .map_err(|e| EngineError::Invalid(self.github_error_text(&org, &e)))?;
+        let runners = self.checked_runners(&client, &org).await?;
 
         if auth == OrgAuth::Token {
             let account = key.clone();
@@ -491,7 +575,7 @@ impl Engine {
         self.update_config(|c| c.orgs.push(org))?;
         let mut obs = self.obs.write_locked();
         let entry = obs.github.entry(key).or_default();
-        entry.runners = Some(Timed::new(Utc::now(), runners));
+        store_runners(entry, Utc::now(), runners);
         entry.missing_token = false;
         entry.error = None;
         Ok(())
@@ -569,10 +653,7 @@ impl Engine {
             .github_client(&org)
             .await
             .map_err(|e| EngineError::Invalid(e.to_string()))?;
-        let runners = client
-            .account_runners(&org)
-            .await
-            .map_err(|e| EngineError::Invalid(self.github_error_text(&org, &e)))?;
+        let runners = self.checked_runners(&client, &org).await?;
         let key = org.login.to_lowercase();
         self.update_config(|c| {
             if let Some(o) = c.orgs.iter_mut().find(|o| o.login.to_lowercase() == key) {
@@ -581,7 +662,7 @@ impl Engine {
         })?;
         let mut obs = self.obs.write_locked();
         let entry = obs.github.entry(key).or_default();
-        entry.runners = Some(Timed::new(Utc::now(), runners));
+        store_runners(entry, Utc::now(), runners);
         entry.error = None;
         Ok(())
     }
