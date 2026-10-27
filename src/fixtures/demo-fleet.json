@@ -261,7 +261,7 @@
             "title": "linux-01-a",
             "status": "pass",
             "value": "Running",
-            "detail": "Service: active · version: 2.329.0 · ~/gh-runners/acme-demo/runner-01"
+            "detail": "Service: active · version: 2.328.0 · ~/gh-runners/acme-demo/runner-01"
           }
         ]
       },
@@ -344,7 +344,7 @@
             "installDir": "~/gh-runners/acme-demo/runner-01",
             "configured": true,
             "serviceState": "active",
-            "version": "2.329.0",
+            "version": "2.328.0",
             "asOf": "2026-10-03T11:56:00Z",
             "stale": true
           },
@@ -366,7 +366,7 @@
               "githubState": "online",
               "serviceState": "unknown",
               "busy": false,
-              "version": "2.329.0",
+              "version": "2.328.0",
               "drift": "host unavailable",
               "desired": true
             },

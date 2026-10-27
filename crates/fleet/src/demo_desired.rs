@@ -161,7 +161,7 @@ pub fn snapshot() -> FleetSnapshot {
             "~/gh-runners/acme-demo/runner-01",
             true,
             "active",
-            Some("2.329.0"),
+            Some("2.328.0"),
         ),
         LocalRunner::new(
             "linux-01-b",
@@ -211,14 +211,14 @@ fn group(mut runner: GithubRunner) -> GithubRunner {
     runner
 }
 
-/// The demo fleet's latest runner release, newer than its runners' 2.329.0.
+/// The demo fleet's latest runner release, which `linux-01-a` (2.328.0) is behind.
 pub(crate) fn release(host: &Host) -> ReleaseAsset {
     let platform = host.platform.runner_asset();
     let suffix = if host.is_windows() { "zip" } else { "tar.gz" };
-    let name = format!("actions-runner-{platform}-2.330.0.{suffix}");
+    let name = format!("actions-runner-{platform}-2.329.0.{suffix}");
     ReleaseAsset {
-        version: "2.330.0".into(),
-        url: format!("https://github.com/actions/runner/releases/download/v2.330.0/{name}"),
+        version: "2.329.0".into(),
+        url: format!("https://github.com/actions/runner/releases/download/v2.329.0/{name}"),
         name,
         sha256: Some("0".repeat(64)),
     }

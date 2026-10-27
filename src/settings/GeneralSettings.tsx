@@ -3,9 +3,10 @@ import type { AppConfig } from "../bindings/AppConfig";
 import { Card, ErrorText, Pill, Switch } from "../components/ui";
 import { CopyValue } from "../components/CopyValue";
 import { commands, isTauri } from "../lib/tauri";
-import { Notifications } from "./Notifications";
+import type { FleetView } from "../bindings/FleetView";
+import { PublishSettings, WatchdogSettings } from "./Automation";
 
-export function GeneralSettings({ config }: { config: AppConfig }) {
+export function GeneralSettings({ config, view }: { config: AppConfig; view: FleetView }) {
   const demo = useMutation({ mutationFn: () => commands.setDemoMode(!config.demoMode) });
   return (
     <>
@@ -20,7 +21,8 @@ export function GeneralSettings({ config }: { config: AppConfig }) {
         {demo.isError && <ErrorText error={demo.error} className="mt-2" />}
       </Card>
 
-      <Notifications enabled={config.desktopNotifications} demo={config.demoMode} />
+      <WatchdogSettings view={view} />
+      <PublishSettings view={view} />
 
       <h2 className="mt-5 text-[13px] font-semibold">Local API for agents</h2>
       <p className="mt-1 text-[12px] text-ink-2">
@@ -34,7 +36,7 @@ export function GeneralSettings({ config }: { config: AppConfig }) {
         <li>Machines are found with the Tailscale CLI on this Mac. No Tailscale API key is used.</li>
         <li>Health and runner configuration are read over SSH. No monitoring software needs to be installed on the machines.</li>
         <li>Busy/idle state and current jobs come from GitHub.</li>
-        <li>Monitoring is read-only. Runner changes require a reviewed plan and use your existing SSH access.</li>
+        <li>Monitoring is read-only. Runner changes require a reviewed plan and use your existing SSH access. The only exceptions are the ones you turn on here: watchdog restarts and the availability variable.</li>
       </ul>
     </>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import type { FleetDrain } from "../bindings/FleetDrain";
 import type { FleetView } from "../bindings/FleetView";
 import type { MachineView } from "../bindings/MachineView";
 import type { RunnerView } from "../bindings/RunnerView";
@@ -58,7 +59,7 @@ export function Sidebar({ view, filtered, selection }: { view: FleetView; filter
       <nav ref={scrollRef} className="scroll min-h-0 flex-1 px-2 pb-2" aria-label="Machines and runners">
         <Heading title="Machines" count={filtered.machines.length} />
         {view.machines.length === 0 && !searching && <EmptyLine>{view.tailnet.available ? "Add runner machines to the inventory to see them here." : tailnetState(view.tailnet).text}</EmptyLine>}
-        {filtered.machines.map((m) => <MachineRows key={m.id} m={m} open={searching || !collapsed.has(m.id)} searching={searching} isSelected={isSelected} />)}
+        {filtered.machines.map((m) => <MachineRows key={m.id} m={m} open={searching || !collapsed.has(m.id)} searching={searching} isSelected={isSelected} drains={view.automation.drains} />)}
         {filtered.unmatchedRunners.length > 0 && <>
           <Heading title="Not linked to a machine" count={filtered.unmatchedRunners.length} open={searching || open.unlinked} onToggle={() => setOpen("unlinked", !open.unlinked)} />
           {(searching || open.unlinked) && filtered.unmatchedRunners.map((r) => <RunnerRow key={r.key} r={r} isSelected={isSelected} />)}
@@ -79,7 +80,7 @@ export function Sidebar({ view, filtered, selection }: { view: FleetView; filter
   );
 }
 
-function MachineRows({ m, open, searching, isSelected }: { m: MachineView; open: boolean; searching: boolean; isSelected: (sel: Selection) => boolean }) {
+function MachineRows({ m, open, searching, isSelected, drains }: { m: MachineView; open: boolean; searching: boolean; isSelected: (sel: Selection) => boolean; drains: FleetDrain[] }) {
   const toggle = useUi((s) => s.toggleCollapsed);
   const dot = machineDot(m);
   const sel: Selection = { kind: "machine", id: m.id };
@@ -95,12 +96,12 @@ function MachineRows({ m, open, searching, isSelected }: { m: MachineView; open:
         warn={machineNeedsChanges(m)}
         disclosure={m.runners.length ? { open, onToggle: () => { if (!searching) toggle(m.id); } } : undefined}
       />
-      {open && m.runners.map((r) => <RunnerRow key={r.key} r={r} isSelected={isSelected} nested />)}
+      {open && m.runners.map((r) => <RunnerRow key={r.key} r={r} isSelected={isSelected} nested drain={drains.find((d) => d.runner === r.name)} />)}
     </div>
   );
 }
 
-function RunnerRow({ r, isSelected, nested }: { r: RunnerView; isSelected: (sel: Selection) => boolean; nested?: boolean }) {
+function RunnerRow({ r, isSelected, nested, drain }: { r: RunnerView; isSelected: (sel: Selection) => boolean; nested?: boolean; drain?: FleetDrain | null }) {
   const status = runnerStatus(r);
   const since = busySince(r);
   const sel: Selection = { kind: "runner", key: r.key };
@@ -112,8 +113,9 @@ function RunnerRow({ r, isSelected, nested }: { r: RunnerView; isSelected: (sel:
         label={r.name}
         indent={nested}
         warn={hasWarning(r) || runnerNeedsChanges(r)}
-        title={`${r.name}: ${status.label}${status.hollow ? " (last known state)" : ""}`}
+        title={`${r.name}: ${status.label}${status.hollow ? " (last known state)" : ""}${drain ? drain.state === "draining" ? " · draining" : " · stopped by a drain" : ""}`}
         trailing={<span className={`flex items-center gap-1.5 ${status.tone === "busy" ? "text-accent" : ""}`}>
+          {drain && <span className="text-info">{drain.state === "draining" ? "draining" : "paused"}</span>}
           {since ? <span title={`Working since ${formatClock(since)}`}><Elapsed since={since} /></span> : status.tone === "busy" ? status.label : <span className="sr-only">{status.label}</span>}
           <StatusDot tone={status.tone} hollow={status.hollow} size={6} />
         </span>}

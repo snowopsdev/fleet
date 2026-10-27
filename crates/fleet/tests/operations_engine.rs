@@ -470,13 +470,13 @@ async fn demo_reviews_are_fictional_and_never_run() {
     let upgrade = f
         .engine
         .desired_review(ChangeRequest::Upgrade {
-            host: "studio".into(),
+            host: "build-linux-01".into(),
             runner: None,
         })
         .await
         .unwrap();
-    assert_eq!(upgrade.upgrade_to.as_deref(), Some("2.330.0"));
-    assert!(!upgrade.items.is_empty());
+    assert_eq!(upgrade.upgrade_to.as_deref(), Some("2.329.0"));
+    assert_eq!(upgrade.items[0].runner, "linux-01-a");
     assert!(f.engine.set_watchdog(true).is_err());
     f.engine.run_automation().await;
     assert!(f.fleet.world().calls.is_empty());

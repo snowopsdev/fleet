@@ -3,4 +3,4 @@
 /**
  * One kind of cleanup target. Each maps to one fixed path or command.
  */
-export type FleetCleanupKind = "work-temp" | "work-actions" | "work" | "diag" | "previous-bin" | "previous-externals" | "xcode-derived-data" | "unavailable-simulators" | "docker";
+export type FleetCleanupKind = "work-temp" | "work-actions" | "work" | "diag" | "previous-bin" | "previous-externals" | "xcode-derived-data" | "simulators" | "docker";

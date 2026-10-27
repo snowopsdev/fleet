@@ -706,19 +706,15 @@ impl Engine {
         };
         let (summary, ntfy_server, ntfy_topic) = match kind {
             AlertDestinationKind::Ntfy => {
-                let server = input
-                    .ntfy_server
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("https://ntfy.sh");
-                let url = outbound::check_url(server).map_err(EngineError::Invalid)?;
-                let topic = input
-                    .ntfy_topic
-                    .as_deref()
-                    .map(str::trim)
-                    .unwrap_or_default()
-                    .to_string();
+                // When editing, an empty server or topic keeps the saved one.
+                let given = |value: &Option<String>| value.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(String::from);
+                let server = given(&input.ntfy_server)
+                    .or_else(|| existing.as_ref().and_then(|d| d.ntfy_server.clone()))
+                    .unwrap_or_else(|| "https://ntfy.sh".into());
+                let url = outbound::check_url(&server).map_err(EngineError::Invalid)?;
+                let topic = given(&input.ntfy_topic)
+                    .or_else(|| existing.as_ref().and_then(|d| d.ntfy_topic.clone()))
+                    .unwrap_or_default();
                 outbound::check_topic(&topic).map_err(EngineError::Invalid)?;
                 if let Some(token) = &input.token {
                     secret.token = Some(token.trim().to_string()).filter(|t| !t.is_empty());

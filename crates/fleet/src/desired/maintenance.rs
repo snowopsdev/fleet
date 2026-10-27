@@ -71,6 +71,7 @@ pub enum CleanupKind {
     /// macOS: the contents of `~/Library/Developer/Xcode/DerivedData`.
     XcodeDerivedData,
     /// macOS: `xcrun simctl delete unavailable`.
+    #[serde(rename = "simulators")]
     UnavailableSimulators,
     /// `docker system prune -f`: stopped containers, unused networks, dangling
     /// images and build cache. Never volumes.

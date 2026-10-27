@@ -19,6 +19,14 @@ export const eventStyle: Record<FleetEventKind, { label: string; tone: Tone }> =
   maintenanceStarted: { label: "Maintenance started", tone: "muted" },
   maintenanceEnded: { label: "Maintenance ended", tone: "muted" },
   alertsResumed: { label: "Alert after maintenance", tone: "warn" },
+  drainRequested: { label: "Draining", tone: "info" },
+  drained: { label: "Drained", tone: "info" },
+  drainCancelled: { label: "Drain ended", tone: "muted" },
+  resumed: { label: "Resumed", tone: "ok" },
+  watchdogRestarted: { label: "Restarted automatically", tone: "info" },
+  watchdogRestartFailed: { label: "Automatic restart failed", tone: "warn" },
+  watchdogGaveUp: { label: "Automatic restarts stopped", tone: "bad" },
+  watchdogRecovered: { label: "Running again", tone: "ok" },
 };
 
 /** History pages hold this many events: `PAGE_SIZE` in crates/fleet/src/monitoring/store.rs. */

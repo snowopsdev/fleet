@@ -2,6 +2,8 @@ import { useConfig, useFleet } from "../hooks";
 import { GeneralSettings } from "./GeneralSettings";
 import { GitHubSettings } from "./GitHubSettings";
 import { MachinePreferences } from "./MachinePreferences";
+import { AlertDestinations } from "./AlertDestinations";
+import { Notifications } from "./Notifications";
 import { Tabs } from "./Tabs";
 
 export function Settings() {
@@ -20,7 +22,11 @@ export function Settings() {
           <MachinePreferences view={view} />
         </>,
         GitHub: <GitHubSettings orgs={config.orgs} status={view.orgs} />,
-        General: <GeneralSettings config={config} />,
+        Notifications: <>
+          <Notifications enabled={config.desktopNotifications} demo={config.demoMode} />
+          <AlertDestinations view={view} />
+        </>,
+        General: <GeneralSettings config={config} view={view} />,
       }}
     />
   );
