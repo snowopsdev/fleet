@@ -23,6 +23,8 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
             repo_scope: RepoScope::Recent { max_repos: 20 },
             added_at: added,
             auth: OrgAuth::GhCli,
+            kind: AccountKind::Organization,
+            runner_repos: vec!["ml".into()],
         }],
         ignored_peers: vec![IgnoredPeer {
             tailscale_node_id: "nNas".into(),
@@ -51,13 +53,22 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         gh(101, "studio-1", true, &["self-hosted", "macOS", "ARM64", "xcode-16"]),
         gh(102, "studio-2", false, &["self-hosted", "macOS", "ARM64", "xcode-16"]),
         gh(201, "mini-02", true, &["self-hosted", "macOS", "ARM64"]),
-        gh(301, "linux-01-a", false, &["self-hosted", "Linux", "X64", "docker"]),
+        // One release behind the demo's latest runner.
+        GhRunner {
+            version: Some("2.328.0".into()),
+            ..gh(301, "linux-01-a", false, &["self-hosted", "Linux", "X64", "docker"])
+        },
         gh(302, "linux-01-b", false, &["self-hosted", "Linux", "X64", "docker"]),
         offline(gh(401, "win-builder", false, &["self-hosted", "Windows", "X64"])),
-        in_group(
-            2,
-            gh(501, "cloud-gpu-1", false, &["self-hosted", "Linux", "X64", "gpu"]),
-        ),
+        // Registered to the acme-demo/ml repository rather than the organization, in a
+        // runner group open to public repositories.
+        GhRunner {
+            repo: Some(format!("{ORG}/ml")),
+            ..in_group(
+                2,
+                gh(501, "cloud-gpu-1", false, &["self-hosted", "Linux", "X64", "gpu"]),
+            )
+        },
     ];
     let runner_groups = vec![
         GhRunnerGroup {
@@ -117,6 +128,18 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
             None,
             ago(26 * 60),
         ),
+        // Held for an environment approval: counted, not queued for a runner yet.
+        job(
+            9006,
+            0,
+            "deploy-production",
+            "Release",
+            "acme-demo/web",
+            "waiting",
+            &["self-hosted", "Linux"],
+            None,
+            ago(9 * 60),
+        ),
         job(
             9005,
             0,
@@ -164,8 +187,17 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
                 resets_at: Some(now + Duration::minutes(38)),
             }),
             missing_token: false,
+            ..Default::default()
         },
     );
+    obs.runner_release = Some(Timed::new(
+        ago(25 * 60),
+        RunnerRelease {
+            version: "2.329.0".into(),
+            published_at: Some(now - Duration::days(12)),
+        },
+    ));
+    obs.runner_release_checked_at = Some(ago(25 * 60));
 
     let inventory = crate::demo_desired::inventory();
     let snapshot = crate::demo_desired::snapshot();
@@ -279,6 +311,7 @@ fn gh(id: u64, name: &str, busy: bool, labels: &[&str]) -> GhRunner {
         ephemeral: Some(false),
         version: Some("2.329.0".into()),
         runner_group_id: Some(1),
+        repo: None,
     }
 }
 

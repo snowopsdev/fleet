@@ -13,7 +13,7 @@ use axum::{Json, Router};
 use chrono::Utc;
 use fleet::engine::{Engine, MemorySecrets, SecretStore};
 use fleet::github::{GithubClient, GithubError};
-use fleet::model::{AppConfig, OrgAuth, OrgConfig, RepoScope};
+use fleet::model::{AccountKind, AppConfig, OrgAuth, OrgConfig, RepoScope};
 use serde_json::{Value, json};
 
 mod common;
@@ -105,7 +105,8 @@ async fn link_pagination_survives_conditional_cached_responses() {
     assert_eq!(first.jobs.iter().map(|job| job.id).collect::<Vec<_>>(), vec![1, 2]);
     assert!(!first.truncated);
     assert_eq!(first, second);
-    assert_eq!(hits.load(Ordering::SeqCst), 6);
+    // Two scans, each listing in-progress runs (two pages), queued runs and waiting runs.
+    assert_eq!(hits.load(Ordering::SeqCst), 8);
 }
 
 #[tokio::test]
@@ -193,11 +194,15 @@ async fn run_and_job_bounds_each_mark_scan_incomplete() {
     let (runs, run_hits, job_hits) = capped_scan(true, false).await;
     assert!(runs.truncated);
     assert_eq!(runs.jobs.len(), 1);
-    assert_eq!((run_hits, job_hits), (4, 1));
+    assert_eq!(
+        (run_hits, job_hits),
+        (8, 1),
+        "in-progress and waiting runs are both capped"
+    );
     let (jobs, run_hits, job_hits) = capped_scan(false, true).await;
     assert!(jobs.truncated);
     assert_eq!(jobs.jobs.len(), 10);
-    assert_eq!((run_hits, job_hits), (1, 10));
+    assert_eq!((run_hits, job_hits), (2, 10));
 }
 
 #[tokio::test]
@@ -225,6 +230,8 @@ fn configured_engine(dir: &std::path::Path, base: String, secrets: Arc<dyn Secre
             repo_scope: scope(),
             added_at: Utc::now(),
             auth: OrgAuth::Token,
+            kind: AccountKind::Organization,
+            runner_repos: Vec::new(),
         }],
         ..Default::default()
     };

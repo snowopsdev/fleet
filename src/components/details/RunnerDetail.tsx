@@ -8,6 +8,7 @@ import { changes, driftText, hasLogs, labelDiff, operationRunning, requestTarget
 import { findMachine } from "../../lib/nav";
 import { busySince, runnerStatus } from "../../lib/status";
 import { isLive } from "../../lib/tauri";
+import { versionText } from "../../lib/versions";
 import { useUi } from "../../store";
 import { Button, Callout, Card, KeyValuePanel, Label, Pill, Section, Stat, StatStrip, type KeyValueRow } from "../ui";
 import { Icon } from "../icons";
@@ -64,6 +65,9 @@ export function RunnerDetail({ runner: r, view }: { runner: RunnerView; view: Fl
         />
       </StatStrip></div>
 
+      {r.versionStatus?.overdue && <Callout tone="warn" title={`Runner update overdue: ${r.versionStatus.latest}`}>
+        This runner has {r.versionStatus.current}. GitHub can stop sending jobs to a runner that misses an update for 30 days.
+      </Callout>}
       {r.warnings.length > 0 && <div className="mt-4 space-y-2">{r.warnings.map((w) => <Callout key={w} tone="warn" className="">{w}</Callout>)}</div>}
 
       {r.activity.kind === "busy" && <div className="mt-6">
@@ -78,13 +82,14 @@ export function RunnerDetail({ runner: r, view }: { runner: RunnerView; view: Fl
           <KeyValuePanel title="GitHub" rows={gh ? [
             ["Status", `${gh.status}${gh.busy ? ", busy" : ""}`],
             ["Runner ID", <span className="font-mono text-[12px]">{gh.id}</span>, String(gh.id)],
-            ["Version", gh.version ?? "—"],
+            ["Registered to", gh.repo ? `Repository ${gh.repo}` : "Organization", gh.repo ?? undefined],
+            ["Version", gh.version ? versionText(r, gh.version) : "—"],
             ["Ephemeral", gh.ephemeral == null ? "—" : gh.ephemeral ? "Yes" : "No"],
           ] : []} footer={gh ? <span className={`flex items-center gap-1.5 ${gh.stale ? "text-warn" : ""}`}>{gh.stale && <Icon name="alert" size={12} />}As of {timeAgo(gh.asOf, now)}{gh.stale ? " (stale)" : ""}</span> : r.org ? `Not in ${r.org}'s runner list.` : "Not registered to an organization added to the dashboard."} />
           <KeyValuePanel title="On the machine" rows={local ? [
             ["Configured", local.configured ? "Yes" : "No .runner file"],
             ["Service", local.serviceState],
-            ["Version", local.version ?? "—"],
+            ["Version", local.version && !gh?.version ? versionText(r, local.version) : local.version ?? "—"],
             ["Install directory", <span className="font-mono text-[12px]">{local.installDir}</span>, local.installDir],
           ] : []} footer={local ? `As of ${timeAgo(local.asOf, now)}${local.stale ? " (stale)" : ""}`
             : r.desired?.status?.serviceState != null ? `Last check: service ${r.desired.status.serviceState}${r.desired.status.version != null ? `, runner ${r.desired.status.version}` : ""}.`

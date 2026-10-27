@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use chrono::Utc;
 
 use crate::derive::{derive, derive_without_issues};
-use crate::github::{GithubClient, GithubError};
+use crate::github::GithubError;
 use crate::model::*;
 use crate::sync::{MutexExt, RwLockExt};
 use crate::{demo, tailscale};
@@ -32,7 +32,8 @@ pub struct Engine {
     config: RwLock<AppConfig>,
     obs: RwLock<Observations>,
     secrets: Arc<dyn SecretStore>,
-    github: Mutex<HashMap<String, Arc<GithubClient>>>,
+    /// Per-account GitHub clients and poll state, keyed by lowercase login.
+    github: Mutex<HashMap<String, orgs::AccountState>>,
     tailscale_status:
         Box<dyn Fn() -> futures::future::BoxFuture<'static, Result<TailnetSnapshot, String>> + Send + Sync>,
     desired: Mutex<desired::DesiredStore>,
@@ -64,6 +65,7 @@ mod monitoring;
 mod orgs;
 #[path = "engine_secrets.rs"]
 mod secrets;
+pub use orgs::AccountSetup;
 pub use secrets::{MemorySecrets, SecretStore};
 
 impl Engine {

@@ -15,6 +15,7 @@ import { MachineTable } from "./MachineTable";
 import { QueueList } from "./QueueDetail";
 import { ActiveAlerts, EventTimeline, MonitoringError } from "./Monitoring";
 import { RunnerChecks } from "./RunnerChecks";
+import { RunnerReleaseLine } from "./RunnerRelease";
 import { Unlinked } from "./Unlinked";
 import { Welcome } from "./Welcome";
 
@@ -37,6 +38,7 @@ export function Overview({ view }: { view: FleetView }) {
         subtitle={`${plural(machines.length, "machine")} · ${plural(s.runners, "runner")}${orgs ? ` · ${orgs}` : ""}`}
       />
       <PlanLine view={view} />
+      <RunnerReleaseLine view={view} />
       {view.plan.operation && <OperationCard op={view.plan.operation} />}
       <div className="mt-8"><StatStrip>
         <Stat label="Working" value={s.runnersBusy} tone="busy" sub={`of ${s.runners} runners`}>

@@ -30,8 +30,10 @@ notes in `fleet.toml`; only the example is tracked. Override the path with
 `RUNNER_DASHBOARD_INVENTORY`. Tests read the example and use fake GitHub and SSH boundaries, so
 they don't need your private inventory.
 
-Changes use the GitHub CLI login, never the token stored in Settings. Listing organization
-runners needs the `admin:org` scope:
+Changes use the GitHub CLI login, never the token stored in Settings. The inventory manages
+organization runners only: personal accounts and repository runners added in Settings ▸ GitHub
+are monitored, never planned or applied. Listing organization runners needs the `admin:org`
+scope:
 
 ```sh
 gh auth refresh --hostname github.com --scopes admin:org

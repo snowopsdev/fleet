@@ -34,6 +34,7 @@ pub(super) async fn index(Extension(s): Extension<Snapshot>, Parameters(_): Para
             "revision": "Opaque fingerprint of the fleet snapshot excluding generatedAt. ETags describe each response. Poll /v1/changes?since=revision or use If-None-Match on GET.",
             "checks": "POST starts a bounded read-only job. Poll its Location until completed or failed. completed means reads finished, not that the fleet is healthy; inspect result.issues and result.errors.",
             "attention": "summary.attention equals issues.length, including unresolved stale or muted alerts.",
+            "github": "orgs[].rateLimitedUntil is set while GitHub polls for that account are paused by a rate limit. Runners with github.repo set are repository runners: monitoring only, never matched to inventory hosts. runnerRelease is the latest actions/runner release; each runner's versionStatus compares its version with it.",
             "history": format!(
                 "Observed machine transitions only; no completed-job archive. Retention is at most {} days and {MAX_EVENTS} events.",
                 EVENT_RETENTION.num_days()

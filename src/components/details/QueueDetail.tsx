@@ -31,6 +31,7 @@ export function QueueDetail({ view }: { view: FleetView }) {
       </div>
       <div className="mt-4 space-y-1.5 text-[12px] text-ink-2">
         {q.otherQueued > 0 && <p>{plural(q.otherQueued, "queued job")} target GitHub-hosted labels (like ubuntu-latest) and are not shown.</p>}
+        {q.held > 0 && <p>{plural(q.held, "self-hosted job")} {q.held === 1 ? "is" : "are"} waiting for an approval or a concurrency group and {q.held === 1 ? "isn't" : "aren't"} listed: GitHub hasn't queued {q.held === 1 ? "it" : "them"} for a runner yet.</p>}
         {!q.complete && <p className="text-warn">This list may be incomplete: job data is missing, stale, or limited to the repositories in each organization's scan scope (Settings).</p>}
         <p>"Label-compatible" means the runner has every label the job asks for. Runner-group access rules can still keep a job off a runner; GitHub's API doesn't expose that per job.</p>
       </div>

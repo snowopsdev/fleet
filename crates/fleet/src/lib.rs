@@ -7,6 +7,8 @@
 //! - `monitoring`: local machine history, alerts and notification requests
 //! - `desired`, `fleet_plan`: the inventory, its checks and reviewed changes
 //! - `local_api`: the read-only loopback HTTP API
+//! - `runner_version`: runner versions compared with the latest `actions/runner` release
+//! - `view_updates`: view revisions, and when to push a re-derived view to the UI
 //! - `demo`, `demo_desired`: a fictional dataset run through the same `derive`
 
 mod atomic_write;
@@ -26,8 +28,10 @@ pub mod machine;
 pub mod machine_diagnostics;
 pub mod model;
 pub mod monitoring;
+pub mod runner_version;
 pub mod sync;
 pub mod tailscale;
+pub mod view_updates;
 
 #[cfg(test)]
 mod derive_tests;
