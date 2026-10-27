@@ -15,9 +15,11 @@ Nothing is installed on the machines. A bounded local journal keeps observed eve
 ## Data flow
 
 Tailscale is read every 15 seconds, GitHub runners every 20 seconds, GitHub jobs every 45 seconds,
-and machines over SSH every 60 seconds after the previous round completes. Refresh Now wakes the
-pollers. SSH rounds coalesce and use at most four concurrent sessions. Blocking remote commands
-run off the async runtime, with a 30-second timeout per machine.
+and machines over SSH every 60 seconds after the previous round completes. Refresh Now bumps a
+generation counter that every poller watches, so a poller that is mid-poll when it's pressed
+polls again as soon as it finishes. SSH rounds coalesce and use at most four concurrent
+sessions. Blocking remote commands run off the async runtime, with a 30-second timeout per
+machine.
 
 `machine.rs` combines the native health script with the inventory runner probe in one SSH
 session. macOS uses sysctl, vm_stat, top and df; Linux uses procfs and df; Windows uses CIM.
@@ -46,7 +48,10 @@ Machines use `ts:<node id>` as their UI identity, or `inv:<host id>` without a t
 Inventory SSH aliases resolve through `ssh -G`. Other desktop and server machines appear under
 Other machines; ignored machines and phones don't get automatic SSH reads.
 
-The UI receives fleet-updated events after polls and every five seconds so ages advance.
+The UI receives fleet-updated events after every poll and change. A five-second tick derives the
+view once, records monitoring transitions from it, and pushes it only when its content revision
+(the local API's) changed, or every 30 seconds as a heartbeat. Staleness flags are content, so
+they reach the UI within one tick of crossing their threshold; ages advance on the UI's clock.
 
 ## Event history and alerts
 
@@ -84,7 +89,12 @@ history is fictional, generated separately, and never touches the journal or sen
   runner data, activity is unknown. Current jobs require an actual runner_id match in the jobs API.
 - Elapsed time never labels a job stuck. Machines and runners sort by name, independent of status.
 - Queued jobs list label-compatible runners, not a promise of scheduling; group access can also
-  affect eligibility.
+  affect eligibility. A repository runner is compatible only with its own repository's jobs.
+- `waiting`, `pending` and `requested` jobs are held by GitHub (an approval, a concurrency group)
+  rather than waiting for a runner: the queue counts them as `held` instead of listing them.
+- A runner's version (GitHub's, else the machine's) is compared with the latest `actions/runner`
+  release. It's overdue when more than one minor release behind, on another major version, or
+  behind a release older than 30 days.
 - Fresh SSH runner facts update displayed inventory drift. Every change still re-reads the host
   through the desired-state engine before review and again before execution.
 
@@ -94,6 +104,26 @@ Monitoring uses the GitHub CLI login by default, held in memory, or a pasted tok
 macOS Keychain. Changes always use the `gh` login ([FLEET.md](FLEET.md#setup)). Org runner lists
 and per-repository workflow jobs are fetched separately; repository scope is configurable in
 Settings.
+
+- **Accounts:** an added account is an organization or a personal account. Either can list
+  repositories whose repository runners (`/repos/{owner}/{repo}/actions/runners`) are shown too;
+  a personal account has only those. Repository runners are monitoring only: they're never
+  matched to inventory hosts, and desired state stays organization-only. Any runner list that
+  can't be read fails the whole runner read, keeping the last good list beside the error.
+- **Clients:** each account keeps one client and its ETag cache across polls. After a 401 or
+  403 the token is read again before the next poll, at most every two minutes unless Refresh
+  Now asks, and swapped into the same client so conditional requests keep working.
+- **Rate limits:** a 403 or 429 with `x-ratelimit-remaining: 0`, a `retry-after` header or a
+  rate-limit message is a rate limit, not a permission error. The account's polls are skipped
+  until GitHub's reset (secondary limits: `retry-after`, else a minute) plus 1-5 seconds of
+  jitter; `rateLimitedUntil` shows it.
+- **Job scope:** a "recent" scope scans the most recently pushed repositories, plus the
+  account's runner repositories and repositories where self-hosted jobs ran in the last week.
+  While fresh data shows a busy runner without a linked job, each scan also probes the next 10
+  repositories by name, so scheduled and manual runs in quiet repositories are found. Everything
+  stays within the 50-repository cap.
+- **Runner release:** the latest `actions/runner` release is read at most hourly through a
+  github.com account (never GitHub Enterprise Server).
 
 The local HTTP API ([HTTP_API.md](HTTP_API.md)) captures one fleet snapshot per request off
 the async runtime and adds provenance and a content-based revision to the response. The shared

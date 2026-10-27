@@ -28,6 +28,8 @@ impl Fixture {
                     repo_scope: RepoScope::Recent { max_repos: 10 },
                     added_at: ago(9999),
                     auth: OrgAuth::GhCli,
+                    kind: AccountKind::Organization,
+                    runner_repos: Vec::new(),
                 }],
                 ..Default::default()
             },
@@ -93,6 +95,7 @@ fn gh(id: u64, name: &str, status: &str, busy: bool, labels: &[&str]) -> GhRunne
         ephemeral: None,
         version: None,
         runner_group_id: None,
+        repo: None,
     }
 }
 
@@ -141,6 +144,8 @@ fn queue_counts_label_compatible_runners() {
     let v = f.view();
     assert_eq!(v.queue.jobs.len(), 2);
     assert_eq!(v.queue.other_queued, 1);
+    // The waiting job is held for an approval, not waiting on a runner.
+    assert_eq!(v.queue.held, 1);
     assert!(v.queue.complete);
     let mac_job = v.queue.jobs.iter().find(|q| q.job.id == 10).unwrap();
     assert_eq!(mac_job.compatible_runners.len(), 3);
@@ -606,4 +611,100 @@ fn identity_conflicts_do_not_reuse_previously_checked_local_facts() {
     assert_eq!(studio.diagnostics, None);
     assert!(studio.runners.iter().all(|r| r.local.is_none()));
     assert!(studio.desired.as_ref().unwrap().plan.iter().all(|item| item.blocked));
+}
+
+#[test]
+fn repository_runners_only_match_their_repository_and_skip_the_inventory() {
+    let mut f = Fixture::new();
+    with_inventory(&mut f);
+    let repo_runner = |id, name: &str, repo: &str| GhRunner {
+        repo: Some(repo.into()),
+        ..gh(
+            id,
+            name,
+            "online",
+            false,
+            &["self-hosted", "macOS", "ARM64", "host-mini"],
+        )
+    };
+    f.gh_runners(
+        ago(10),
+        vec![
+            repo_runner(1, "mini-02", "acme/api"),
+            repo_runner(2, "web-box", "acme/web"),
+        ],
+    )
+    .jobs(ago(20), vec![job(10, None, "queued", &["self-hosted", "macos"], None)]);
+    let v = f.view();
+    // The web repository's runner can take the web job; the api runner can't.
+    assert_eq!(v.queue.jobs[0].compatible_runners, vec!["gh:acme:2"]);
+    // Neither is joined to an inventory host, by name or by host label.
+    assert_eq!(
+        v.unmatched_runners.iter().map(|r| r.key.as_str()).collect::<Vec<_>>(),
+        vec!["gh:acme:1", "gh:acme:2"]
+    );
+    assert_eq!(
+        v.unmatched_runners[0].github.as_ref().unwrap().repo.as_deref(),
+        Some("acme/api")
+    );
+}
+
+#[test]
+fn runner_versions_are_compared_with_the_latest_release() {
+    let mut f = Fixture::new();
+    let versioned = |id, name: &str, version: &str| GhRunner {
+        version: Some(version.into()),
+        ..gh(id, name, "online", false, MAC)
+    };
+    f.gh_runners(
+        ago(10),
+        vec![
+            versioned(1, "current", "2.330.0"),
+            versioned(2, "behind", "2.329.0"),
+            gh(3, "unknown", "online", false, MAC),
+        ],
+    );
+    assert!(f.view().unmatched_runners.iter().all(|r| r.version_status.is_none()));
+    f.obs.runner_release = Some(Timed::new(
+        ago(60),
+        RunnerRelease {
+            version: "2.330.0".into(),
+            published_at: Some(now() - Duration::days(2)),
+        },
+    ));
+    let v = f.view();
+    assert_eq!(
+        v.runner_release.as_ref().map(|r| (r.version.as_str(), r.checked_at)),
+        Some(("2.330.0", ago(60)))
+    );
+    let status = |name: &str| {
+        v.unmatched_runners
+            .iter()
+            .find(|r| r.name == name)
+            .unwrap()
+            .version_status
+            .as_ref()
+            .map(|s| (s.update_available, s.overdue))
+    };
+    assert_eq!(status("current"), Some((false, false)));
+    assert_eq!(status("behind"), Some((true, false)));
+    assert_eq!(status("unknown"), None);
+    // A release two days old is inside the grace period for runners that update themselves.
+    assert!(!v.issues.iter().any(|i| i.id.starts_with("runner-version")));
+
+    f.obs.runner_release.as_mut().unwrap().value.published_at = Some(now() - Duration::days(8));
+    let v = f.view();
+    let issue = v.issues.iter().find(|i| i.id == "runner-version:available").unwrap();
+    assert_eq!(issue.runner_key.as_deref(), Some("gh:acme:2"));
+    assert_eq!(issue.title, "Runner update available: 2.330.0");
+
+    f.obs.runner_release.as_mut().unwrap().value.published_at = Some(now() - Duration::days(31));
+    let v = f.view();
+    let ids: Vec<&str> = v
+        .issues
+        .iter()
+        .map(|i| i.id.as_str())
+        .filter(|i| i.starts_with("runner-version"))
+        .collect();
+    assert_eq!(ids, vec!["runner-version:overdue"]);
 }

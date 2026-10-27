@@ -9,6 +9,7 @@ import type { FleetSummary } from "./FleetSummary";
 import type { MachineView } from "./MachineView";
 import type { OrgStatusView } from "./OrgStatusView";
 import type { QueueView } from "./QueueView";
+import type { RunnerReleaseView } from "./RunnerReleaseView";
 import type { RunnerView } from "./RunnerView";
 import type { TailnetStatusView } from "./TailnetStatusView";
 
@@ -36,4 +37,8 @@ plan: FleetPlanStatus, orgs: Array<OrgStatusView>, tailnet: TailnetStatusView, m
 /**
  * Drains, watchdog restarts, alert destinations and published availability.
  */
-automation: FleetAutomation, };
+automation: FleetAutomation, 
+/**
+ * The latest `actions/runner` release, when it has been read.
+ */
+runnerRelease: RunnerReleaseView | null, };

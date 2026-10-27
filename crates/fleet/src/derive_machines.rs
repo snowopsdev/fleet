@@ -402,7 +402,9 @@ fn inventory_runners(
     let labelled: Vec<_> = gh
         .runners
         .iter()
-        .filter(|e| e.org == org && !matched.contains(&e.key) && e.runner.labels.contains(label))
+        .filter(|e| {
+            e.org == org && e.runner.repo.is_none() && !matched.contains(&e.key) && e.runner.labels.contains(label)
+        })
         .collect();
     for e in labelled {
         matched.insert(e.key.clone());
@@ -442,6 +444,7 @@ fn checked_github(plan: &FleetPlanInputs, org: &str, name: &str, host: &Host, no
             ephemeral: None,
             version: None,
             runner_group_id: None,
+            repo: None,
         },
         at,
         stale: now - at > super::GITHUB_STALE_AFTER,

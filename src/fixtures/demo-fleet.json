@@ -10,7 +10,7 @@
     "runnersOffline": 1,
     "runnersUnknown": 2,
     "queuedJobs": 2,
-    "attention": 7
+    "attention": 9
   },
   "issues": [
     {
@@ -75,6 +75,28 @@
       "detail": "Host unreachable.",
       "machineId": "ts:nWin",
       "runnerKey": null,
+      "stale": false,
+      "muted": false,
+      "fix": null
+    },
+    {
+      "id": "runner-version:overdue",
+      "category": "runner",
+      "title": "Runner update overdue: 2.329.0",
+      "detail": "GitHub can stop sending jobs to a runner that misses an update for 30 days. Update Studio-Old-2 (2.321.0).",
+      "machineId": "ts:nStudio",
+      "runnerKey": "gh:acme-demo:90",
+      "stale": false,
+      "muted": false,
+      "fix": null
+    },
+    {
+      "id": "runner-version:available",
+      "category": "runner",
+      "title": "Runner update available: 2.329.0",
+      "detail": "linux-01-a (2.328.0) is behind. Runners update themselves unless automatic updates are turned off.",
+      "machineId": "ts:nLinux",
+      "runnerKey": "gh:acme-demo:301",
       "stale": false,
       "muted": false,
       "fix": null
@@ -249,6 +271,38 @@
         "alerts": [],
         "events": [
           {
+            "id": "00000000000000000011",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:09:00Z",
+            "kind": "watchdogRecovered",
+            "detail": "linux-01-a is running again after an automatic restart."
+          },
+          {
+            "id": "00000000000000000010",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:09:00Z",
+            "kind": "runnerServiceChanged",
+            "detail": "linux-01-a: failed → running."
+          },
+          {
+            "id": "00000000000000000009",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:08:00Z",
+            "kind": "watchdogRestarted",
+            "detail": "Automatically restarted linux-01-a (attempt 1 of 3): its service was failed and GitHub showed it offline and idle."
+          },
+          {
+            "id": "00000000000000000008",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:06:00Z",
+            "kind": "runnerServiceChanged",
+            "detail": "linux-01-a: running → failed."
+          },
+          {
             "id": "00000000000000000001",
             "machineKey": "inv:build-linux-01",
             "machineName": "build-linux-01",
@@ -280,8 +334,9 @@
               "docker"
             ],
             "os": "Linux",
-            "version": "2.329.0",
+            "version": "2.328.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -326,6 +381,14 @@
                 "blocked": true
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.328.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": true,
+            "minorVersionsBehind": 1,
+            "overdue": false
           }
         },
         {
@@ -351,6 +414,7 @@
             "os": "Linux",
             "version": "2.329.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -395,6 +459,14 @@
                 "blocked": true
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
           }
         }
       ],
@@ -634,7 +706,7 @@
         ],
         "events": [
           {
-            "id": "00000000000000000010",
+            "id": "00000000000000000014",
             "machineKey": "inv:mac-mini-02",
             "machineName": "mac-mini-02",
             "at": "2026-10-03T11:48:00Z",
@@ -675,6 +747,7 @@
             "os": "macOS",
             "version": "2.329.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -730,6 +803,14 @@
                 "blocked": false
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
           }
         }
       ],
@@ -871,7 +952,8 @@
                 "blocked": true
               }
             ]
-          }
+          },
+          "versionStatus": null
         }
       ],
       "warnings": [],
@@ -1089,7 +1171,15 @@
         "alerts": [],
         "events": [
           {
-            "id": "00000000000000000009",
+            "id": "00000000000000000015",
+            "machineKey": "inv:studio",
+            "machineName": "studio",
+            "at": "2026-10-03T11:54:00Z",
+            "kind": "drainRequested",
+            "detail": "Draining studio-1: its service stops after the current job, as reviewed."
+          },
+          {
+            "id": "00000000000000000013",
             "machineKey": "inv:studio",
             "machineName": "studio",
             "at": "2026-10-03T11:23:00Z",
@@ -1097,7 +1187,7 @@
             "detail": "studio-1: inactive → running."
           },
           {
-            "id": "00000000000000000008",
+            "id": "00000000000000000012",
             "machineKey": "inv:studio",
             "machineName": "studio",
             "at": "2026-10-03T11:22:00Z",
@@ -1139,6 +1229,7 @@
             "os": "macOS",
             "version": "2.329.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -1197,6 +1288,14 @@
                 "blocked": false
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
           }
         },
         {
@@ -1222,6 +1321,7 @@
             "os": "macOS",
             "version": "2.329.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -1266,6 +1366,14 @@
                 "blocked": false
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
           }
         },
         {
@@ -1289,6 +1397,7 @@
             "os": "macOS",
             "version": null,
             "ephemeral": null,
+            "repo": null,
             "asOf": "2026-10-03T11:56:00Z",
             "stale": true
           },
@@ -1330,6 +1439,14 @@
                 "blocked": false
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.321.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": true,
+            "minorVersionsBehind": 8,
+            "overdue": true
           }
         }
       ],
@@ -1629,6 +1746,7 @@
             "os": "Windows",
             "version": "2.329.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -1665,6 +1783,14 @@
                 "blocked": true
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
           }
         }
       ],
@@ -1830,13 +1956,22 @@
         "os": "Linux",
         "version": "2.329.0",
         "ephemeral": false,
+        "repo": "acme-demo/ml",
         "asOf": "2026-10-03T11:59:51Z",
         "stale": false
       },
       "local": null,
       "currentJob": null,
       "warnings": [],
-      "desired": null
+      "desired": null,
+      "versionStatus": {
+        "current": "2.329.0",
+        "latest": "2.329.0",
+        "latestPublishedAt": "2026-09-21T12:00:00Z",
+        "updateAvailable": false,
+        "minorVersionsBehind": 0,
+        "overdue": false
+      }
     }
   ],
   "ignored": [
@@ -1908,6 +2043,7 @@
       }
     ],
     "otherQueued": 1,
+    "held": 1,
     "complete": true,
     "asOf": "2026-10-03T11:59:39Z"
   },
@@ -1944,11 +2080,16 @@
         "remaining": 4712,
         "resetsAt": "2026-10-03T12:38:00Z"
       },
+      "rateLimitedUntil": null,
       "repoScope": {
         "kind": "recent",
         "maxRepos": 20
       },
-      "auth": "ghCli"
+      "auth": "ghCli",
+      "kind": "organization",
+      "runnerRepos": [
+        "ml"
+      ]
     }
   ],
   "tailnet": {
@@ -1975,7 +2116,15 @@
     ],
     "events": [
       {
-        "id": "00000000000000000010",
+        "id": "00000000000000000015",
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "at": "2026-10-03T11:54:00Z",
+        "kind": "drainRequested",
+        "detail": "Draining studio-1: its service stops after the current job, as reviewed."
+      },
+      {
+        "id": "00000000000000000014",
         "machineKey": "inv:mac-mini-02",
         "machineName": "mac-mini-02",
         "at": "2026-10-03T11:48:00Z",
@@ -1983,7 +2132,7 @@
         "detail": "/: 5.7% free (13.0 GiB of 228.2 GiB)."
       },
       {
-        "id": "00000000000000000009",
+        "id": "00000000000000000013",
         "machineKey": "inv:studio",
         "machineName": "studio",
         "at": "2026-10-03T11:23:00Z",
@@ -1991,12 +2140,44 @@
         "detail": "studio-1: inactive → running."
       },
       {
-        "id": "00000000000000000008",
+        "id": "00000000000000000012",
         "machineKey": "inv:studio",
         "machineName": "studio",
         "at": "2026-10-03T11:22:00Z",
         "kind": "rebooted",
         "detail": "A different operating-system boot session was observed."
+      },
+      {
+        "id": "00000000000000000011",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:09:00Z",
+        "kind": "watchdogRecovered",
+        "detail": "linux-01-a is running again after an automatic restart."
+      },
+      {
+        "id": "00000000000000000010",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:09:00Z",
+        "kind": "runnerServiceChanged",
+        "detail": "linux-01-a: failed → running."
+      },
+      {
+        "id": "00000000000000000009",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:08:00Z",
+        "kind": "watchdogRestarted",
+        "detail": "Automatically restarted linux-01-a (attempt 1 of 3): its service was failed and GitHub showed it offline and idle."
+      },
+      {
+        "id": "00000000000000000008",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:06:00Z",
+        "kind": "runnerServiceChanged",
+        "detail": "linux-01-a: running → failed."
       },
       {
         "id": "00000000000000000007",
@@ -2055,5 +2236,60 @@
         "detail": "Started observing this machine. Earlier events are not known."
       }
     ]
+  },
+  "automation": {
+    "drains": [
+      {
+        "runner": "studio-1",
+        "hostId": "studio",
+        "state": "draining",
+        "requestedAt": "2026-10-03T11:54:00Z",
+        "stoppedAt": null,
+        "error": null
+      }
+    ],
+    "watchdog": {
+      "enabled": true,
+      "runners": [
+        {
+          "runner": "linux-01-a",
+          "hostId": "build-linux-01",
+          "attempts": [
+            "2026-10-03T11:08:00Z"
+          ],
+          "downSince": null,
+          "nextAttemptAt": null,
+          "gaveUpAt": null,
+          "lastError": null
+        }
+      ]
+    },
+    "destinations": [
+      {
+        "id": "demo-slack",
+        "name": "#ci-alerts",
+        "kind": "slack",
+        "enabled": true,
+        "summary": "hooks.slack.com",
+        "pending": 0,
+        "deliveredAt": "2026-10-03T11:48:00Z",
+        "error": null
+      }
+    ],
+    "publish": {
+      "enabled": true,
+      "organization": "acme-demo",
+      "variable": "RUNNER_FLEET_STATUS",
+      "intervalMinutes": 5,
+      "value": "{\"healthy\":false,\"online\":{\"linux-build\":1,\"macos-build\":3,\"macos-e2e\":1,\"ubuntu\":1,\"windows-build\":0,\"xcode\":2},\"updatedAt\":\"2026-10-03T11:51:00Z\"}",
+      "publishedAt": "2026-10-03T11:51:00Z",
+      "error": null,
+      "waiting": null
+    }
+  },
+  "runnerRelease": {
+    "version": "2.329.0",
+    "publishedAt": "2026-09-21T12:00:00Z",
+    "checkedAt": "2026-10-03T11:35:00Z"
   }
 }

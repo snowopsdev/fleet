@@ -5,7 +5,7 @@ use ts_rs::TS;
 
 use crate::desired::model::{CheckStatus, FleetPlanAction};
 use crate::machine_diagnostics::DiagnosticStatus;
-use crate::model::{DataSource, FleetView, MachineConnection, MachineView, count_u32};
+use crate::model::{DataSource, FleetView, MachineConnection, MachineView, RunnerView, count_u32};
 use crate::monitoring::FleetAlertKind;
 use FleetIssueCategory::{
     Alert, Connection, Diagnostic, Github, Inventory, Operation, Queue, Runner, Storage, Tailnet,
@@ -83,6 +83,7 @@ pub(crate) fn attach(view: &mut FleetView) {
         fleet_issues(view),
         machine_issues(view),
         runner_issues(view),
+        runner_version_issues(view),
         queue_issues(view),
         github_issues(view),
         control_check_issues(view),
@@ -312,6 +313,71 @@ fn runner_issues(view: &FleetView) -> Vec<FleetIssue> {
             issue
         })
         .collect()
+}
+
+/// Runners behind the latest `actions/runner` release: one low-priority finding once runners
+/// that update themselves should have, and a stronger one when GitHub may stop sending jobs.
+fn runner_version_issues(view: &FleetView) -> Vec<FleetIssue> {
+    let Some(release) = &view.runner_release else {
+        return Vec::new();
+    };
+    let settled = release
+        .published_at
+        .is_none_or(|at| view.generated_at - at >= crate::runner_version::UPDATE_GRACE);
+    let behind: Vec<&RunnerView> = view
+        .machines
+        .iter()
+        .chain(&view.other_machines)
+        .flat_map(|m| &m.runners)
+        .chain(&view.unmatched_runners)
+        .filter(|r| r.version_status.as_ref().is_some_and(|v| v.update_available))
+        .collect();
+    let (overdue, due): (Vec<&RunnerView>, Vec<&RunnerView>) = behind
+        .into_iter()
+        .partition(|r| r.version_status.as_ref().is_some_and(|v| v.overdue));
+    let list = |runners: &[&RunnerView]| {
+        runners
+            .iter()
+            .map(|r| {
+                let current = r.version_status.as_ref().map_or("unknown", |v| v.current.as_str());
+                format!("{} ({current})", r.name)
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut issues = Vec::new();
+    for (id, runners, title, detail) in [
+        (
+            "runner-version:overdue",
+            &overdue,
+            format!("Runner update overdue: {}", release.version),
+            format!(
+                "GitHub can stop sending jobs to a runner that misses an update for 30 days. Update {}.",
+                list(&overdue)
+            ),
+        ),
+        (
+            "runner-version:available",
+            &due,
+            format!("Runner update available: {}", release.version),
+            format!(
+                "{} {} behind. Runners update themselves unless automatic updates are turned off.",
+                list(&due),
+                if due.len() == 1 { "is" } else { "are" }
+            ),
+        ),
+    ] {
+        if runners.is_empty() || (id == "runner-version:available" && !settled) {
+            continue;
+        }
+        let mut issue = FleetIssue::new(id, Runner, title, detail);
+        if let [runner] = runners.as_slice() {
+            issue.runner_key = Some(runner.key.clone());
+            issue.machine_id.clone_from(&runner.machine_id);
+        }
+        issues.push(issue);
+    }
+    issues
 }
 
 fn queue_issues(view: &FleetView) -> Vec<FleetIssue> {
