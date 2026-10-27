@@ -15,8 +15,8 @@ Every route requires a loopback client address and a loopback `Host` header, and
 request with an `Origin` header, so browser pages can't call it. No CORS headers are sent. Only
 GET, HEAD and `POST /v1/checks` are accepted. Responses never include tokens or other
 credentials; log reads return runner diagnostic output as written by the runner. No endpoint
-installs, registers, restarts, retires or decommissions runners, mints runner tokens, or changes
-host configuration.
+installs, registers, restarts, retires or decommissions runners, mints runner tokens, wakes
+machines, or changes host configuration.
 
 ## Routes
 
