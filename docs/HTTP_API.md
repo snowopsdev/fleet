@@ -83,6 +83,12 @@ metadata (`complete`, `asOf`, `otherQueued`) stays fleet-wide when jobs are filt
 timestamps, runner check findings and per-runner desired status. Its global `plan` stays
 fleet-wide.
 
+Runners and organizations carry GitHub details for monitoring: `github.repo` is set on
+repository runners (monitoring only, never matched to inventory hosts), `versionStatus` compares
+the runner's version with the latest release in the fleet's `runnerRelease`, and
+`orgs[].rateLimitedUntil` is set while GitHub polls for that account are paused. The queue's
+`held` counts self-hosted jobs GitHub holds for an approval or concurrency group.
+
 `/v1/issues` is the desktop's attention feed. `summary.attention` equals the full
 `issues.length`, including unresolved stale or muted alerts. The UI renders alerts, history
 storage failures and operation failures in their own panels; the remaining findings appear
@@ -152,7 +158,8 @@ Two log reads may run at once. Arbitrary file paths are not accepted. Checks and
 ## Polling and errors
 
 `revision` is an opaque fingerprint of the fleet snapshot excluding `generatedAt`. It changes
-when observations, settings or derived freshness change. `GET /v1/changes?since=<revision>`
+when observations, settings or derived freshness change. The desktop app uses the same revision
+to skip pushing unchanged views to its window. `GET /v1/changes?since=<revision>`
 returns `changed`. Alternatively, keep the `ETag` from a GET and send `If-None-Match` to the
 same URL; unchanged representations return 304 with no body. ETags apply to the response,
 including its filters, pagination and job state. Demo timestamps advance with each generated
