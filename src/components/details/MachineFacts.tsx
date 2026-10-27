@@ -36,6 +36,8 @@ export function MachineFacts({ m, inFleet }: { m: MachineView; inFleet: boolean 
       ["Root", <span className="mono">{h.root}</span>, h.root],
     );
     if (h.serviceAccount) inventory.push(["Account", h.serviceAccount, h.serviceAccount]);
+    if (h.xcode.length) inventory.push(["Xcode", h.xcode.join(", "), h.xcode.join(", ")]);
+    if (h.simulatorRuntimes.length) inventory.push(["Simulators", h.simulatorRuntimes.join(", "), h.simulatorRuntimes.join(", ")]);
     inventory.push(["Labels", <span className="flex flex-wrap gap-1">{h.labels.map((l) => <Label key={l}>{l}</Label>)}</span>]);
     if (!h.enabled) inventory.push(["Status", "Disabled"]);
   }

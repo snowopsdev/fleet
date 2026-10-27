@@ -30,6 +30,9 @@ ssh_transport = "tailscale"
 root = "~/gh-runners/acme"
 service_mode = "launchagent"
 labels = ["fleet", "macos-build", "xcode", "host-mini"]
+# Optional: Xcode versions and simulator runtimes jobs expect; diagnostics flag missing ones.
+xcode = ["26.1"]
+simulator_runtimes = ["iOS 26.0"]
 runners = [{ name = "mini-01", directory = "runner-01" }]
 
 [[hosts]]

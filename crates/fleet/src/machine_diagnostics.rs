@@ -28,6 +28,10 @@ pub enum DiagnosticGroup {
     Network,
     Power,
     System,
+    /// macOS login, console session, screen lock, keychain and signing.
+    Session,
+    /// Xcode, its license and simulator runtimes.
+    Toolchain,
     Runners,
 }
 
@@ -74,6 +78,10 @@ pub(crate) fn evaluate(report: &MachineReport, host: Option<&Host>) -> Vec<Machi
         ),
     }
     checks.system(host);
+    if report.os == OsFamily::Macos {
+        checks.macos_session(host);
+        checks.xcode(host);
+    }
     if let Some(host) = host.filter(|h| h.runners.iter().any(|r| !r.decommission)) {
         checks.runner_disk(host);
         checks.runners(host);
@@ -401,7 +409,17 @@ impl<'a> Checks<'a> {
             "Account used for this read-only inspection.",
         );
         self.architecture(host);
-        let disks = &self.report.disks;
+        // The runner root's filesystem gets its own check below.
+        let separate = host.is_some_and(|h| h.desired_runners().next().is_some());
+        let disks: Vec<_> = self
+            .report
+            .disks
+            .iter()
+            .filter(|d| !(separate && d.runner_root))
+            .collect();
+        if disks.is_empty() && self.report.disks.iter().any(|d| d.runner_root) {
+            return;
+        }
         if disks.is_empty() {
             self.add(
                 "disk-space",
@@ -421,7 +439,7 @@ impl<'a> Checks<'a> {
             .map(|d| {
                 format!(
                     "{}: {:.1} GiB free of {:.1} GiB",
-                    d.label(),
+                    d.mount_point,
                     gib(d.available_bytes),
                     gib(d.total_bytes)
                 )
@@ -573,6 +591,9 @@ impl<'a> Checks<'a> {
         }
     }
 }
+
+#[path = "machine_diagnostics_macos.rs"]
+mod macos;
 
 #[cfg(test)]
 #[path = "machine_diagnostics_tests.rs"]

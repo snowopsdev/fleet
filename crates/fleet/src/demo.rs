@@ -195,6 +195,8 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         if id == "studio" {
             // Runner workspaces live on an external SSD.
             report.disks[0].runner_root = false;
+            // The GUI lane's desktop is locked, so UI tests would fail.
+            report.diagnostics.insert("screen_locked".into(), "yes".into());
             report.disks.push(DiskStats {
                 mount_point: "/Volumes/Builds".into(),
                 total_bytes: 2_000_000_000_000,
@@ -337,7 +339,14 @@ fn report(
         warnings: vec![],
         diagnostics: [
             ("identity", "ci"),
-            ("architecture", "arm64"),
+            (
+                "architecture",
+                match os {
+                    OsFamily::Macos => "arm64",
+                    OsFamily::Windows => "AMD64",
+                    OsFamily::Linux | OsFamily::Other => "x86_64",
+                },
+            ),
             (
                 "tailscale_cli",
                 if os == OsFamily::Windows {
@@ -372,6 +381,20 @@ fn report(
             ("ac_hibernate", "0"),
             ("ac_lid", "0"),
             ("ac_standby_network", "2"),
+            ("auto_login_read", "1"),
+            ("auto_login_user", "ci"),
+            ("console_sessions", "1"),
+            ("console_session_user", "ci"),
+            ("screen_locked", "no"),
+            ("login_keychain", "36"),
+            ("codesign_identities", "3"),
+            ("developer_dir", "/Applications/Xcode.app/Contents/Developer"),
+            ("xcode_scan", "1"),
+            ("xcode_apps", "26.1|17B55|/Applications/Xcode.app"),
+            ("xcode_license_dir", "/Applications/Xcode.app/Contents/Developer"),
+            ("xcode_license", "0"),
+            ("simulator_scan", "1"),
+            ("simulator_runtimes", "iOS 26.0;watchOS 26.0"),
         ]
         .into_iter()
         .map(|(k, v)| (k.into(), v.into()))

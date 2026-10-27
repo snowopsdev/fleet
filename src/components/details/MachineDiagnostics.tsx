@@ -7,7 +7,14 @@ import { timeAgo } from "../../lib/format";
 import type { Tone } from "../../lib/status";
 import { Card, Pill, Section, StatusDot } from "../ui";
 
-const GROUPS: [DiagnosticGroup, string][] = [["network", "Tailscale & access"], ["power", "Power & availability"], ["system", "System"], ["runners", "Runner services"]];
+const GROUPS: [DiagnosticGroup, string][] = [
+  ["network", "Tailscale & access"],
+  ["power", "Power & availability"],
+  ["system", "System"],
+  ["session", "Login, screen & signing"],
+  ["toolchain", "Xcode & simulators"],
+  ["runners", "Runner services"],
+];
 const STATUS: Record<DiagnosticStatus, { label: string; tone: Tone }> = {
   pass: { label: "OK", tone: "ok" },
   warn: { label: "Warning", tone: "warn" },

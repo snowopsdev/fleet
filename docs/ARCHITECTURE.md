@@ -31,7 +31,10 @@ state. No runner credential files are read.
 
 The same SSH session includes native machine diagnostics. `machine_diagnostics.rs` interprets
 selected facts from Tailscale, pmset, systemd/logind or Windows powercfg, alongside disk and runner
-facts. Only selected Tailscale preference fields are returned; raw preferences and private state
+facts. On macOS it also reads automatic login, the console session and screen lock, the login
+keychain's exit status, a count of code-signing identities and the installed Xcode versions and
+license, each bounded by a short time limit with stdin closed (`machine_diagnostics_macos.rs`);
+declared `xcode` and `simulator_runtimes` are compared with them. Only selected Tailscale preference fields are returned; raw preferences and private state
 never leave the machine. Checks distinguish pass, warning, information and unknown. An incomplete
 diagnostic section becomes unknown without discarding otherwise valid health and runner data.
 Diagnostics inherit the health observation's timestamp and freshness. Fleet warnings use only

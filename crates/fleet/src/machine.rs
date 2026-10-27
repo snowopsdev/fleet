@@ -215,9 +215,12 @@ pub fn inspection_script(target: &MachineTarget) -> String {
             .unwrap_or_default();
         format!("{root}{WINDOWS_HEALTH}\n& {{\n{WINDOWS_DIAGNOSTICS}\n}}\nWrite-Output '{RUNNERS_MARKER}'\n{probe}")
     } else {
-        let root = root
+        let mut root = root
             .map(|r| format!("RFM_RUNNER_ROOT={}\n", sh_remote_path(r)))
             .unwrap_or_default();
+        if target.host().is_some_and(|h| !h.simulator_runtimes.is_empty()) {
+            root.push_str("RFM_SIMULATOR_RUNTIMES=1\n");
+        }
         format!("{root}{POSIX_HEALTH}\n(\n{POSIX_DIAGNOSTICS}\n)\nprintf '{RUNNERS_MARKER}\\n'\n{probe}")
     }
 }

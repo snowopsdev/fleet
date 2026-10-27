@@ -227,6 +227,12 @@ pub struct Host {
     pub service_account: Option<String>,
     pub enabled: bool,
     pub ssh_transport: SshTransport,
+    /// macOS only: Xcode versions jobs expect, compared with the installed ones. Not in Runner Fleet.
+    #[serde(default)]
+    pub xcode: Vec<String>,
+    /// macOS only: simulator runtimes jobs expect, such as `iOS 26.0`. Not in Runner Fleet.
+    #[serde(default)]
+    pub simulator_runtimes: Vec<String>,
 }
 
 impl Host {

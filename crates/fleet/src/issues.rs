@@ -206,7 +206,10 @@ fn issues_for_machine(machine: &MachineView) -> Vec<FleetIssue> {
         let warnings: Vec<_> = diagnostics
             .checks
             .iter()
-            .filter(|c| c.status == DiagnosticStatus::Warn && !(disk_alert && c.id == "disk-space"))
+            .filter(|c| {
+                c.status == DiagnosticStatus::Warn
+                    && !(disk_alert && matches!(c.id.as_str(), "disk-space" | "runner-disk"))
+            })
             .collect();
         if !warnings.is_empty() {
             issues.push(FleetIssue::new(

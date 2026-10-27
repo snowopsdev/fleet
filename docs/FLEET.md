@@ -86,6 +86,8 @@ group every runner registers into. Each `[[hosts]]` entry is one machine:
 | `service_account` | Windows only, and required for `windows-logon`. |
 | `labels` | Labels on every runner of the host: `fleet`, one platform capability label (`macos-build`, `windows-build`, `linux-build` or `linux-experimental`) and, by convention, `host-<id>`. |
 | `enabled` | `false` leaves the host out of checks and changes. Defaults to `true`. |
+| `xcode` | macOS only, optional: Xcode versions jobs expect, such as `["26.1"]`. See [Xcode and simulators](#xcode-and-simulators). |
+| `simulator_runtimes` | macOS only, optional: simulator runtimes jobs expect, such as `["iOS 26.0"]`. |
 | `runners` | At least one runner. |
 
 A runner takes `name`, unique across the inventory, and `directory`, one path component below
@@ -254,6 +256,35 @@ Runner checks report each `power:*` setting. Nothing here ever changes power set
 Runners that share a user account also share its caches and machine access; concurrent jobs
 are not isolated. Record each host's capacity and operating constraints in the private inventory.
 
+**macOS readiness.** Machine diagnostics on a Mac also read, without changing anything or
+prompting: whether automatic login is set for the runner account
+(`com.apple.loginwindow autoLoginUser`); which user is on the console and whether its screen
+is locked (`IOConsoleUsers`, `CGSSessionScreenIsLocked`); whether the SSH session can read the
+login keychain (`security show-keychain-info`, exit status only); and how many valid
+code-signing identities there are (a count; identities never leave the machine). A locked
+screen or another user on the console is a warning on hosts with a GUI lane (an `*-e2e`
+label). SSH logins get their own security session, so a keychain that is locked for SSH may
+still be unlocked for the LaunchAgent; the check says so instead of guessing. Every command has
+a few seconds to finish, with stdin closed.
+
+### Xcode and simulators
+
+Diagnostics list the Xcode apps in `/Applications` (read from each app's `version.plist`), the
+selected developer directory (`xcode-select -p`) and whether the selected Xcode's license is
+accepted (`xcodebuild -license check`). They warn when the Command Line Tools are selected
+although Xcode is installed, and when the license isn't accepted. The `/usr/bin` shims are
+never run, so a Mac without developer tools isn't offered an install dialog.
+
+Declare the versions jobs rely on to get a warning when one is missing:
+
+```toml
+xcode = ["26.1", "16.4"]           # 26 accepts any 26.x; 26.1 accepts 26.1 and 26.1.x
+simulator_runtimes = ["iOS 26.0"]  # read with simctl list runtimes, only when declared
+```
+
+The app never installs Xcode or runtimes. Simulator runtimes can't be listed until the
+license is accepted.
+
 **Tailscale SSH hosts** use `ssh_transport = "tailscale"` and explicit
 `builder@HOST.example.ts.net` targets; scripts and transient passwords go over stdin. Tailscale
 SSH must already be enabled and authorized on the machine. On macOS that means the open-source
@@ -350,6 +381,7 @@ There's no recursive cleanup. Remove old directories by explicit path, separatel
 | Linux install fails on sudo | Use the sudo password field in the review, or configure narrowly scoped non-interactive sudo. |
 | Windows job can't see a certificate or profile | Check the runner's service identity; use a dedicated build account only when needed. |
 | Logon-task runner offline | **Run checks**: auto-logon must be set and the account's session active. |
-| GUI E2E fails with focus or visibility errors on a Mac | A locked desktop fails every GUI test: check `IOConsoleUsers`' `CGSSessionScreenIsLocked`. |
+| GUI E2E fails with focus or visibility errors on a Mac | A locked desktop fails every GUI test: the machine's **Screen lock** diagnostic reads `IOConsoleUsers`' `CGSSessionScreenIsLocked`. |
+| `xcodebuild` fails on a Mac with Xcode installed | Check the **Selected developer directory** and **Xcode license** diagnostics. |
 | "GitHub name exists but exact local directory is missing" | Resolve the collision by hand. Apply never uses `--replace`. |
 | Local `.runner` exists but GitHub has no runner | Inspect before re-registering. Apply won't tear it down. |

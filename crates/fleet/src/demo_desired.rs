@@ -23,6 +23,7 @@ ssh = "studio"
 root = "~/gh-runners/acme-demo"
 service_mode = "launchagent"
 labels = ["fleet", "macos-build", "xcode"]
+xcode = ["26.1"]
 runners = [
   { name = "studio-1", directory = "runner-01", labels = ["macos-e2e"] },
   { name = "studio-2", directory = "runner-02", replaces = { name = "Studio-Old-2", directory = "~/actions-runner-2" } },
@@ -35,6 +36,8 @@ ssh = "mac-mini-02"
 root = "~/gh-runners/acme-demo"
 service_mode = "launchagent"
 labels = ["fleet", "macos-build"]
+xcode = ["26.1", "16.4"]
+simulator_runtimes = ["iOS 26.0"]
 runners = [{ name = "mini-02", directory = "runner-01" }]
 
 [[hosts]]

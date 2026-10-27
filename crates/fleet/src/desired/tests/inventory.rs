@@ -145,6 +145,52 @@ fn intel_macs_and_arm64_linux_are_supported_beyond_runner_fleet() {
 }
 
 #[test]
+fn macos_hosts_can_declare_xcode_versions_and_simulator_runtimes() {
+    let text = base().replace(
+        "service_mode = \"launchagent\"",
+        "service_mode = \"launchagent\"\nxcode = [\"26.1\", \"16\"]\nsimulator_runtimes = [\"iOS 26.0\"]",
+    );
+    let host = load(&text).unwrap().hosts.remove(0);
+    assert_eq!(
+        (host.xcode, host.simulator_runtimes),
+        (vec!["26.1".to_string(), "16".into()], vec!["iOS 26.0".to_string()])
+    );
+    for (field, message) in [
+        (
+            "xcode = [\"26.1; rm -rf ~\"]",
+            "test: invalid xcode version: '26.1; rm -rf ~'",
+        ),
+        ("xcode = [\"latest\"]", "test: invalid xcode version: 'latest'"),
+        (
+            "simulator_runtimes = [\"iOS\"]",
+            "test: invalid simulator runtime: 'iOS' (use a name like 'iOS 26.0')",
+        ),
+        (
+            "simulator_runtimes = [\"Android 14\"]",
+            "test: invalid simulator runtime: 'Android 14' (use a name like 'iOS 26.0')",
+        ),
+        ("xcode = \"26.1\"", "xcode must be an array of strings"),
+    ] {
+        let text = base().replace(
+            "service_mode = \"launchagent\"",
+            &format!("service_mode = \"launchagent\"\n{field}"),
+        );
+        assert_eq!(load_err(&text), message, "{field}");
+    }
+    let linux = base()
+        .replace("platform = \"darwin-arm64\"", "platform = \"linux-x64\"")
+        .replace(
+            "service_mode = \"launchagent\"",
+            "service_mode = \"systemd\"\nxcode = [\"26.1\"]",
+        )
+        .replace("\"macos-build\"", "\"linux-build\"");
+    assert_eq!(
+        load_err(&linux),
+        "test: xcode and simulator_runtimes are supported only on macOS"
+    );
+}
+
+#[test]
 fn linux_host_requires_exactly_one_workload_class() {
     let linux = base()
         .replace("platform = \"darwin-arm64\"", "platform = \"linux-x64\"")

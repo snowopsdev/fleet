@@ -12,4 +12,12 @@ sshTarget: string | null,
 /**
  * The `ssh` value exactly as written in the inventory.
  */
-sshSetting: string, root: string, serviceMode: FleetServiceMode, labels: Array<string>, runners: Array<FleetRunner>, serviceAccount: string | null, enabled: boolean, sshTransport: FleetSshTransport, };
+sshSetting: string, root: string, serviceMode: FleetServiceMode, labels: Array<string>, runners: Array<FleetRunner>, serviceAccount: string | null, enabled: boolean, sshTransport: FleetSshTransport, 
+/**
+ * macOS only: Xcode versions jobs expect, compared with the installed ones. Not in Runner Fleet.
+ */
+xcode: Array<string>, 
+/**
+ * macOS only: simulator runtimes jobs expect, such as `iOS 26.0`. Not in Runner Fleet.
+ */
+simulatorRuntimes: Array<string>, };

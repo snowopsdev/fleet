@@ -10,7 +10,7 @@
     "runnersOffline": 1,
     "runnersUnknown": 2,
     "queuedJobs": 2,
-    "attention": 7
+    "attention": 9
   },
   "issues": [
     {
@@ -36,6 +36,17 @@
       "fix": null
     },
     {
+      "id": "ts:nMini:diagnostics",
+      "category": "diagnostic",
+      "title": "mac-mini-02: 1 diagnostic warning",
+      "detail": "Declared Xcode: Missing 16.4",
+      "machineId": "ts:nMini",
+      "runnerKey": null,
+      "stale": false,
+      "muted": false,
+      "fix": null
+    },
+    {
       "id": "ts:nMini:changes",
       "category": "inventory",
       "title": "mac-mini-02: runner plan needs attention",
@@ -52,6 +63,17 @@
       "title": "mac-mini-03 couldn't be checked",
       "detail": "SSH permission denied. Check the host's SSH login and tailnet access.",
       "machineId": "ts:nNew",
+      "runnerKey": null,
+      "stale": false,
+      "muted": false,
+      "fix": null
+    },
+    {
+      "id": "ts:nStudio:diagnostics",
+      "category": "diagnostic",
+      "title": "studio: 1 diagnostic warning",
+      "detail": "Screen lock: Locked",
+      "machineId": "ts:nStudio",
       "runnerKey": null,
       "stale": false,
       "muted": false,
@@ -135,7 +157,8 @@
           {
             "mountPoint": "/",
             "totalBytes": 1800000000000,
-            "availableBytes": 1250000000000
+            "availableBytes": 1250000000000,
+            "runnerRoot": true
           }
         ],
         "uptimeSecs": 792000,
@@ -213,17 +236,17 @@
             "id": "architecture",
             "group": "system",
             "title": "Architecture",
-            "status": "info",
-            "value": "arm64",
-            "detail": "Architecture reported by the operating system."
+            "status": "pass",
+            "value": "x86_64",
+            "detail": "Matches the inventory platform linux-x64."
           },
           {
-            "id": "disk-space",
-            "group": "system",
-            "title": "Disk space",
+            "id": "runner-disk",
+            "group": "runners",
+            "title": "Runner volume",
             "status": "pass",
-            "value": "At least 10% free",
-            "detail": "/: 1164.2 GiB free of 1676.4 GiB"
+            "value": "69% free",
+            "detail": "/ holds ~/gh-runners/acme-demo and each runner's _work directory: 1164.2 GiB free of 1676.4 GiB."
           },
           {
             "id": "runner-startup",
@@ -432,7 +455,9 @@
           ],
           "serviceAccount": null,
           "enabled": true,
-          "sshTransport": "tailscale"
+          "sshTransport": "tailscale",
+          "xcode": [],
+          "simulatorRuntimes": []
         },
         "plan": [
           {
@@ -501,7 +526,8 @@
           {
             "mountPoint": "/",
             "totalBytes": 245000000000,
-            "availableBytes": 14000000000
+            "availableBytes": 14000000000,
+            "runnerRoot": true
           }
         ],
         "uptimeSecs": 792000,
@@ -587,17 +613,97 @@
             "id": "architecture",
             "group": "system",
             "title": "Architecture",
-            "status": "info",
+            "status": "pass",
             "value": "arm64",
-            "detail": "Architecture reported by the operating system."
+            "detail": "Matches the inventory platform darwin-arm64."
           },
           {
-            "id": "disk-space",
-            "group": "system",
-            "title": "Disk space",
+            "id": "auto-login",
+            "group": "session",
+            "title": "Automatic login",
+            "status": "pass",
+            "value": "Enabled for ci",
+            "detail": "After a restart, macOS logs in as the runner account, so its LaunchAgents start."
+          },
+          {
+            "id": "console-session",
+            "group": "session",
+            "title": "Console session",
+            "status": "pass",
+            "value": "ci",
+            "detail": "The runner account is the console session, so GUI jobs have a display."
+          },
+          {
+            "id": "screen-lock",
+            "group": "session",
+            "title": "Screen lock",
+            "status": "pass",
+            "value": "Unlocked",
+            "detail": "From CGSSessionScreenIsLocked. GUI tests, such as UI tests in the simulator, fail on a locked desktop."
+          },
+          {
+            "id": "login-keychain",
+            "group": "session",
+            "title": "Login keychain",
+            "status": "info",
+            "value": "Locked for SSH sessions",
+            "detail": "SSH logins get their own security session, so this can't show whether the runner's LaunchAgent session has the keychain unlocked. Signing jobs need it unlocked there."
+          },
+          {
+            "id": "codesign-identities",
+            "group": "session",
+            "title": "Code-signing identities",
+            "status": "info",
+            "value": "3 valid",
+            "detail": "Valid code-signing identities in this account's keychains, counted without reading them."
+          },
+          {
+            "id": "xcode-installed",
+            "group": "toolchain",
+            "title": "Installed Xcode",
+            "status": "info",
+            "value": "26.1 (17B55)",
+            "detail": "26.1: /Applications/Xcode.app"
+          },
+          {
+            "id": "xcode-selected",
+            "group": "toolchain",
+            "title": "Selected developer directory",
+            "status": "pass",
+            "value": "Xcode 26.1",
+            "detail": "/Applications/Xcode.app/Contents/Developer"
+          },
+          {
+            "id": "xcode-license",
+            "group": "toolchain",
+            "title": "Xcode license",
+            "status": "pass",
+            "value": "Accepted",
+            "detail": "xcodebuild -license check passed for /Applications/Xcode.app/Contents/Developer."
+          },
+          {
+            "id": "xcode-declared",
+            "group": "toolchain",
+            "title": "Declared Xcode",
             "status": "warn",
-            "value": "Less than 10% free",
-            "detail": "/: 13.0 GiB free of 228.2 GiB"
+            "value": "Missing 16.4",
+            "detail": "The inventory declares Xcode 26.1, 16.4; installed: 26.1 (17B55). Jobs that select a missing version fail. The app never installs Xcode."
+          },
+          {
+            "id": "simulator-runtimes",
+            "group": "toolchain",
+            "title": "Simulator runtimes",
+            "status": "pass",
+            "value": "All installed",
+            "detail": "The inventory declares iOS 26.0; available: iOS 26.0, watchOS 26.0."
+          },
+          {
+            "id": "runner-disk",
+            "group": "runners",
+            "title": "Runner volume",
+            "status": "warn",
+            "value": "6% free",
+            "detail": "/ holds ~/gh-runners/acme-demo and each runner's _work directory: 13.0 GiB free of 228.2 GiB. Jobs fail when it fills up; clear old workspaces or caches."
           },
           {
             "id": "runner-startup",
@@ -758,7 +864,14 @@
           ],
           "serviceAccount": null,
           "enabled": true,
-          "sshTransport": "openssh"
+          "sshTransport": "openssh",
+          "xcode": [
+            "26.1",
+            "16.4"
+          ],
+          "simulatorRuntimes": [
+            "iOS 26.0"
+          ]
         },
         "plan": [
           {
@@ -899,7 +1012,9 @@
           ],
           "serviceAccount": null,
           "enabled": true,
-          "sshTransport": "openssh"
+          "sshTransport": "openssh",
+          "xcode": [],
+          "simulatorRuntimes": []
         },
         "plan": [
           {
@@ -959,7 +1074,14 @@
           {
             "mountPoint": "/",
             "totalBytes": 994000000000,
-            "availableBytes": 312000000000
+            "availableBytes": 312000000000,
+            "runnerRoot": false
+          },
+          {
+            "mountPoint": "/Volumes/Builds",
+            "totalBytes": 2000000000000,
+            "availableBytes": 380000000000,
+            "runnerRoot": true
           }
         ],
         "uptimeSecs": 792000,
@@ -1045,9 +1167,9 @@
             "id": "architecture",
             "group": "system",
             "title": "Architecture",
-            "status": "info",
+            "status": "pass",
             "value": "arm64",
-            "detail": "Architecture reported by the operating system."
+            "detail": "Matches the inventory platform darwin-arm64."
           },
           {
             "id": "disk-space",
@@ -1056,6 +1178,86 @@
             "status": "pass",
             "value": "At least 10% free",
             "detail": "/: 290.6 GiB free of 925.7 GiB"
+          },
+          {
+            "id": "auto-login",
+            "group": "session",
+            "title": "Automatic login",
+            "status": "pass",
+            "value": "Enabled for ci",
+            "detail": "After a restart, macOS logs in as the runner account, so its LaunchAgents start."
+          },
+          {
+            "id": "console-session",
+            "group": "session",
+            "title": "Console session",
+            "status": "pass",
+            "value": "ci",
+            "detail": "The runner account is the console session, so GUI jobs have a display."
+          },
+          {
+            "id": "screen-lock",
+            "group": "session",
+            "title": "Screen lock",
+            "status": "warn",
+            "value": "Locked",
+            "detail": "From CGSSessionScreenIsLocked. GUI tests, such as UI tests in the simulator, fail on a locked desktop."
+          },
+          {
+            "id": "login-keychain",
+            "group": "session",
+            "title": "Login keychain",
+            "status": "info",
+            "value": "Locked for SSH sessions",
+            "detail": "SSH logins get their own security session, so this can't show whether the runner's LaunchAgent session has the keychain unlocked. Signing jobs need it unlocked there."
+          },
+          {
+            "id": "codesign-identities",
+            "group": "session",
+            "title": "Code-signing identities",
+            "status": "info",
+            "value": "3 valid",
+            "detail": "Valid code-signing identities in this account's keychains, counted without reading them."
+          },
+          {
+            "id": "xcode-installed",
+            "group": "toolchain",
+            "title": "Installed Xcode",
+            "status": "info",
+            "value": "26.1 (17B55)",
+            "detail": "26.1: /Applications/Xcode.app"
+          },
+          {
+            "id": "xcode-selected",
+            "group": "toolchain",
+            "title": "Selected developer directory",
+            "status": "pass",
+            "value": "Xcode 26.1",
+            "detail": "/Applications/Xcode.app/Contents/Developer"
+          },
+          {
+            "id": "xcode-license",
+            "group": "toolchain",
+            "title": "Xcode license",
+            "status": "pass",
+            "value": "Accepted",
+            "detail": "xcodebuild -license check passed for /Applications/Xcode.app/Contents/Developer."
+          },
+          {
+            "id": "xcode-declared",
+            "group": "toolchain",
+            "title": "Declared Xcode",
+            "status": "pass",
+            "value": "All installed",
+            "detail": "The inventory declares Xcode 26.1; installed: 26.1 (17B55)."
+          },
+          {
+            "id": "runner-disk",
+            "group": "runners",
+            "title": "Runner volume",
+            "status": "pass",
+            "value": "19% free",
+            "detail": "/Volumes/Builds holds ~/gh-runners/acme-demo and each runner's _work directory: 353.9 GiB free of 1862.6 GiB."
           },
           {
             "id": "runner-startup",
@@ -1373,7 +1575,11 @@
           ],
           "serviceAccount": null,
           "enabled": true,
-          "sshTransport": "openssh"
+          "sshTransport": "openssh",
+          "xcode": [
+            "26.1"
+          ],
+          "simulatorRuntimes": []
         },
         "plan": [
           {
@@ -1451,7 +1657,8 @@
           {
             "mountPoint": "C:\\",
             "totalBytes": 512000000000,
-            "availableBytes": 140000000000
+            "availableBytes": 140000000000,
+            "runnerRoot": true
           }
         ],
         "uptimeSecs": 792000,
@@ -1561,17 +1768,17 @@
             "id": "architecture",
             "group": "system",
             "title": "Architecture",
-            "status": "info",
-            "value": "arm64",
-            "detail": "Architecture reported by the operating system."
+            "status": "pass",
+            "value": "AMD64",
+            "detail": "Matches the inventory platform windows-x64."
           },
           {
-            "id": "disk-space",
-            "group": "system",
-            "title": "Disk space",
+            "id": "runner-disk",
+            "group": "runners",
+            "title": "Runner volume",
             "status": "pass",
-            "value": "At least 10% free",
-            "detail": "C:\\: 130.4 GiB free of 476.8 GiB"
+            "value": "27% free",
+            "detail": "C:\\ holds C:\\gh-runners\\acme-demo and each runner's _work directory: 130.4 GiB free of 476.8 GiB."
           },
           {
             "id": "runner-startup",
@@ -1693,7 +1900,9 @@
           ],
           "serviceAccount": ".\\builder",
           "enabled": true,
-          "sshTransport": "openssh"
+          "sshTransport": "openssh",
+          "xcode": [],
+          "simulatorRuntimes": []
         },
         "plan": [
           {

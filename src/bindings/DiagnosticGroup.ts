@@ -3,4 +3,4 @@
 /**
  * Groups keep host configuration separate from runner-specific requirements.
  */
-export type DiagnosticGroup = "network" | "power" | "system" | "runners";
+export type DiagnosticGroup = "network" | "power" | "system" | "session" | "toolchain" | "runners";
