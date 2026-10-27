@@ -7,13 +7,15 @@ on each machine's and runner's pane, and makes changes only after you review the
 rules and guards come from Runner Fleet's `bin/fleet` CLI.
 
 The fleet uses long-lived native services: no Docker, Kubernetes, ARC, Ansible or VMs.
-GitHub's runner auto-update stays on.
+GitHub's runner auto-update stays on; **Upgrade…** catches up a runner that fell behind.
 
 > Checking (status, plan, runner checks, logs) only reads. **Apply** never retires an existing
 > runner. **Retire** needs an online, idle, active replacement and the phrase typed, and keeps
 > the old directory. **Decommission** needs `decommission = true` in the inventory first, and
-> also keeps the directory. Every change opens a review; when you run it, the host is read
-> again and nothing happens if it changed since the review.
+> also keeps the directory. **Clean up**, **Upgrade**, **Drain** and **Resume** never touch a
+> busy runner. Every change opens a review; when you run it, the host is read again and nothing
+> happens if it changed since the review. The only changes without a review each time are the
+> two you turn on in Settings ([Automatic actions](#automatic-actions-opt-in)).
 
 ## Setup
 
@@ -128,8 +130,11 @@ still present, runners pending decommission, and GitHub runners carrying its `ho
 - **Review apply…** (a machine's Changes section) installs or reconciles that host's runners:
   missing runners, labels, trusted-group membership, stopped services. On a host whose runners
   replace legacy ones, it applies one runner at a time.
-- On a runner's pane: **Restart…** (only when it's idle), **Retire…**, **Decommission…**, and
-  **Diagnostic log ▸ Show last 200 lines**, a read-only tail of its newest `_diag/Runner_*.log`.
+- On a runner's pane: **Restart…** (only when it's idle), **Retire…**, **Decommission…**,
+  **Upgrade…**, **Drain…** and **Resume…** ([Maintenance](#maintenance-cleanup-upgrades-and-drains)),
+  and **Diagnostic log ▸ Show last 200 lines**, a read-only tail of its newest
+  `_diag/Runner_*.log`.
+- A machine's **Maintenance** section: **Clean up…** and **Upgrade idle runners…**.
 - The Windows service-account password (`service_mode = "windows-service"` with
   `service_account`) and a Linux sudo password (for hosts without non-interactive sudo) are
   typed into the review when needed, used once, and never stored.
@@ -297,6 +302,156 @@ listing the name and keeps the runner directory. The entry stays in the inventor
 tombstone that reserves the name and path; remove it, and the directory, later and
 deliberately.
 
+## Maintenance: cleanup, upgrades and drains
+
+These are reviewed changes like apply: the review re-reads GitHub and the host, and running it
+reads both again and refuses if anything changed. A busy runner is never cleaned, upgraded or
+stopped, and the host scripts check once more, immediately before acting, that no
+`Runner.Worker` from that runner's directory is running.
+
+### Clean up
+
+**Clean up…** on a machine measures, then (after review) removes, only these targets. Each is
+shown with its exact path and measured size:
+
+| Target | What is removed |
+|---|---|
+| `RUNNER/_work/_temp`, `RUNNER/_work/_actions` | Their contents, for idle runners. |
+| `RUNNER/_work` | Its whole contents (workspaces, tool cache, temp), only with the review's opt-in checkbox. |
+| `RUNNER/_diag` | `Runner_*.log` and `Worker_*.log` files directly in it, older than the chosen number of days (14 by default). The review lists each file; only those are removed. |
+| `RUNNER/bin.fleet-previous`, `RUNNER/externals.fleet-previous` | The previous binaries kept by the last upgrade. |
+| `~/Library/Developer/Xcode/DerivedData` (macOS) | Its contents, only when no runner on the machine is busy. |
+| Unavailable simulators (macOS) | `xcrun simctl delete unavailable`, only when no runner is busy. |
+| Docker (macOS, Linux) | `docker system prune -f` when Docker is installed and running: stopped containers, unused networks, dangling images and build cache. Never volumes. Only when no runner is busy. |
+
+`RUNNER` is a declared runner's exact inventory directory. The host derives every path from a
+fixed suffix of it (or of the home directory), requires `.runner` to name that runner, resolves
+the path, and refuses one that is a symlink, passes through one, or resolves anywhere else. It
+removes directory contents with `find -delete`, which neither follows links nor crosses into
+another file system, and keeps the directory itself. On Windows, child folders are removed with
+`rmdir /s`, which removes junctions without following them. `.runner`, `.credentials*`,
+configuration files, `bin` and `externals` are never targets. Legacy and decommissioned runner
+directories are left alone.
+
+This is a deliberate, narrow exception to Runner Fleet's "no broad or glob-based deletion"
+rule: these runner caches grow without bound, and each target is an enumerated, reviewed,
+exact path. Nothing else is ever removed recursively.
+
+**Cleaning after every job (manual recipe).** The runner can run a script after each job with
+`ACTIONS_RUNNER_HOOK_JOB_COMPLETED`. The app doesn't install one; if you want it, add to the
+runner directory's `.env` (one runner at a time, with its service stopped, then start it):
+
+```sh
+ACTIONS_RUNNER_HOOK_JOB_COMPLETED=/Users/builder/gh-runners/acme/job-completed.sh
+```
+
+and keep the script narrow, for example:
+
+```sh
+#!/bin/sh
+# Runs after each job, in the runner's own account. Remove only this job's temp files.
+set -eu
+[ -n "${RUNNER_TEMP:-}" ] && [ -d "$RUNNER_TEMP" ] || exit 0
+find "$RUNNER_TEMP" -xdev -mindepth 1 -delete
+```
+
+A failing hook fails the job, so test it on one runner first. `.env` survives upgrades, since
+upgrades replace only `bin/` and `externals/`.
+
+### Upgrade
+
+For a runner behind the latest `actions/runner` release, **Upgrade…** (a runner's pane) or
+**Upgrade idle runners…** (a machine's Maintenance section) shows each runner's current and
+target version; busy runners appear as not now. Running it handles one runner at a time: stop
+the idle service, download the release on the machine and verify the SHA-256 digest GitHub
+publishes (a release without one is refused), extract it, replace `bin/` and `externals/` inside
+the same directory (keeping the old ones as `bin.fleet-previous` and
+`externals.fleet-previous`), start the service, and confirm the runner reports the new version.
+The directory is never moved and `.runner`, `.credentials*` and `.env` are never touched. A
+runner that started a job in the meantime is skipped; a failure stops there and leaves that
+runner stopped (see [Recovery](#recovery)). If a newer release appears between review and run,
+the run refuses and you review again.
+
+### Drain and resume
+
+GitHub has no API to pause a runner, so **Drain…** works at the service level: the runner's
+service is stopped on the machine once it is idle, immediately if it already is. A busy runner
+keeps its job: the app keeps a durable drain (in `automation.json` beside its settings) and,
+about every 20 seconds, stops the service once GitHub shows the runner idle. That stop is
+authorised by the original review: it checks that the inventory still declares the same runner
+at the same path and that GitHub lists the same registration, refuses a busy runner, and is
+recorded in the machine's history. **Cancel drain** on the runner's pane removes a drain that
+hasn't stopped anything yet. The sidebar marks drained runners *draining* or *paused*.
+
+A drained runner shows offline on GitHub and the watchdog leaves it alone. **Resume…** starts its
+service and ends the drain. The stop lasts until the service manager starts it again: a
+LaunchAgent after the next login, a systemd unit or Windows service after a reboot. If the app
+then sees it running, it ends the drain and notes that in history. A logon-task runner's task is
+disabled while drained, so its repeating trigger can't restart it.
+
+A deferred stop runs without a password. On a Linux host without non-interactive sudo it can't
+stop the service; the drain stays and its pane shows why. Drain it again once it's idle, with the
+sudo password in the review.
+
+## Automatic actions (opt-in)
+
+Two settings let the app change things without a review each time. Both are off by default, and
+turning one on is the standing approval for exactly what it does. This is a deliberate, narrow
+exception to "only reviewed plans change machines". Neither runs with demo data.
+
+### Watchdog restarts
+
+**Settings ▸ General ▸ Automatically restart stopped runner services.** When on, the app
+restarts an inventory runner (not a legacy, decommissioned or drained one) on an enabled host
+when a fresh SSH read shows its service `inactive`, `failed` or `stopped` and fresh GitHub data
+shows it offline and not busy. It uses the same guarded restart as **Restart…**, which reads
+GitHub again and refuses a busy runner. It waits 2 minutes after first seeing the service
+stopped, then 5, 15 and 60 minutes between attempts, and makes at most 3 attempts per runner in
+6 hours. When a fourth would be due it gives up, raises an alert and stops trying until it sees
+the service running again. Every attempt, failure, give-up and recovery is recorded in the
+machine's history and sent through desktop notifications and alert destinations (maintenance
+mode pauses those). Attempts are saved before they are made, so restarting the app doesn't
+repeat one. Turning the setting off or on starts its history afresh. It never uses a password,
+so hosts that need a sudo password can't be restarted this way.
+
+### Fleet availability for workflows
+
+**Settings ▸ General ▸ Publish availability to an organization variable.** When on, the app
+writes the organization Actions variable `RUNNER_FLEET_STATUS` (the name is configurable),
+visible to the organization's private repositories, through `gh api` with the `gh` login (which
+needs organization admin, as for other changes):
+
+```json
+{"updatedAt":"2026-10-03T12:00:00Z","online":{"linux-build":1,"macos-build":2},"healthy":true}
+```
+
+`online` counts the inventory runners GitHub reports online for each label the inventory gives
+them, except `fleet` and `host-*`; `healthy` means every one of those labels has at least one.
+Online runners can still be busy. It is written only from fresh GitHub data (the organization
+must also be added in Settings ▸ GitHub), only when the counts change, and at most every 5
+minutes (configurable). Nothing else is written. The value is not updated while the app isn't
+running, so `updatedAt` can be old.
+
+Workflows can then fall back to GitHub-hosted runners when self-hosted capacity is down
+([community discussion #20019](https://github.com/orgs/community/discussions/20019)):
+
+```yaml
+jobs:
+  build:
+    runs-on: ${{ vars.RUNNER_FLEET_STATUS && fromJSON(vars.RUNNER_FLEET_STATUS).online['macos-build'] > 0 && fromJSON('["self-hosted","macos-build"]') || 'macos-latest' }}
+```
+
+To keep routing through the trusted group, return an object instead:
+
+```yaml
+    runs-on: ${{ vars.RUNNER_FLEET_STATUS && fromJSON(vars.RUNNER_FLEET_STATUS).online['macos-build'] > 0 && fromJSON('{"group":"Acme trusted builders","labels":"macos-build"}') || 'macos-latest' }}
+```
+
+`vars` is available in `runs-on`; the leading `vars.RUNNER_FLEET_STATUS &&` keeps `fromJSON`
+from failing before the variable exists, and a missing label reads as null, which isn't greater
+than 0. Expressions bind `>` before `&&` before `||`. Jobs that need the machines themselves
+(GUI lanes, signing) shouldn't fall back.
+
 ## Recovery
 
 - **Install failed before registration:** fix the reported prerequisite. A partial, unconfigured
@@ -311,7 +466,16 @@ deliberately.
 - **Restoring a retired runner:** its files are still at the legacy path, but its registration
   is gone. That's a manual procedure, not an automatic rollback.
 
-There's no recursive cleanup. Remove old directories by explicit path, separately.
+- **Upgrade failed:** the runner is left stopped. If its `bin/` was already replaced, the
+  previous files are in `bin.fleet-previous` and `externals.fleet-previous` in the same
+  directory (a failure while swapping puts them back by itself). Read **Diagnostic log**, then
+  **Resume…** or **Restart…**, or move the previous folders back by hand with the service
+  stopped.
+- **The watchdog gave up:** an alert says so. Read the diagnostic log, fix the cause, and
+  **Restart…** the runner; the watchdog tries again once it has seen the service running.
+
+The only recursive removal is **Clean up…**, and only for the exact targets it lists. Remove old
+runner directories by explicit path, separately.
 
 ## Troubleshooting
 

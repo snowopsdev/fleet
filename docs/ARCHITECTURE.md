@@ -79,6 +79,42 @@ announcement state prevent duplicates after a restart. Stable inventory keys pre
 across tailnet node replacements; a changed SSH target resets alert and boot baselines. Demo
 history is fictional, generated separately, and never touches the journal or sends alerts.
 
+Alert destinations (`outbound.rs`: Slack and Discord webhooks, ntfy, a generic JSON webhook)
+get the same alerts and recoveries. Settings keep only their kind, name, ntfy server and topic,
+and a host summary; webhook URLs and ntfy tokens are in the Keychain (`SecretStore` account
+`alert-destination:<id>`). Each announcement is queued per enabled destination in the same
+journal write that records the event, so it is saved before it is sent. After each monitoring
+round the engine claims due deliveries (pushing each out by a minute and saving that first, so a
+crash retries later rather than at once; a destination can rarely receive an alert twice, never
+lose one), posts them with reqwest (10-second timeout, no redirects, HTTPS or loopback only, and
+errors without the URL), removes accepted ones and retries failures after 1, 2, 5, 15, 30 and
+then 60 minutes for up to a day. Maintenance pauses and removed destinations drop their queue.
+
+## Automation
+
+`automation/` holds what the app does later or on its own, each authorised in advance, with its
+durable state in `automation.json` beside the settings (saved before acting; an unreadable or
+newer file pauses automation and is preserved). `run_automation` runs every 20 seconds from the
+Tauri poller and never in demo mode. Each action takes the same change slot as reviewed
+changes, so none overlaps a running change, and is recorded in machine history
+(`MonitorStore::record_external`).
+
+- **Drains:** a reviewed drain of a busy runner leaves a drain mark (runner, exact path, GitHub
+  registration, review ID). The deferred stop runs when fresh GitHub data shows the runner idle
+  (or once a minute otherwise), re-reads the inventory and GitHub, refuses a changed path or
+  registration, and stops the service with the host script's job check.
+- **Watchdog** (`automation/watchdog.rs`, opt-in): a pure plan from the fleet view and the
+  journal decides restarts with backoff (2, 5, 15, 60 minutes) and at most 3 attempts per runner
+  in 6 hours, then a give-up alert (`FleetAlertKind::WatchdogGaveUp`). Restarts use the guarded
+  `restart_runner`. Enabling it is the standing approval; see
+  [FLEET.md](FLEET.md#automatic-actions-opt-in).
+- **Availability variable** (`automation/publish.rs`, opt-in): counts online inventory runners
+  per capability label from fresh GitHub data and writes the organization variable through
+  `gh api` (value on stdin) only when the counts change, at most every N minutes.
+
+The view's `automation` section (drains, watchdog state, destinations without secrets, publish
+status) is read-only data, also served by the local API.
+
 ## Status rules
 
 - Installed/configured and service state come from SSH; connected, busy and idle come from GitHub.
@@ -169,6 +205,14 @@ script on SSH stdin.
     the reviewed ones. Reviews are single-use and expire after 15 minutes.
   - SSH aliases are resolved off the async runtime so inventory hosts join their tailnet
     machines.
+- **Maintenance (`desired/maintenance.rs`, `engine_desired_maintenance.rs`):** cleanup,
+  upgrade, drain and resume are reviewed changes outside Runner Fleet's plan. Their reviews read
+  extra facts (a read-only cleanup survey, the latest release asset); sizes are shown but not
+  compared, so a re-check compares only what will change. Execution uses the reviewed targets and
+  release. Host scripts (`worker-cleanup.*`, `worker-upgrade.*`, the stop script) check for a
+  running `Runner.Worker` in the runner directory immediately before acting. Cleanup resolves
+  fixed suffixes of the runner or home directory and refuses symlinks, the only recursive
+  removal in the app. Demo data builds fictional, never-stored reviews for these.
 - **Parity:** `examples/fleet.rs` prints Runner Fleet's `--json` shapes for
   [the parity script](FLEET.md#parity-with-runner-fleet).
 - **Demo:** `demo_desired.rs` is a fictional inventory and snapshot run through the same view

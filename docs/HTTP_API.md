@@ -15,15 +15,16 @@ Every route requires a loopback client address and a loopback `Host` header, and
 request with an `Origin` header, so browser pages can't call it. No CORS headers are sent. Only
 GET, HEAD and `POST /v1/checks` are accepted. Responses never include tokens or other
 credentials; log reads return runner diagnostic output as written by the runner. No endpoint
-installs, registers, restarts, retires or decommissions runners, mints runner tokens, or changes
-host configuration.
+installs, registers, restarts, retires, decommissions, cleans up, upgrades, drains or resumes
+runners, mints runner tokens, changes alert destinations or automatic actions, or changes host
+configuration.
 
 ## Routes
 
 | Route | Filters and result |
 | --- | --- |
 | `GET /` | Capabilities, limits and semantics |
-| `GET /v1/fleet` | Complete FleetView, including `otherMachines` and `issues` |
+| `GET /v1/fleet` | Complete FleetView, including `otherMachines`, `issues` and `automation` |
 | `GET /v1/summary` | Summary, organization and tailnet status |
 | `GET /v1/machines` | `scope=all` (default), `fleet` or `discovered`; `os`, `connection`, `q`, `after`, `limit` |
 | `GET /v1/machines/{id}` | One machine |
@@ -88,6 +89,13 @@ repository runners (monitoring only, never matched to inventory hosts), `version
 the runner's version with the latest release in the fleet's `runnerRelease`, and
 `orgs[].rateLimitedUntil` is set while GitHub polls for that account are paused. The queue's
 `held` counts self-hosted jobs GitHub holds for an approval or concurrency group.
+
+`/v1/fleet`'s `automation` describes reviewed drains (`draining` or `stopped`), the watchdog
+(whether it's on, and each runner's recent attempts, next attempt and give-up), alert
+destinations (kind, name, host summary, queue length and last outcome; never URLs or tokens)
+and the published availability variable. It is read-only: drains, the watchdog and
+destinations are changed only in the app. A watchdog give-up is an alert (`watchdogGaveUp`) in
+`/v1/monitoring` and `/v1/issues`.
 
 `/v1/issues` is the desktop's attention feed. `summary.attention` equals the full
 `issues.length`, including unresolved stale or muted alerts. The UI renders alerts, history

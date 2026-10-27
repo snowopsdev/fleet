@@ -17,11 +17,17 @@ accepting feature requests, but you're welcome to fork it and make it your own.
 - **SSH monitoring** reads CPU, load, memory, free disk, uptime and runner configuration from
   the machines. Nothing is installed on the machines.
 - **Event history and alerts** keep observed connections, reboots and runner service changes
-  on this Mac, with offline and low-disk alerts and optional desktop notifications.
+  on this Mac, with offline and low-disk alerts, optional desktop notifications, and optional
+  Slack, Discord, ntfy or JSON webhook destinations.
+- **Maintenance:** reviewed disk cleanup, runner upgrades, and draining a runner after its
+  current job; an opt-in watchdog that restarts stopped runner services; and an opt-in
+  organization variable that lets workflows fall back to GitHub-hosted runners.
 
 Monitoring is read-only. Changes go through Runner Fleet's desired-state rules, ported to Rust:
-the app installs, reconciles, retires, decommissions or restarts runners only through reviewed
-plans against your inventory, `inventory/fleet.toml`.
+the app installs, reconciles, retires, decommissions, restarts, cleans up, upgrades, drains or
+resumes runners only through reviewed plans against your inventory, `inventory/fleet.toml`.
+The two exceptions are off by default and turned on in Settings: watchdog restarts and the
+availability variable ([docs/FLEET.md](docs/FLEET.md#automatic-actions-opt-in)).
 
 ## Requirements
 
@@ -114,9 +120,11 @@ cargo run -q -p fleet --example fleet -- health mini
 ## Event history and alerts
 
 The fleet overview and each machine show observed events, kept on this Mac while the app runs.
-Desktop notifications are off by default: turn them on in Settings ▸ General and use **Test
-notification** to check delivery. **Maintenance for 1 hour** on a machine pauses its
-notifications but keeps history and in-app alerts. Thresholds and retention are in
+Desktop notifications are off by default: turn them on in Settings ▸ Notifications and use
+**Test notification** to check delivery. The same tab adds alert destinations (Slack, Discord,
+ntfy, JSON webhook) with **Send test**; their URLs and tokens are stored in the Keychain.
+**Maintenance for 1 hour** on a machine pauses its notifications and destinations but keeps
+history and in-app alerts. Thresholds and retention are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#event-history-and-alerts).
 
 ## Local API for scripts and AI agents

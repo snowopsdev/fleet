@@ -707,7 +707,13 @@ impl Engine {
         let (summary, ntfy_server, ntfy_topic) = match kind {
             AlertDestinationKind::Ntfy => {
                 // When editing, an empty server or topic keeps the saved one.
-                let given = |value: &Option<String>| value.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(String::from);
+                let given = |value: &Option<String>| {
+                    value
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(String::from)
+                };
                 let server = given(&input.ntfy_server)
                     .or_else(|| existing.as_ref().and_then(|d| d.ntfy_server.clone()))
                     .unwrap_or_else(|| "https://ntfy.sh".into());
