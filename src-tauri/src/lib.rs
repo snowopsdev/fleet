@@ -174,6 +174,7 @@ pub fn run() {
             commands::add_org,
             commands::update_org_token,
             commands::set_org_scope,
+            commands::set_org_runner_repos,
             commands::remove_org,
             commands::ignore_peer,
             commands::unignore_peer,

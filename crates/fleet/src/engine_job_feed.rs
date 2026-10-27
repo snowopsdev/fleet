@@ -58,17 +58,20 @@ impl Engine {
         let mut changes = self.job_activity.settings.subscribe();
         loop {
             let config = self.config();
-            let wanted: BTreeMap<String, crate::model::OrgConfig> =
-                if config.demo_mode || self.job_activity.feeds.is_stopped() {
-                    BTreeMap::new()
-                } else {
-                    config
-                        .orgs
-                        .into_iter()
-                        .map(|o| (o.login.to_lowercase(), o))
-                        .filter(|(key, _)| config.job_activity.feed_orgs.contains(key))
-                        .collect()
-                };
+            let wanted: BTreeMap<String, crate::model::OrgConfig> = if config.demo_mode
+                || self.job_activity.feeds.is_stopped()
+            {
+                BTreeMap::new()
+            } else {
+                config
+                    .orgs
+                    .into_iter()
+                    .map(|o| (o.login.to_lowercase(), o))
+                    .filter(|(key, o)| {
+                        o.kind == crate::model::AccountKind::Organization && config.job_activity.feed_orgs.contains(key)
+                    })
+                    .collect()
+            };
             running.retain(|org, stop| {
                 let keep = wanted.contains_key(org);
                 if !keep {

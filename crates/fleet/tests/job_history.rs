@@ -3,11 +3,12 @@
 #![expect(clippy::unwrap_used, reason = "test fixtures fail the test loudly")]
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::extract::Query;
+use axum::http::{HeaderMap, StatusCode};
 use axum::routing::get;
 use axum::{Json, Router};
 use chrono::Utc;
@@ -15,7 +16,7 @@ use fleet::engine::{Engine, MemorySecrets, SecretStore};
 use fleet::jobs::feed::{Backoff, FleetJobFeedState, ForwardProcess, ForwardSpec, Launch, ProcessEvent};
 use fleet::jobs::history::FleetJobHistoryFilter;
 use fleet::jobs::{FleetJobConclusion, FleetJobSource};
-use fleet::model::{AppConfig, OrgAuth, OrgConfig, RepoScope};
+use fleet::model::{AccountKind, AppConfig, OrgAuth, OrgConfig, RepoScope};
 use serde_json::{Value, json};
 
 mod common;
@@ -30,26 +31,67 @@ fn runner_job(id: u64, status: &str, conclusion: Option<&str>) -> Value {
 
 /// A fake GitHub with one runner and one run that finishes when `finished` is set.
 fn fake_github(finished: Arc<AtomicBool>, run_lists: Arc<AtomicUsize>) -> Router {
+    fake_github_with(finished, run_lists, Budget::default())
+}
+
+/// Rate-limit headers the fake reports: `remaining` on run lists, and a refused (rate
+/// limited) run job listing while `limited` is set.
+#[derive(Clone)]
+struct Budget {
+    remaining: Arc<AtomicU32>,
+    limited: Arc<AtomicBool>,
+    runner_lists: Arc<AtomicUsize>,
+}
+
+impl Default for Budget {
+    fn default() -> Self {
+        Self {
+            remaining: Arc::new(AtomicU32::new(5000)),
+            limited: Arc::default(),
+            runner_lists: Arc::default(),
+        }
+    }
+}
+
+fn rate_headers(remaining: u32) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert("x-ratelimit-limit", "5000".parse().unwrap());
+    headers.insert("x-ratelimit-remaining", remaining.to_string().parse().unwrap());
+    let reset = (Utc::now() + chrono::Duration::minutes(30)).timestamp();
+    headers.insert("x-ratelimit-reset", reset.to_string().parse().unwrap());
+    headers
+}
+
+fn fake_github_with(finished: Arc<AtomicBool>, run_lists: Arc<AtomicUsize>, budget: Budget) -> Router {
     let runs_finished = finished.clone();
+    let runners = budget.runner_lists.clone();
+    let remaining = budget.remaining.clone();
     Router::new()
         .route(
             "/orgs/{org}/actions/runners",
-            get(|| async {
-                Json(
-                    json!({"total_count": 1, "runners": [{"id": 7, "name": "fake-runner", "os": "Linux",
-                    "status": "online", "busy": true, "labels": [{"name": "self-hosted"}, {"name": "Linux"}]}]}),
-                )
+            get(move || {
+                runners.fetch_add(1, Ordering::SeqCst);
+                async {
+                    Json(
+                        json!({"total_count": 1, "runners": [{"id": 7, "name": "fake-runner", "os": "Linux",
+                        "status": "online", "busy": true, "labels": [{"name": "self-hosted"}, {"name": "Linux"}]}]}),
+                    )
+                }
             }),
         )
         .route(
             "/repos/{org}/{repo}/actions/runs",
             get(move |Query(q): Query<HashMap<String, String>>| {
                 let finished = runs_finished.clone();
+                let left = remaining.load(Ordering::SeqCst);
                 run_lists.fetch_add(1, Ordering::SeqCst);
                 async move {
                     let running = q["status"] == "in_progress" && !finished.load(Ordering::SeqCst);
                     let runs = if running { json!([{"id": 11}]) } else { json!([]) };
-                    Json(json!({"total_count": runs.as_array().unwrap().len(), "workflow_runs": runs}))
+                    (
+                        rate_headers(left),
+                        Json(json!({"total_count": runs.as_array().unwrap().len(), "workflow_runs": runs})),
+                    )
                 }
             }),
         )
@@ -57,7 +99,12 @@ fn fake_github(finished: Arc<AtomicBool>, run_lists: Arc<AtomicUsize>) -> Router
             "/repos/{org}/{repo}/actions/runs/{run}/jobs",
             get(move || {
                 let finished = finished.load(Ordering::SeqCst);
+                let limited = budget.limited.load(Ordering::SeqCst);
                 async move {
+                    if limited {
+                        let body = Json(json!({"message": "API rate limit exceeded"}));
+                        return (StatusCode::FORBIDDEN, rate_headers(0), body);
+                    }
                     let jobs = if finished {
                         // 112 finished between two scans and was never seen running.
                         json!([
@@ -67,7 +114,8 @@ fn fake_github(finished: Arc<AtomicBool>, run_lists: Arc<AtomicUsize>) -> Router
                     } else {
                         json!([runner_job(111, "in_progress", None)])
                     };
-                    Json(json!({"total_count": jobs.as_array().unwrap().len(), "jobs": jobs}))
+                    let body = Json(json!({"total_count": jobs.as_array().unwrap().len(), "jobs": jobs}));
+                    (StatusCode::OK, rate_headers(5000), body)
                 }
             }),
         )
@@ -83,6 +131,8 @@ fn engine(dir: &std::path::Path, base: String) -> Arc<Engine> {
             },
             added_at: Utc::now(),
             auth: OrgAuth::Token,
+            kind: AccountKind::Organization,
+            runner_repos: Vec::new(),
         }],
         ..Default::default()
     };
@@ -281,4 +331,34 @@ async fn feed_settings_and_rates_are_validated() {
     engine.set_job_feed("acme", true).unwrap();
     engine.set_job_feed("acme", false).unwrap();
     assert!(engine.config().job_activity.feed_orgs.is_empty());
+}
+
+#[tokio::test]
+async fn history_reads_leave_a_low_budget_to_the_polls_and_honour_rate_limits() {
+    let finished = Arc::new(AtomicBool::new(false));
+    let budget = Budget::default();
+    let base = serve(fake_github_with(finished.clone(), Arc::default(), budget.clone())).await;
+    let dir = tempfile::tempdir().unwrap();
+    let engine = engine(dir.path(), base);
+    engine.poll_github_runners().await;
+    engine.poll_github_jobs_and_history().await;
+
+    // The scan reports a nearly spent budget: the finished run waits for a later round.
+    finished.store(true, Ordering::SeqCst);
+    budget.remaining.store(150, Ordering::SeqCst);
+    engine.poll_github_jobs_and_history().await;
+    assert!(history(&engine).is_empty());
+
+    // A rate-limited history read makes every poll of the account wait for the reset.
+    budget.remaining.store(5000, Ordering::SeqCst);
+    budget.limited.store(true, Ordering::SeqCst);
+    engine.poll_github_jobs_and_history().await;
+    assert!(history(&engine).is_empty());
+    let before = budget.runner_lists.load(Ordering::SeqCst);
+    engine.poll_github_runners().await;
+    assert_eq!(
+        budget.runner_lists.load(Ordering::SeqCst),
+        before,
+        "runner polls wait for the reset"
+    );
 }

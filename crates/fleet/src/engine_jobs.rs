@@ -19,6 +19,9 @@ use crate::sync::{MutexExt, RwLockExt};
 const RUNS_PER_ROUND: usize = 20;
 /// Jobs seen running but missing from their run's latest attempt, read one by one per run.
 const JOBS_PER_RUN: usize = 5;
+/// History reads stop for the round when an account has fewer requests left than this,
+/// leaving its budget to the runner and job polls.
+const KEEP_REQUESTS: u32 = 200;
 /// With a healthy job feed, the job scan still runs this often as a fallback.
 pub(super) const FEED_FALLBACK_SCAN: Duration = Duration::minutes(3);
 
@@ -102,17 +105,22 @@ impl Engine {
             return;
         }
         let now = Utc::now();
-        let clients = self.github.locked().clone();
+        let clients: Vec<_> = config
+            .orgs
+            .iter()
+            .filter_map(|o| {
+                let org = o.login.to_lowercase();
+                Some((self.polled_client(&org, now)?, org))
+            })
+            .collect();
         let rounds: Vec<OrgRound> = {
             let obs = self.obs.read_locked();
-            config
-                .orgs
-                .iter()
-                .filter_map(|o| {
-                    let org = o.login.to_lowercase();
+            clients
+                .into_iter()
+                .filter_map(|(client, org)| {
                     let observed = obs.github.get(&org)?;
                     Some(OrgRound {
-                        client: clients.get(&org)?.clone(),
+                        client,
                         scan: observed.jobs.as_ref()?.value.clone(),
                         runners: observed.runners.as_ref().map(|r| r.value.clone()).unwrap_or_default(),
                         org,
@@ -133,6 +141,9 @@ impl Engine {
         let mut result = RoundResult::default();
         for (round, runs) in rounds.iter().zip(due) {
             for run in runs {
+                if round.client.rate_limit().is_some_and(|r| r.remaining < KEEP_REQUESTS) {
+                    break;
+                }
                 match read_run(&round.client, &run.repo, run.run_id, &run.jobs).await {
                     Ok((jobs, complete)) => {
                         result
@@ -149,14 +160,30 @@ impl Engine {
                     Err(error) => {
                         tracing::debug!(org = %round.org, run = run.run_id, "job history read failed: {error}");
                         result.checked.push(run.run_id);
-                        if matches!(error, GithubError::RateLimited(_) | GithubError::Unauthorized) {
+                        if let GithubError::RateLimited { resets_at } = error {
+                            self.back_off(&round.org, resets_at);
+                            break;
+                        }
+                        if matches!(error, GithubError::Unauthorized) {
                             break;
                         }
                     }
                 }
             }
+            if let Some(observed) = self.obs.write_locked().github.get_mut(&round.org) {
+                observed.rate_limit = round.client.rate_limit();
+            }
         }
         self.apply_job_round(result, FleetJobSource::Poll, now).await;
+    }
+
+    /// A history read hit the rate limit: every poll of the account waits for GitHub's reset.
+    fn back_off(&self, org: &str, resets_at: DateTime<Utc>) {
+        let now = Utc::now();
+        if let Some(observed) = self.obs.write_locked().github.get_mut(org) {
+            let until = resets_at.max(now) + Duration::seconds(2);
+            observed.rate_limited_until = Some(observed.rate_limited_until.map_or(until, |at| at.max(until)));
+        }
     }
 
     /// Records finished jobs and run outcomes, then saves off the async runtime.
@@ -258,10 +285,16 @@ impl Engine {
     /// Turns the real-time job feed on or off for an added organization.
     pub fn set_job_feed(&self, login: &str, enabled: bool) -> Result<(), EngineError> {
         let key = login.to_lowercase();
-        if !self.config().orgs.iter().any(|o| o.login.to_lowercase() == key) {
+        let Some(account) = self.config().orgs.into_iter().find(|o| o.login.to_lowercase() == key) else {
             return Err(EngineError::NotFound(format!(
                 "{login} isn't an added organization. Add it in Settings ▸ GitHub first."
             )));
+        };
+        if enabled && account.kind == crate::model::AccountKind::User {
+            return Err(EngineError::Invalid(
+                "The real-time job feed forwards organization webhooks, so it isn't available for personal accounts."
+                    .into(),
+            ));
         }
         self.update_config(|c| {
             let orgs = &mut c.job_activity.feed_orgs;

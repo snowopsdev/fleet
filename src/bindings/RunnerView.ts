@@ -4,6 +4,7 @@ import type { JobView } from "./JobView";
 import type { LocalRunnerFacts } from "./LocalRunnerFacts";
 import type { RunnerActivity } from "./RunnerActivity";
 import type { RunnerDesired } from "./RunnerDesired";
+import type { RunnerVersionStatus } from "./RunnerVersionStatus";
 import type { Tri } from "./Tri";
 
 export type RunnerView = { 
@@ -19,4 +20,8 @@ currentJob: JobView | null, warnings: Array<string>,
 /**
  * What the inventory says about this runner, if its machine is a fleet host.
  */
-desired: RunnerDesired | null, };
+desired: RunnerDesired | null, 
+/**
+ * The runner's version compared with the latest release, when both are known.
+ */
+versionStatus: RunnerVersionStatus | null, };

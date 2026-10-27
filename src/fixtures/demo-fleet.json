@@ -10,7 +10,7 @@
     "runnersOffline": 1,
     "runnersUnknown": 2,
     "queuedJobs": 2,
-    "attention": 7
+    "attention": 9
   },
   "issues": [
     {
@@ -75,6 +75,28 @@
       "detail": "Host unreachable.",
       "machineId": "ts:nWin",
       "runnerKey": null,
+      "stale": false,
+      "muted": false,
+      "fix": null
+    },
+    {
+      "id": "runner-version:overdue",
+      "category": "runner",
+      "title": "Runner update overdue: 2.329.0",
+      "detail": "GitHub can stop sending jobs to a runner that misses an update for 30 days. Update Studio-Old-2 (2.321.0).",
+      "machineId": "ts:nStudio",
+      "runnerKey": "gh:acme-demo:90",
+      "stale": false,
+      "muted": false,
+      "fix": null
+    },
+    {
+      "id": "runner-version:available",
+      "category": "runner",
+      "title": "Runner update available: 2.329.0",
+      "detail": "linux-01-a (2.328.0) is behind. Runners update themselves unless automatic updates are turned off.",
+      "machineId": "ts:nLinux",
+      "runnerKey": "gh:acme-demo:301",
       "stale": false,
       "muted": false,
       "fix": null
@@ -280,8 +302,9 @@
               "docker"
             ],
             "os": "Linux",
-            "version": "2.329.0",
+            "version": "2.328.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -326,6 +349,14 @@
                 "blocked": true
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.328.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": true,
+            "minorVersionsBehind": 1,
+            "overdue": false
           }
         },
         {
@@ -351,6 +382,7 @@
             "os": "Linux",
             "version": "2.329.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -395,6 +427,14 @@
                 "blocked": true
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
           }
         }
       ],
@@ -675,6 +715,7 @@
             "os": "macOS",
             "version": "2.329.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -730,6 +771,14 @@
                 "blocked": false
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
           }
         }
       ],
@@ -871,7 +920,8 @@
                 "blocked": true
               }
             ]
-          }
+          },
+          "versionStatus": null
         }
       ],
       "warnings": [],
@@ -1139,6 +1189,7 @@
             "os": "macOS",
             "version": "2.329.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -1197,6 +1248,14 @@
                 "blocked": false
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
           }
         },
         {
@@ -1222,6 +1281,7 @@
             "os": "macOS",
             "version": "2.329.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -1266,6 +1326,14 @@
                 "blocked": false
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
           }
         },
         {
@@ -1289,6 +1357,7 @@
             "os": "macOS",
             "version": null,
             "ephemeral": null,
+            "repo": null,
             "asOf": "2026-10-03T11:56:00Z",
             "stale": true
           },
@@ -1330,6 +1399,14 @@
                 "blocked": false
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.321.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": true,
+            "minorVersionsBehind": 8,
+            "overdue": true
           }
         }
       ],
@@ -1629,6 +1706,7 @@
             "os": "Windows",
             "version": "2.329.0",
             "ephemeral": false,
+            "repo": null,
             "asOf": "2026-10-03T11:59:51Z",
             "stale": false
           },
@@ -1665,6 +1743,14 @@
                 "blocked": true
               }
             ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
           }
         }
       ],
@@ -1830,13 +1916,22 @@
         "os": "Linux",
         "version": "2.329.0",
         "ephemeral": false,
+        "repo": "acme-demo/ml",
         "asOf": "2026-10-03T11:59:51Z",
         "stale": false
       },
       "local": null,
       "currentJob": null,
       "warnings": [],
-      "desired": null
+      "desired": null,
+      "versionStatus": {
+        "current": "2.329.0",
+        "latest": "2.329.0",
+        "latestPublishedAt": "2026-09-21T12:00:00Z",
+        "updateAvailable": false,
+        "minorVersionsBehind": 0,
+        "overdue": false
+      }
     }
   ],
   "ignored": [
@@ -1908,6 +2003,7 @@
       }
     ],
     "otherQueued": 1,
+    "held": 1,
     "complete": true,
     "asOf": "2026-10-03T11:59:39Z"
   },
@@ -1944,11 +2040,16 @@
         "remaining": 4712,
         "resetsAt": "2026-10-03T12:38:00Z"
       },
+      "rateLimitedUntil": null,
       "repoScope": {
         "kind": "recent",
         "maxRepos": 20
       },
-      "auth": "ghCli"
+      "auth": "ghCli",
+      "kind": "organization",
+      "runnerRepos": [
+        "ml"
+      ]
     }
   ],
   "tailnet": {
@@ -4166,5 +4267,10 @@
       }
     ],
     "feeds": []
+  },
+  "runnerRelease": {
+    "version": "2.329.0",
+    "publishedAt": "2026-09-21T12:00:00Z",
+    "checkedAt": "2026-10-03T11:35:00Z"
   }
 }

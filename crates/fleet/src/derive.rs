@@ -89,6 +89,11 @@ pub(crate) fn derive_without_issues(
         plan: plan_status(plan, checked.as_ref()),
         monitoring: crate::monitoring::FleetMonitoring::default(),
         activity: crate::jobs::FleetActivity::default(),
+        runner_release: obs.runner_release.as_ref().map(|r| RunnerReleaseView {
+            version: r.value.version.clone(),
+            published_at: r.value.published_at,
+            checked_at: r.at,
+        }),
     };
     if source == DataSource::Demo {
         crate::monitoring::demo::attach(&mut view, now);
@@ -173,10 +178,13 @@ struct GhEntry {
 
 struct GithubIndex {
     runners: Vec<GhEntry>,
-    /// (org, lowercase name) -> index
+    /// (org, lowercase name) -> index, for organization runners only: repository runners
+    /// aren't managed by the inventory.
     by_name: HashMap<(String, String), usize>,
     /// (org, runner id) -> in-progress job
     jobs_by_runner: HashMap<(String, u64), GhJob>,
+    release: Option<RunnerRelease>,
+    now: DateTime<Utc>,
 }
 
 impl GithubIndex {
@@ -185,6 +193,8 @@ impl GithubIndex {
             runners: Vec::new(),
             by_name: HashMap::new(),
             jobs_by_runner: HashMap::new(),
+            release: obs.runner_release.as_ref().map(|r| r.value.clone()),
+            now,
         };
         for org_cfg in &config.orgs {
             let org = org_cfg.login.to_lowercase();
@@ -193,7 +203,9 @@ impl GithubIndex {
                 let stale = now - runners.at > GITHUB_STALE_AFTER;
                 for r in &runners.value {
                     let i = idx.runners.len();
-                    idx.by_name.insert((org.clone(), r.name.to_lowercase()), i);
+                    if r.repo.is_none() {
+                        idx.by_name.insert((org.clone(), r.name.to_lowercase()), i);
+                    }
                     idx.runners.push(GhEntry {
                         key: format!("gh:{org}:{}", r.id),
                         org: org.clone(),
@@ -273,6 +285,7 @@ fn runner_view(
         os: e.runner.os.clone(),
         version: e.runner.version.clone(),
         ephemeral: e.runner.ephemeral,
+        repo: e.runner.repo.clone(),
         as_of: e.at,
         stale: e.stale,
     });
@@ -284,6 +297,13 @@ fn runner_view(
         as_of: at,
         stale,
     });
+
+    let version_status = github
+        .as_ref()
+        .and_then(|g| g.version.as_deref())
+        .or_else(|| local_facts.as_ref().and_then(|l| l.version.as_deref()))
+        .zip(gh.release.as_ref())
+        .and_then(|(current, release)| crate::runner_version::status(current, release, gh.now));
 
     let current_job = gh_entry
         .and_then(|e| gh.jobs_by_runner.get(&(e.org.clone(), e.runner.id)))
@@ -334,6 +354,7 @@ fn runner_view(
         current_job,
         warnings,
         desired: None,
+        version_status,
     }
 }
 
@@ -420,13 +441,32 @@ fn queue_view(
         }
         view.as_of = Some(view.as_of.map_or(jobs.at, |a: DateTime<Utc>| a.min(jobs.at)));
 
-        for job in jobs.value.jobs.iter().filter(|j| j.status == "queued") {
+        for job in jobs
+            .value
+            .jobs
+            .iter()
+            .filter(|j| !matches!(j.status.as_str(), "in_progress" | "completed"))
+        {
+            // A repository runner only takes its own repository's jobs.
             let compatible: Vec<&GhEntry> = gh
                 .runners
                 .iter()
-                .filter(|r| r.org == org && labels::is_compatible(&job.labels, &r.runner.labels))
+                .filter(|r| {
+                    r.org == org
+                        && r.runner
+                            .repo
+                            .as_ref()
+                            .is_none_or(|repo| repo.eq_ignore_ascii_case(&job.repo))
+                        && labels::is_compatible(&job.labels, &r.runner.labels)
+                })
                 .collect();
-            if compatible.is_empty() && !labels::targets_self_hosted(&job.labels) {
+            let self_hosted = !compatible.is_empty() || labels::targets_self_hosted(&job.labels);
+            if job.status != "queued" {
+                // `waiting` (approval), `pending` and `requested` jobs don't need a runner yet.
+                view.held += u32::from(self_hosted);
+                continue;
+            }
+            if !self_hosted {
                 view.other_queued += 1;
                 continue;
             }
@@ -512,8 +552,11 @@ fn org_statuses(config: &AppConfig, obs: &Observations) -> Vec<OrgStatusView> {
                     (None, None) => None,
                 }),
                 rate_limit: o.and_then(|o| o.rate_limit.clone()),
+                rate_limited_until: o.and_then(|o| o.rate_limited_until),
                 repo_scope: cfg.repo_scope.clone(),
                 auth: cfg.auth,
+                kind: cfg.kind,
+                runner_repos: cfg.runner_repos.clone(),
             }
         })
         .collect();

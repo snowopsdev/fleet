@@ -38,7 +38,7 @@ export function ActivitySettings({ config, view }: { config: AppConfig; view: Fl
       <HookScope />
       <div className="mt-3 space-y-2">
         {config.orgs.length === 0 && <Card className="px-4 py-3 text-[12.5px] text-ink-2">Add an organization in the GitHub tab first.</Card>}
-        {config.orgs.map((o) => {
+        {config.orgs.filter((o) => o.kind !== "user").map((o) => {
           const key = o.login.toLowerCase();
           return <FeedRow key={key} org={o.login} enabled={config.jobActivity.feedOrgs.includes(key)} demo={config.demoMode} status={view.activity.feeds.find((f) => f.org === key)} />;
         })}

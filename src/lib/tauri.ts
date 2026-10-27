@@ -11,6 +11,7 @@ import type { ChangeRequest } from "../bindings/ChangeRequest";
 import type { ChangeSecrets } from "../bindings/ChangeSecrets";
 import type { ReviewView } from "../bindings/ReviewView";
 import type { GhStatus } from "../bindings/GhStatus";
+import type { AccountKind } from "../bindings/AccountKind";
 import type { OrgAuth } from "../bindings/OrgAuth";
 import type { RepoScope } from "../bindings/RepoScope";
 import type { FleetAnalytics } from "../bindings/FleetAnalytics";
@@ -47,8 +48,8 @@ export const commands = {
   getConfig: (): Promise<AppConfig> =>
     isTauri ? invoke("get_config") : Promise.resolve({ orgs: [], ignoredPeers: [], machinePreferences: {}, demoMode: true, localApi: false, desktopNotifications: false, inventoryPath: null, jobActivity: { hostedRates: { linux: 0.006, windows: 0.01, macos: 0.062, asOf: "2026-10-26" }, feedOrgs: [] } }),
   refreshNow: () => invoke<void>("refresh_now"),
-  addOrg: (login: string, auth: OrgAuth, token: string | null, repoScope: RepoScope) =>
-    updateConfig("add_org", { login, auth, token, repoScope }),
+  addOrg: (login: string, auth: OrgAuth, token: string | null, repoScope: RepoScope, kind: AccountKind = "organization", runnerRepos: string[] = []) =>
+    updateConfig("add_org", { login, auth, token, repoScope, kind, runnerRepos }),
   getGhStatus: (): Promise<GhStatus> =>
     isTauri
       ? invoke("get_gh_status")
@@ -56,6 +57,7 @@ export const commands = {
   useGhForOrg: (login: string) => updateConfig("use_gh_for_org", { login }),
   updateOrgToken: (login: string, token: string) => updateConfig("update_org_token", { login, token }),
   setOrgScope: (login: string, repoScope: RepoScope) => updateConfig("set_org_scope", { login, repoScope }),
+  setOrgRunnerRepos: (login: string, runnerRepos: string[]) => updateConfig("set_org_runner_repos", { login, runnerRepos }),
   removeOrg: (login: string) => updateConfig("remove_org", { login }),
   ignorePeer: (nodeId: string) => updateConfig("ignore_peer", { nodeId }),
   unignorePeer: (nodeId: string) => updateConfig("unignore_peer", { nodeId }),
