@@ -16,7 +16,9 @@ use futures::future::{BoxFuture, join_all};
 use super::{Engine, EngineError, SecretStore};
 use crate::derive::GITHUB_STALE_AFTER;
 use crate::github::{AccountRunners, GithubClient, GithubError, MAX_REPOS};
-use crate::model::{AccountKind, JobScan, OrgAuth, OrgConfig, OrgObservation, RepoScope, Timed, default_api_base};
+use crate::model::{
+    AccountKind, GhRunnerGroup, JobScan, OrgAuth, OrgConfig, OrgObservation, RepoScope, Timed, default_api_base,
+};
 use crate::sync::{MutexExt, RwLockExt};
 use crate::{gh, labels};
 
@@ -94,6 +96,22 @@ fn next_pause(
             Some((current.map_or(until, |(previous, _)| previous.max(until)), now))
         }
         None => current.filter(|(_, at)| *at > started),
+    }
+}
+
+/// The runner listing, then the runner groups read with the same client.
+fn store_runners_and_groups(
+    o: &mut OrgObservation,
+    at: DateTime<Utc>,
+    (listing, groups): (AccountRunners, Result<Vec<GhRunnerGroup>, String>),
+) {
+    store_runners(o, at, listing);
+    match groups {
+        Ok(groups) => {
+            o.runner_groups = Some(Timed::new(at, groups));
+            o.runner_groups_error = None;
+        }
+        Err(error) => o.runner_groups_error = Some(Timed::new(at, error)),
     }
 }
 
@@ -354,13 +372,22 @@ impl Engine {
     /// Organization and repository runners for every account, then the runner release when due.
     pub async fn poll_github_runners(&self) {
         self.poll_github(
-            |_, client, org| client.account_runners(org).boxed(),
+            |_, client, org| {
+                async move {
+                    let runners = client.account_runners(org).await?;
+                    // Group policies only feed the public-repository warning, so a failure to
+                    // read them is kept apart and never fails the runner read.
+                    let groups = client.account_runner_groups(org).await.map_err(|e| e.to_string());
+                    Ok((runners, groups))
+                }
+                .boxed()
+            },
             // A 403 on the organization's list means the credential can't list runners.
             // Fetching the token again picks up a fix such as `gh auth refresh --scopes admin:org`.
             // A repository that can't be listed is recorded beside it and isn't a credential problem.
             |e| matches!(e, GithubError::Unauthorized | GithubError::Forbidden(_)),
             |org| &mut org.error,
-            store_runners,
+            store_runners_and_groups,
         )
         .await;
         self.poll_runner_release().await;

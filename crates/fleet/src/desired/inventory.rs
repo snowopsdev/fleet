@@ -92,6 +92,14 @@ fn strings(data: &toml::Table, key: &str) -> Result<Vec<String>> {
     }
 }
 
+fn optional_string(data: &toml::Table, key: &str) -> Result<Option<String>> {
+    match data.get(key) {
+        None => Ok(None),
+        Some(Value::String(s)) if !s.trim().is_empty() => Ok(Some(s.trim().to_string())),
+        Some(_) => err(format!("{key} must be a non-empty string")),
+    }
+}
+
 fn resolve_ssh(value: &str, environ: &HashMap<String, String>) -> (Option<String>, String) {
     let setting = value.trim().to_string();
     if let Some(name) = env_reference(&setting) {
@@ -180,7 +188,22 @@ fn parse_host(raw: &Value, environ: &HashMap<String, String>) -> Result<Host> {
     let platform = Platform::parse(&platform)
         .ok_or_else(|| InventoryError(format!("{id}: unsupported platform {}", repr(&platform))))?;
     let service_mode = ServiceMode::parse(&service_mode).ok_or_else(|| service_mode_error(&id, platform))?;
+    let xcode = strings(data, "xcode")?;
+    let simulator_runtimes = strings(data, "simulator_runtimes")?;
+    let mac_address = match optional_string(data, "mac_address")? {
+        Some(mac) => Some(
+            mac.parse::<crate::wake::MacAddress>()
+                .map_err(|e| InventoryError(format!("{id}: {e}")))?
+                .to_string(),
+        ),
+        None => None,
+    };
+    let wake_via = optional_string(data, "wake_via")?;
     Ok(Host {
+        xcode,
+        simulator_runtimes,
+        mac_address,
+        wake_via,
         id,
         platform,
         ssh_target,
@@ -233,6 +256,7 @@ fn validate_inventory(inventory: &Inventory) -> Result<()> {
     }
     let mut declared = Declared::default();
     for host in &inventory.hosts {
+        validate_wake(inventory, host)?;
         validate_host(host, &mut declared)?;
         for runner in &host.runners {
             validate_runner(host, runner, &mut declared)?;
@@ -267,6 +291,7 @@ fn validate_host<'a>(host: &'a Host, declared: &mut Declared<'a>) -> Result<()> 
     {
         return err(format!("{}: invalid service_account: {}", host.id, repr(account)));
     }
+    validate_toolchains(host)?;
     if host.runners.is_empty() {
         return err(format!("{}: define at least one runner", host.id));
     }
@@ -284,6 +309,56 @@ fn validate_host<'a>(host: &'a Host, declared: &mut Declared<'a>) -> Result<()> 
             host.id,
             choices.join(", ")
         ));
+    }
+    Ok(())
+}
+
+/// Wake-on-LAN needs both the address and another inventory host to send from.
+fn validate_wake(inventory: &Inventory, host: &Host) -> Result<()> {
+    match (&host.mac_address, &host.wake_via) {
+        (None, None) => Ok(()),
+        (Some(_), Some(via)) if via == &host.id => err(format!("{}: wake_via must name another host", host.id)),
+        (Some(_), Some(via)) if !inventory.hosts.iter().any(|h| &h.id == via) => {
+            err(format!("{}: wake_via names an unknown host: {}", host.id, repr(via)))
+        }
+        (Some(_), Some(_)) => Ok(()),
+        _ => err(format!("{}: mac_address and wake_via go together", host.id)),
+    }
+}
+
+/// `26`, `26.1` or `26.1.1`.
+fn safe_version(value: &str) -> bool {
+    let parts: Vec<&str> = value.split('.').collect();
+    parts.len() <= 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// Declared Xcode versions and simulator runtimes (`iOS 26.0`), on macOS hosts only.
+fn validate_toolchains(host: &Host) -> Result<()> {
+    if (!host.xcode.is_empty() || !host.simulator_runtimes.is_empty()) && !host.platform.is_macos() {
+        return err(format!(
+            "{}: xcode and simulator_runtimes are supported only on macOS",
+            host.id
+        ));
+    }
+    for version in &host.xcode {
+        if !safe_version(version) {
+            return err(format!("{}: invalid xcode version: {}", host.id, repr(version)));
+        }
+    }
+    for runtime in &host.simulator_runtimes {
+        let valid = runtime.split_once(' ').is_some_and(|(os, version)| {
+            matches!(os, "iOS" | "iPadOS" | "watchOS" | "tvOS" | "visionOS" | "xrOS") && safe_version(version)
+        });
+        if !valid {
+            return err(format!(
+                "{}: invalid simulator runtime: {} (use a name like 'iOS 26.0')",
+                host.id,
+                repr(runtime)
+            ));
+        }
     }
     Ok(())
 }

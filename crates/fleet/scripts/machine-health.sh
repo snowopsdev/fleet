@@ -37,8 +37,21 @@ case "$(uname -s)" in
     ;;
 esac
 # df's portable form puts capacity in KiB. Preserve spaces in mount points.
-df -Pk / "$HOME" 2>/dev/null | awk 'NR>1 && $2 ~ /^[0-9]+$/ {
-  total=$2*1024; free=$4*1024; mount=$6; for(i=7;i<=NF;i++) mount=mount " " $i;
-  printf "RFM\tdisk\t%s\t%.0f\t%.0f\n",mount,total,free
-}'
+disk_rows() {
+  awk -v kind="$1" 'NR>1 && $2 ~ /^[0-9]+$/ {
+    total=$2*1024; free=$4*1024; mount=$6; for(i=7;i<=NF;i++) mount=mount " " $i;
+    printf "RFM\t%s\t%s\t%.0f\t%.0f\n",kind,mount,total,free
+  }'
+}
+df -Pk / "$HOME" 2>/dev/null | disk_rows disk
+# The filesystem holding the inventory host's runner root (RFM_RUNNER_ROOT, set ahead of this
+# script), often an external volume. Before the first install the root may not exist yet, so
+# use its nearest existing parent. df follows symlinks to the volume they point at.
+if [ -n "${RFM_RUNNER_ROOT-}" ]; then
+  root_path="$RFM_RUNNER_ROOT"
+  while [ ! -e "$root_path" ] && [ "$root_path" != / ] && [ "$root_path" != . ]; do
+    root_path="$(dirname -- "$root_path")"
+  done
+  df -Pk -- "$root_path" 2>/dev/null | disk_rows root_disk
+fi
 printf 'RFM_END\n'

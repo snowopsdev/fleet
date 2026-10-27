@@ -3,4 +3,4 @@
 /**
  * Alert categories supported by automatic monitoring.
  */
-export type FleetAlertKind = "offline" | "lowDisk";
+export type FleetAlertKind = "offline" | "lowDisk" | "watchdogGaveUp";

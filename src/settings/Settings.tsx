@@ -3,6 +3,8 @@ import { ActivitySettings } from "./ActivitySettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { GitHubSettings } from "./GitHubSettings";
 import { MachinePreferences } from "./MachinePreferences";
+import { AlertDestinations } from "./AlertDestinations";
+import { Notifications } from "./Notifications";
 import { Tabs } from "./Tabs";
 
 export function Settings() {
@@ -21,8 +23,12 @@ export function Settings() {
           <MachinePreferences view={view} />
         </>,
         GitHub: <GitHubSettings orgs={config.orgs} status={view.orgs} />,
+        Notifications: <>
+          <Notifications enabled={config.desktopNotifications} demo={config.demoMode} />
+          <AlertDestinations view={view} />
+        </>,
         Activity: <ActivitySettings config={config} view={view} />,
-        General: <GeneralSettings config={config} />,
+        General: <GeneralSettings config={config} view={view} />,
       }}
     />
   );

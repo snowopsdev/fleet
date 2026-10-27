@@ -183,19 +183,20 @@ export function ErrorText({ error, className = "" }: { error: unknown; className
   return <p role="alert" className={`break-words text-[12px] text-bad selectable ${className}`}>{errorText(error)}</p>;
 }
 
-type CalloutTone = "bad" | "warn";
+type CalloutTone = "bad" | "warn" | "info";
 
 /** The tinted surface of a notice, for lists of notices built from rows. */
 export const calloutSurface: Record<CalloutTone, string> = {
   bad: "border-bad/30 bg-bad/5",
   warn: "border-warn/30 bg-warn/5",
+  info: "border-info/30 bg-info/5",
 };
 
 /** A notice on a page: something that went wrong or needs a look. */
 export function Callout({ tone, title, children, className = "mt-4" }: { tone: CalloutTone; title?: ReactNode; children?: ReactNode; className?: string }) {
   return (
     <Card className={`flex items-start gap-2.5 px-4 py-3 text-[12.5px] ${calloutSurface[tone]} ${className}`}>
-      <span className={`mt-px shrink-0 ${tone === "bad" ? "text-bad" : "text-warn"}`}><Icon name="alert" /></span>
+      <span className={`mt-px shrink-0 ${tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : "text-info"}`}><Icon name="alert" /></span>
       <div className="min-w-0 flex-1">
         {title && <div className="font-medium">{title}</div>}
         {children && <div className={`break-words text-ink-2 selectable ${title ? "mt-0.5" : ""}`}>{children}</div>}

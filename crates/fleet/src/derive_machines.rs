@@ -433,9 +433,9 @@ fn checked_github(plan: &FleetPlanInputs, org: &str, name: &str, host: &Host, no
             id: u64::try_from(runner.id).ok()?,
             name: runner.name.clone(),
             os: match host.platform {
-                Platform::DarwinArm64 => "macOS",
+                Platform::DarwinArm64 | Platform::DarwinX64 => "macOS",
                 Platform::WindowsArm64 | Platform::WindowsX64 => "Windows",
-                Platform::LinuxX64 => "Linux",
+                Platform::LinuxX64 | Platform::LinuxArm64 => "Linux",
             }
             .into(),
             status: runner.status.clone(),

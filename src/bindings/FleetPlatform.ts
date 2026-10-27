@@ -3,4 +3,4 @@
 /**
  * The OS and CPU architecture a host's runners are installed for.
  */
-export type FleetPlatform = "darwin-arm64" | "windows-arm64" | "windows-x64" | "linux-x64";
+export type FleetPlatform = "darwin-arm64" | "darwin-x64" | "windows-arm64" | "windows-x64" | "linux-x64" | "linux-arm64";

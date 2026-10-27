@@ -8,11 +8,13 @@
 //! - `github`, `remote`, `process`: the `gh`, SSH and subprocess boundaries
 //! - `state`, `plan`: pure status rows and plan items from a snapshot
 //! - `operations`: apply / retire / decommission / restart, and doctor
+//! - `maintenance`: reviewed cleanup, upgrade, and stopping or starting one runner
 //! - `windows_logon`: scripts for runners in a Windows desktop session
 //! - `testing`: fakes for the boundaries, for tests (feature `test-support`)
 
 pub mod github;
 pub mod inventory;
+pub mod maintenance;
 pub mod model;
 pub mod operations;
 pub mod plan;

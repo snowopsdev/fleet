@@ -78,6 +78,11 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
     spawn_loop(&app, &engine, &refresh, Duration::from_secs(45), |e| async move {
         e.poll_github_jobs_and_history().await
     });
+    // Reviewed drains waiting for a job to finish, the opt-in watchdog and the
+    // opt-in availability variable. The engine does nothing here in demo mode.
+    spawn_loop(&app, &engine, &refresh, Duration::from_secs(20), |e| async move {
+        e.run_automation().await
+    });
 
     // Re-derive periodically even without new data so history is recorded and
     // staleness thresholds advance on screen.
@@ -94,6 +99,8 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
                         // Push before delivery waits on the OS; a poll may push newer data meanwhile.
                         push(&app, view, Push::IfChanged);
                         deliver_notifications(&app, &engine, events).await;
+                        // Queued alerts for Slack, Discord, ntfy and webhooks, retried with backoff.
+                        engine.deliver_alerts().await;
                     }
                     Err(error) => {
                         tracing::warn!("recording machine history failed: {error}");

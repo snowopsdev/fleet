@@ -23,7 +23,9 @@ use reqwest::header::{ACCEPT, ETAG, HeaderMap, IF_NONE_MATCH, LINK, RETRY_AFTER,
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::model::{AccountKind, GhJob, GhRunner, JobScan, OrgConfig, RateLimit, RepoScope, RunnerRelease};
+use crate::model::{
+    AccountKind, GhJob, GhRunner, GhRunnerGroup, JobScan, OrgConfig, RateLimit, RepoScope, RunnerRelease,
+};
 use crate::sync::{MutexExt, RwLockExt};
 
 mod completed;
@@ -316,6 +318,47 @@ impl GithubClient {
             )));
         }
         Ok(runners.items.into_iter().map(RawRunner::into_model).collect())
+    }
+
+    /// Runner groups and whether public repositories may use them (read-only, ETag cached).
+    pub async fn runner_groups(&self, org: &str) -> Result<Vec<GhRunnerGroup>, GithubError> {
+        #[derive(Deserialize)]
+        struct RawGroup {
+            id: u64,
+            name: String,
+            #[serde(default)]
+            allows_public_repositories: bool,
+        }
+        let groups = self
+            .collection::<RawGroup>(
+                &format!("/orgs/{org}/actions/runner-groups"),
+                "runner_groups",
+                100,
+                MAX_RUNNER_PAGES,
+            )
+            .await?;
+        if groups.truncated {
+            return Err(GithubError::Incomplete(format!(
+                "Couldn't read all of {org}'s runner groups within {MAX_RUNNER_PAGES} pages."
+            )));
+        }
+        Ok(groups
+            .items
+            .into_iter()
+            .map(|g| GhRunnerGroup {
+                id: g.id,
+                name: g.name,
+                allows_public_repositories: g.allows_public_repositories,
+            })
+            .collect())
+    }
+
+    /// An organization's runner groups; personal accounts have none.
+    pub async fn account_runner_groups(&self, account: &OrgConfig) -> Result<Vec<GhRunnerGroup>, GithubError> {
+        match account.kind {
+            AccountKind::Organization => self.runner_groups(&account.login).await,
+            AccountKind::User => Ok(Vec::new()),
+        }
     }
 
     /// Self-hosted runners registered to one repository, each tagged with `owner/repo`.

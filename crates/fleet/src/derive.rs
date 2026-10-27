@@ -88,6 +88,7 @@ pub(crate) fn derive_without_issues(
         },
         plan: plan_status(plan, checked.as_ref()),
         monitoring: crate::monitoring::FleetMonitoring::default(),
+        automation: crate::automation::FleetAutomation::default(),
         activity: crate::jobs::FleetActivity::default(),
         runner_release: obs.runner_releases.as_ref().and_then(|list| {
             let latest = crate::runner_version::latest(&list.value)?;
@@ -100,6 +101,7 @@ pub(crate) fn derive_without_issues(
     };
     if source == DataSource::Demo {
         crate::monitoring::demo::attach(&mut view, now);
+        crate::automation::demo::attach(&mut view, now);
         crate::jobs::demo::attach(&mut view, now);
     }
     view
@@ -562,6 +564,7 @@ fn org_statuses(config: &AppConfig, obs: &Observations) -> Vec<OrgStatusView> {
                 rate_limited_until: o.and_then(|o| o.rate_limited_until),
                 repo_scope: cfg.repo_scope.clone(),
                 auth: cfg.auth,
+                public_runner_groups: o.map(public_runner_groups).unwrap_or_default(),
                 kind: cfg.kind,
                 runner_repos: cfg.runner_repos.clone(),
                 runner_repo_errors: o
@@ -586,4 +589,29 @@ fn org_statuses(config: &AppConfig, obs: &Observations) -> Vec<OrgStatusView> {
         .collect();
     orgs.sort_by_key(|o| o.login.to_lowercase());
     orgs
+}
+
+/// Groups that allow public repositories and hold at least one of the org's runners.
+fn public_runner_groups(org: &OrgObservation) -> Vec<PublicRunnerGroup> {
+    let (Some(groups), Some(runners)) = (&org.runner_groups, &org.runners) else {
+        return Vec::new();
+    };
+    groups
+        .value
+        .iter()
+        .filter(|g| g.allows_public_repositories)
+        .filter_map(|group| {
+            let mut members: Vec<String> = runners
+                .value
+                .iter()
+                .filter(|r| r.runner_group_id == Some(group.id))
+                .map(|r| r.name.clone())
+                .collect();
+            members.sort_by_key(|n| n.to_lowercase());
+            (!members.is_empty()).then(|| PublicRunnerGroup {
+                name: group.name.clone(),
+                runners: members,
+            })
+        })
+        .collect()
 }

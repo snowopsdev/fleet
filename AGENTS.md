@@ -21,10 +21,14 @@ specifics that take precedence:
   `crates/fleet/src/jobs/feed_tests.rs` and `crates/fleet/tests/job_history.rs`).
 - **Error text** from `EngineError` and the desired-state operations is shown to the user as is,
   so it's written as sentences. That's deliberate, despite the lowercase-messages guideline.
-- **Safety:** tests never contact a real host or the GitHub org; they fake GitHub, SSH and
-  native services. Only reviewed plans change machines (apply, retire, decommission and restart
-  from the machine and runner panes). Don't run any of them, or mint runner tokens, without the
-  user asking. Read-only checks (`scripts/fleet-parity.sh`) are fine.
+- **Safety:** tests never contact a real host, the GitHub org or a real webhook/ntfy endpoint;
+  they fake GitHub, SSH, native services and HTTP. Only reviewed plans change machines (apply,
+  retire, decommission, restart, cleanup, upgrade, drain and resume from the machine and runner
+  panes). A drain's deferred stop is authorised by its review. The two deliberate, narrow
+  exceptions are opt-in and off by default: the watchdog's restarts (turning it on is the
+  standing approval) and writing the availability variable. Don't run any of them, mint runner
+  tokens, or send real notifications without the user asking. Read-only checks
+  (`scripts/fleet-parity.sh`) are fine.
 - **Terms** in UI text and docs: "machine" for a computer, "host" only for an inventory
   `[[hosts]]` entry. The doctor feature is "Runner checks"; `doctor` is its API and CLI name.
 - **Runner Fleet parity:** `crates/fleet/src/desired` ports `soloterm/runner-fleet`. Keep its
@@ -42,7 +46,12 @@ carry over from Runner Fleet:
   services, directories or power settings.
 - Never use `--replace`, move a configured runner directory, store a secret, or add broad or
   glob-based deletion. Retirement resolves and checks an exact inventory runner name and path,
-  and keeps the workspace.
+  and keeps the workspace. The one recursive removal is the reviewed **Clean up**, deliberately
+  limited to the enumerated targets in [FLEET.md](docs/FLEET.md#clean-up), each resolved on the
+  host inside its runner (or home) directory with no symlink on the way; never `.runner`,
+  `.credentials*`, configuration, `bin` or `externals`. Don't widen it.
+- Never clean, upgrade or stop a busy runner; host scripts re-check for a running job right
+  before they act. Alert destination secrets live only in the Keychain.
 - Decommission needs `decommission = true` in the inventory first; apply never installs or
   starts a decommissioned runner.
 - Apply checks the runner group policy (all private repositories, no public ones, all

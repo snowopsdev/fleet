@@ -3,6 +3,7 @@ import type { DesiredRunnerRole } from "../bindings/DesiredRunnerRole";
 import type { FleetPlanAction } from "../bindings/FleetPlanAction";
 import type { FleetPlanItem } from "../bindings/FleetPlanItem";
 import type { FleetStatusRow } from "../bindings/FleetStatusRow";
+import type { FleetDrain } from "../bindings/FleetDrain";
 import type { FleetView } from "../bindings/FleetView";
 import type { MachineView } from "../bindings/MachineView";
 import type { RunnerView } from "../bindings/RunnerView";
@@ -26,6 +27,10 @@ const ACTION_LABELS: Record<FleetPlanAction, string> = {
   "repair-registration": "Needs manual repair",
   "recover-local": "Needs manual recovery",
   "harden-group": "Runner group unsafe",
+  cleanup: "Clean up",
+  upgrade: "Upgrade",
+  drain: "Drain",
+  resume: "Resume",
 };
 
 export function actionLabel(action: FleetPlanAction): string {
@@ -35,7 +40,7 @@ export function actionLabel(action: FleetPlanAction): string {
 export function itemTone(item: FleetPlanItem): Tone {
   if (item.blocked) return "warn";
   if (item.action === "no-change") return "ok";
-  if (item.action === "decommission" || item.action === "retire-legacy") return "info";
+  if (item.action === "decommission" || item.action === "retire-legacy" || item.action === "drain") return "info";
   return "busy";
 }
 
@@ -105,8 +110,18 @@ interface RowAction {
   danger?: boolean;
 }
 
+/** The reviewed drain holding this runner, if any. */
+export function drainOf(view: FleetView, runner: string): FleetDrain | null {
+  return view.automation.drains.find((d) => d.runner === runner) ?? null;
+}
+
+/** Inventory runners on a machine that are behind the latest runner release. */
+export function upgradableRunners(m: MachineView): RunnerView[] {
+  return m.runners.filter((r) => r.desired?.role.kind === "declared" && r.versionStatus?.updateAvailable);
+}
+
 /** Changes offered for one runner, each opening a review first. */
-export function runnerActions(r: RunnerView): RowAction[] {
+export function runnerActions(r: RunnerView, drain: FleetDrain | null = null): RowAction[] {
   const d = r.desired;
   if (!d) return [];
   const out: RowAction[] = [];
@@ -125,6 +140,14 @@ export function runnerActions(r: RunnerView): RowAction[] {
   const idle = d.status?.busy === false && r.activity.kind !== "busy";
   if (serviceConfigured(d.status) && d.role.kind !== "decommission" && d.role.kind !== "undeclared" && idle) {
     out.push({ label: "Restart", request: { kind: "restart", runner: r.name } });
+  }
+  if (d.role.kind === "declared" && serviceConfigured(d.status)) {
+    if (idle && r.versionStatus?.updateAvailable) {
+      out.push({ label: "Upgrade", request: { kind: "upgrade", host: d.hostId, runner: r.name } });
+    }
+    const running = d.status?.serviceState === "active" || d.status?.serviceState === "running";
+    if (running && !drain) out.push({ label: "Drain", request: { kind: "drain", runner: r.name } });
+    if (!running || drain?.state === "stopped") out.push({ label: "Resume", request: { kind: "resume", runner: r.name } });
   }
   return out;
 }
@@ -151,23 +174,34 @@ export function requestTitle(r: ChangeRequest): string {
       return `Decommission ${r.runner}`;
     case "restart":
       return `Restart ${r.runner}`;
+    case "cleanup":
+      return `Clean up ${r.host}`;
+    case "upgrade":
+      return r.runner ? `Upgrade ${r.runner}` : "Upgrade idle runners";
+    case "drain":
+      return `Drain ${r.runner}`;
+    case "resume":
+      return `Resume ${r.runner}`;
   }
 }
 
 /** The change is about this machine: its inventory host, or for a restart one of its runners. */
 export function requestTargetsMachine(r: ChangeRequest, m: MachineView): boolean {
-  if (r.kind === "restart") return m.runners.some((x) => x.name === r.runner);
+  if (r.kind === "restart" || r.kind === "drain" || r.kind === "resume") return m.runners.some((x) => x.name === r.runner);
   return !!m.desired && r.host === m.desired.host.id;
 }
 
 /** The change is about this runner, including a host-wide apply and retiring it as a legacy runner. */
 export function requestTargetsRunner(r: ChangeRequest, runner: RunnerView): boolean {
-  if (r.kind === "restart") return r.runner === runner.name;
+  if (r.kind === "restart" || r.kind === "drain" || r.kind === "resume") return r.runner === runner.name;
   const d = runner.desired;
   if (!d || r.host !== d.hostId) return false;
   switch (r.kind) {
     case "apply":
+    case "upgrade":
       return r.runner == null || r.runner === runner.name;
+    case "cleanup":
+      return true;
     case "retire":
       // A retire names the replacement; the legacy runner is the one removed.
       return r.runner === runner.name || (d.role.kind === "legacy" && d.role.replacedBy === r.runner);
@@ -198,4 +232,19 @@ export function groupByStem(runners: RunnerView[]): RunnerGroup[] {
       return { name: rs.length === 1 ? rs[0].name : stem, runners: rs, online: busy + idle, busy };
     })
     .sort((a, b) => b.runners.length - a.runners.length || a.name.localeCompare(b.name));
+}
+
+/** A size in KiB for people: `512 KiB`, `12.3 MiB`, `1.5 GiB`, as the host scripts report it. */
+export function formatKib(kib: number): string {
+  if (kib >= 1024 * 1024) return `${(kib / (1024 * 1024)).toFixed(1)} GiB`;
+  if (kib >= 1024) return `${(kib / 1024).toFixed(1)} MiB`;
+  return `${kib} KiB`;
+}
+
+/** What a cleanup review covers unless the review changes it. */
+export const DEFAULT_CLEANUP_OPTIONS = { wholeWork: false, diagOlderThanDays: 14 };
+
+/** Changes that have fictional reviews with demo data, so demo mode can show them. */
+export function isMaintenance(request: ChangeRequest): boolean {
+  return request.kind === "cleanup" || request.kind === "upgrade" || request.kind === "drain" || request.kind === "resume";
 }

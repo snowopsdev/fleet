@@ -34,7 +34,9 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         demo_mode: true,
         local_api: true,
         inventory_path: None,
+        ssh_connection_reuse: false,
         machine_preferences: Default::default(),
+        automation: Default::default(),
         job_activity: Default::default(),
     };
 
@@ -44,6 +46,7 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         peer("nLinux", "build-linux-01", "linux", true, None),
         peer("nWin", "win-builder", "windows", false, Some(ago(3 * 3600))),
         peer("nNew", "mac-mini-03", "macOS", true, None),
+        peer("nPi", "pi-01", "linux", true, None),
         peer("nSpare", "spare-ubuntu", "linux", true, None),
         peer("nLaptop", "dev-laptop", "macOS", true, None),
         peer("nNas", "home-nas", "linux", true, None),
@@ -60,7 +63,36 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
             ..gh(301, "linux-01-a", false, &["self-hosted", "Linux", "X64", "docker"])
         },
         gh(302, "linux-01-b", false, &["self-hosted", "Linux", "X64", "docker"]),
+        // In a runner group open to public repositories.
+        in_group(
+            2,
+            gh(
+                601,
+                "pi-01-a",
+                false,
+                &[
+                    "self-hosted",
+                    "Linux",
+                    "ARM64",
+                    "fleet",
+                    "linux-experimental",
+                    "raspberry-pi",
+                ],
+            ),
+        ),
         offline(gh(401, "win-builder", false, &["self-hosted", "Windows", "X64"])),
+    ];
+    let runner_groups = vec![
+        GhRunnerGroup {
+            id: 1,
+            name: "Default".into(),
+            allows_public_repositories: false,
+        },
+        GhRunnerGroup {
+            id: 2,
+            name: "Community builds".into(),
+            allows_public_repositories: true,
+        },
     ];
     // Registered to the acme-demo/ml repository rather than the organization.
     let ml_runners = vec![GhRunner {
@@ -164,6 +196,8 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
             )),
             error: None,
             jobs_error: None,
+            runner_groups: Some(Timed::new(ago(9), runner_groups)),
+            runner_groups_error: None,
             rate_limit: Some(RateLimit {
                 limit: 5000,
                 remaining: 4712,
@@ -200,6 +234,7 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
             360,
             Some("SSH connection timed out."),
         ),
+        ("pi-01", OsFamily::Linux, 22.0, (8, 5), (128, 71), 8, None),
         (
             "win-builder",
             OsFamily::Windows,
@@ -227,11 +262,29 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
                 runners.insert(old.name.clone(), local.clone());
             }
         }
+        let mut report = report(os, cpu, memory, disk, runners);
+        if id == "pi-01" {
+            report.os_version = Some("Debian GNU/Linux 13 (trixie)".into());
+            report.logical_cores = Some(4);
+            report.diagnostics.insert("architecture".into(), "aarch64".into());
+        }
+        if id == "studio" {
+            // Runner workspaces live on an external SSD.
+            report.disks[0].runner_root = false;
+            // The GUI lane's desktop is locked, so UI tests would fail.
+            report.diagnostics.insert("screen_locked".into(), "yes".into());
+            report.disks.push(DiskStats {
+                mount_point: "/Volumes/Builds".into(),
+                total_bytes: 2_000_000_000_000,
+                available_bytes: 380_000_000_000,
+                runner_root: true,
+            });
+        }
         obs.machines.insert(
             inventory_machine_key(id),
             MachineObservation {
                 target: MachineTarget::Inventory(host.clone()),
-                report: Some(Timed::new(ago(age), report(os, cpu, memory, disk, runners))),
+                report: Some(Timed::new(ago(age), report)),
                 last_error: error.map(|message| Timed::new(ago(5), message.into())),
             },
         );
@@ -287,6 +340,11 @@ fn gh(id: u64, name: &str, busy: bool, labels: &[&str]) -> GhRunner {
         runner_group_id: Some(1),
         repo: None,
     }
+}
+
+fn in_group(group: u64, mut r: GhRunner) -> GhRunner {
+    r.runner_group_id = Some(group);
+    r
 }
 
 fn offline(mut r: GhRunner) -> GhRunner {
@@ -357,12 +415,20 @@ fn report(
             },
             total_bytes: disk_gb.0 * GB,
             available_bytes: disk_gb.1 * GB,
+            runner_root: true,
         }],
         runners,
         warnings: vec![],
         diagnostics: [
             ("identity", "ci"),
-            ("architecture", "arm64"),
+            (
+                "architecture",
+                match os {
+                    OsFamily::Macos => "arm64",
+                    OsFamily::Windows => "AMD64",
+                    OsFamily::Linux | OsFamily::Other => "x86_64",
+                },
+            ),
             (
                 "tailscale_cli",
                 if os == OsFamily::Windows {
@@ -397,6 +463,20 @@ fn report(
             ("ac_hibernate", "0"),
             ("ac_lid", "0"),
             ("ac_standby_network", "2"),
+            ("auto_login_read", "1"),
+            ("auto_login_user", "ci"),
+            ("console_sessions", "1"),
+            ("console_session_user", "ci"),
+            ("screen_locked", "no"),
+            ("login_keychain", "36"),
+            ("codesign_identities", "3"),
+            ("developer_dir", "/Applications/Xcode.app/Contents/Developer"),
+            ("xcode_scan", "1"),
+            ("xcode_apps", "26.1|17B55|/Applications/Xcode.app"),
+            ("xcode_license_dir", "/Applications/Xcode.app/Contents/Developer"),
+            ("xcode_license", "0"),
+            ("simulator_scan", "1"),
+            ("simulator_runtimes", "iOS 26.0;watchOS 26.0"),
         ]
         .into_iter()
         .map(|(k, v)| (k.into(), v.into()))

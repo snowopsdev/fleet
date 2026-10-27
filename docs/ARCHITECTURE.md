@@ -24,19 +24,33 @@ machine.
 `machine.rs` combines the native health script with the inventory runner probe in one SSH
 session. macOS uses sysctl, vm_stat, top and df; Linux uses procfs and df; Windows uses CIM.
 An unavailable metric remains null. Truncated responses, invalid numbers and incomplete runner
-lists fail the read. The runner probe checks only declared and legacy paths and native service
+lists fail the read. Besides `/` and the home volume (every fixed drive on Windows), it reports
+the filesystem holding an inventory host's runner `root`, or the root's nearest existing
+parent, which is often an external volume; the root travels quoted in the script, with `~`
+expanded on the machine. Filesystems are deduplicated by mount point, and the runner root's
+is marked, checked as the runner volume and named in low-disk alerts. The runner probe checks only declared and legacy paths and native service
 state. No runner credential files are read.
 
 The same SSH session includes native machine diagnostics. `machine_diagnostics.rs` interprets
 selected facts from Tailscale, pmset, systemd/logind or Windows powercfg, alongside disk and runner
-facts. Only selected Tailscale preference fields are returned; raw preferences and private state
+facts. On macOS it also reads automatic login, the console session and screen lock, the login
+keychain's exit status, a count of code-signing identities and the installed Xcode versions and
+license, each bounded by a short time limit with stdin closed (`machine_diagnostics_macos.rs`);
+declared `xcode` and `simulator_runtimes` are compared with them. Only selected Tailscale preference fields are returned; raw preferences and private state
 never leave the machine. Checks distinguish pass, warning, information and unknown. An incomplete
 diagnostic section becomes unknown without discarding otherwise valid health and runner data.
 Diagnostics inherit the health observation's timestamp and freshness. Fleet warnings use only
 fresh, connected observations, and include discovered machines without inventory entries.
 
 The inventory chooses `ssh` or `tailscale ssh`. OpenSSH uses batch mode, trusted host keys, no
-agent forwarding and no port forwarding. Scripts travel on stdin, never as long command-line
+agent forwarding and no port forwarding. Settings ▸ General can turn on shared SSH connections
+(off by default, `ssh_reuse.rs`): monitoring reads then add `ControlMaster=auto`,
+`ControlPersist=120` and a `ControlPath` in `/tmp/runner-dashboard-<uid>`, a 0700 directory the
+app refuses to use unless it's a real directory owned by the user, short enough for macOS's
+104-byte socket paths. Dead masters are detected with server-alive probes; OpenSSH replaces a
+socket whose master is gone, and other mux failures repeat the read once without sharing.
+Turning it off deletes the sockets. Reviewed changes and `tailscale ssh` never share
+connections. Scripts travel on stdin, never as long command-line
 arguments; Windows scripts are a base64 line read with `[Console]::In.ReadLine()`, so nothing
 waits on stdin EOF through cmd.exe. Discovered machines outside the inventory can report health
 using their tailnet address and advertised Tailscale SSH, or this Mac's OpenSSH configuration;
@@ -80,6 +94,42 @@ alert first raised during the pause is announced once when it ends. Persisted ba
 announcement state prevent duplicates after a restart. Stable inventory keys preserve history
 across tailnet node replacements; a changed SSH target resets alert and boot baselines. Demo
 history is fictional, generated separately, and never touches the journal or sends alerts.
+
+Alert destinations (`outbound.rs`: Slack and Discord webhooks, ntfy, a generic JSON webhook)
+get the same alerts and recoveries. Settings keep only their kind, name, ntfy server and topic,
+and a host summary; webhook URLs and ntfy tokens are in the Keychain (`SecretStore` account
+`alert-destination:<id>`). Each announcement is queued per enabled destination in the same
+journal write that records the event, so it is saved before it is sent. After each monitoring
+round the engine claims due deliveries (pushing each out by a minute and saving that first, so a
+crash retries later rather than at once; a destination can rarely receive an alert twice, never
+lose one), posts them with reqwest (10-second timeout, no redirects, HTTPS or loopback only, and
+errors without the URL), removes accepted ones and retries failures after 1, 2, 5, 15, 30 and
+then 60 minutes for up to a day. Maintenance pauses and removed destinations drop their queue.
+
+## Automation
+
+`automation/` holds what the app does later or on its own, each authorised in advance, with its
+durable state in `automation.json` beside the settings (saved before acting; an unreadable or
+newer file pauses automation and is preserved). `run_automation` runs every 20 seconds from the
+Tauri poller and never in demo mode. Each action takes the same change slot as reviewed
+changes, so none overlaps a running change, and is recorded in machine history
+(`MonitorStore::record_external`).
+
+- **Drains:** a reviewed drain of a busy runner leaves a drain mark (runner, exact path, GitHub
+  registration, review ID). The deferred stop runs when fresh GitHub data shows the runner idle
+  (or once a minute otherwise), re-reads the inventory and GitHub, refuses a changed path or
+  registration, and stops the service with the host script's job check.
+- **Watchdog** (`automation/watchdog.rs`, opt-in): a pure plan from the fleet view and the
+  journal decides restarts with backoff (2, 5, 15, 60 minutes) and at most 3 attempts per runner
+  in 6 hours, then a give-up alert (`FleetAlertKind::WatchdogGaveUp`). Restarts use the guarded
+  `restart_runner`. Enabling it is the standing approval; see
+  [FLEET.md](FLEET.md#automatic-actions-opt-in).
+- **Availability variable** (`automation/publish.rs`, opt-in): counts online inventory runners
+  per capability label from fresh GitHub data and writes the organization variable through
+  `gh api` (value on stdin) only when the counts change, at most every N minutes.
+
+The view's `automation` section (drains, watchdog state, destinations without secrets, publish
+status) is read-only data, also served by the local API.
 
 ## Job history and analytics
 
@@ -171,7 +221,9 @@ view's runners, and never touches the journal.
 Monitoring uses the GitHub CLI login by default, held in memory, or a pasted token kept in the
 macOS Keychain. Changes always use the `gh` login ([FLEET.md](FLEET.md#setup)). Org runner lists
 and per-repository workflow jobs are fetched separately; repository scope is configurable in
-Settings.
+Settings. Runner groups are read with the runner list, only to warn about groups with
+self-hosted runners that public repositories can use; a failure to read them isn't shown as
+an organization error.
 
 - **Accounts:** an added account is an organization or a personal account. Either can list
   repositories whose repository runners (`/repos/{owner}/{repo}/actions/runners`) are shown too;
@@ -222,7 +274,9 @@ Tests replace GitHub, SSH and service boundaries; they never contact real hosts 
 `remote`, `state`, `plan`, `operations`), with its tests in `desired/tests.rs`. It keeps the
 file format, rules and messages, including `exclude_labels` and the `windows-logon` service mode
 (`desired/windows_logon.rs`), where the runner runs in an auto-logged-on desktop session for GUI
-tests. It differs only in the hardening listed below. The machine scripts
+tests. It differs in the hardening listed below, and in additions Runner Fleet doesn't have:
+the `darwin-x64` and `linux-arm64` platforms and optional host keys for toolchain drift and
+Wake-on-LAN ([FLEET.md](FLEET.md#platforms)). The machine scripts
 (`crates/fleet/scripts/`) are embedded with `include_str!`, and their RF_* values travel in the
 script on SSH stdin.
 
@@ -249,7 +303,18 @@ script on SSH stdin.
     the reviewed ones. Reviews are single-use and expire after 15 minutes.
   - SSH aliases are resolved off the async runtime so inventory hosts join their tailnet
     machines.
+- **Maintenance (`desired/maintenance.rs`, `engine_desired_maintenance.rs`):** cleanup,
+  upgrade, drain and resume are reviewed changes outside Runner Fleet's plan. Their reviews read
+  extra facts (a read-only cleanup survey, the latest release asset); sizes are shown but not
+  compared, so a re-check compares only what will change. Execution uses the reviewed targets and
+  release. Host scripts (`worker-cleanup.*`, `worker-upgrade.*`, the stop script) check for a
+  running `Runner.Worker` in the runner directory immediately before acting. Cleanup resolves
+  fixed suffixes of the runner or home directory and refuses symlinks, the only recursive
+  removal in the app. Demo data builds fictional, never-stored reviews for these.
 - **Parity:** `examples/fleet.rs` prints Runner Fleet's `--json` shapes for
   [the parity script](FLEET.md#parity-with-runner-fleet).
 - **Demo:** `demo_desired.rs` is a fictional inventory and snapshot run through the same view
   builder.
+- **Wake-on-LAN (`engine_wake.rs`, `wake.rs`):** like a change, a wake is reviewed first and
+  single-use; sending re-reads the inventory and the view and refuses if the address, the
+  `wake_via` host or their tailnet state changed. `WakeSender` is the boundary tests fake.

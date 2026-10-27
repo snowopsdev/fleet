@@ -75,6 +75,7 @@
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-bad: var(--bad);
+  --color-info: var(--info);
   --color-muted: var(--muted);
   --color-demo-bg: var(--demo-bg);
   --color-demo-text: var(--demo-text);

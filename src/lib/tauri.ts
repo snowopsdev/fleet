@@ -10,7 +10,10 @@ import type { FleetMachineEvent } from "../bindings/FleetMachineEvent";
 import type { ChangeRequest } from "../bindings/ChangeRequest";
 import type { ChangeSecrets } from "../bindings/ChangeSecrets";
 import type { ReviewView } from "../bindings/ReviewView";
+import type { FleetWakeReview } from "../bindings/FleetWakeReview";
 import type { GhStatus } from "../bindings/GhStatus";
+import type { FleetAlertDestinationInput } from "../bindings/FleetAlertDestinationInput";
+import type { FleetPublishSettings } from "../bindings/FleetPublishSettings";
 import type { AccountKind } from "../bindings/AccountKind";
 import type { OrgAuth } from "../bindings/OrgAuth";
 import type { RepoScope } from "../bindings/RepoScope";
@@ -46,7 +49,7 @@ async function updateConfig(cmd: string, args?: Record<string, unknown>): Promis
 export const commands = {
   getFleet: (): Promise<FleetView> => (isTauri ? invoke("get_fleet") : Promise.resolve(previewFleet())),
   getConfig: (): Promise<AppConfig> =>
-    isTauri ? invoke("get_config") : Promise.resolve({ orgs: [], ignoredPeers: [], machinePreferences: {}, demoMode: true, localApi: false, desktopNotifications: false, inventoryPath: null, jobActivity: { hostedRates: { linux: 0.006, windows: 0.01, macos: 0.062, asOf: "2026-10-26" }, feedOrgs: [] } }),
+    isTauri ? invoke("get_config") : Promise.resolve({ orgs: [], ignoredPeers: [], machinePreferences: {}, demoMode: true, localApi: false, desktopNotifications: false, inventoryPath: null, automation: { watchdog: false, alertDestinations: [], publish: { enabled: false, variable: "RUNNER_FLEET_STATUS", intervalMinutes: 5 } }, jobActivity: { hostedRates: { linux: 0.006, windows: 0.01, macos: 0.062, asOf: "2026-10-26" }, feedOrgs: [] }, sshConnectionReuse: false }),
   refreshNow: () => invoke<void>("refresh_now"),
   addOrg: (login: string, auth: OrgAuth, token: string | null, repoScope: RepoScope, kind: AccountKind = "organization", runnerRepos: string[] = []) =>
     updateConfig("add_org", { login, auth, token, repoScope, kind, runnerRepos }),
@@ -80,6 +83,19 @@ export const commands = {
   desiredExecute: (reviewId: string, secrets: ChangeSecrets, confirmation: string | null) =>
     invoke<void>("desired_execute", { reviewId, secrets, confirmation }),
   desiredDismissOperation: () => invoke<void>("desired_dismiss_operation"),
+  /** Cancels a reviewed drain that hasn't stopped its runner yet. */
+  desiredCancelDrain: (runner: string) => invoke<void>("desired_cancel_drain", { runner }),
+
+  // Automatic behaviour. Turning the watchdog on is the standing approval for its restarts.
+  setWatchdog: (enabled: boolean) => updateConfig("set_watchdog", { enabled }),
+  setPublishSettings: (settings: FleetPublishSettings) => updateConfig("set_publish_settings", { settings }),
+  /** Webhook URLs and tokens go to the Keychain and are never returned. */
+  saveAlertDestination: (destination: FleetAlertDestinationInput) => invoke<string>("save_alert_destination", { destination }),
+  removeAlertDestination: (id: string) => invoke<void>("remove_alert_destination", { id }),
+  testAlertDestination: (id: string) => invoke<void>("test_alert_destination", { id }),
+  // Wake-on-LAN: reviewed first, then sent once from the machine's wake_via host.
+  wakeReview: (id: string) => invoke<FleetWakeReview>("wake_review", { id }),
+  wakeExecute: (reviewId: string) => invoke<string>("wake_execute", { reviewId }),
 
   // Completed-job history and analytics (local data only), and the optional job feed.
   getJobHistory: (filter: FleetJobHistoryFilter): Promise<FleetJobHistoryPage> =>
@@ -95,6 +111,7 @@ export const commands = {
       ? invoke("get_local_api_status")
       : Promise.resolve({ enabled: false, url: null, error: "Only in the desktop app", discoveryFile: null }),
   setLocalApi: (on: boolean) => updateConfig("set_local_api", { on }),
+  setSshConnectionReuse: (on: boolean) => updateConfig("set_ssh_connection_reuse", { on }),
 };
 
 /** The preview fixture's first history page, filtered like the desktop app's first page. */

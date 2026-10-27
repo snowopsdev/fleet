@@ -49,6 +49,37 @@ async fn paginates_runners_and_sends_version_header() {
     assert_eq!(client.rate_limit().unwrap().remaining, 4990);
 }
 
+#[tokio::test]
+async fn reads_runner_group_repository_policy() {
+    let router = Router::new().route(
+        "/orgs/{org}/actions/runner-groups",
+        get(|Path(org): Path<String>| async move {
+            assert_eq!(org, "acme");
+            Json(json!({"total_count": 2, "runner_groups": [
+                {"id": 1, "name": "Default", "visibility": "all", "allows_public_repositories": false},
+                {"id": 4, "name": "Open source", "visibility": "all", "allows_public_repositories": true},
+            ]}))
+        }),
+    );
+    let base = serve(router).await;
+    let groups = GithubClient::new(&base, "t0k").runner_groups("acme").await.unwrap();
+    assert_eq!(
+        groups,
+        [
+            GhRunnerGroup {
+                id: 1,
+                name: "Default".into(),
+                allows_public_repositories: false
+            },
+            GhRunnerGroup {
+                id: 4,
+                name: "Open source".into(),
+                allows_public_repositories: true
+            },
+        ]
+    );
+}
+
 #[test]
 fn etag_cache_evicts_the_least_recently_used_page() {
     let page = || ApiPage {

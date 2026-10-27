@@ -3,6 +3,7 @@
 
 mod decommission;
 mod inventory;
+mod maintenance;
 mod operations;
 mod plan;
 mod remote;

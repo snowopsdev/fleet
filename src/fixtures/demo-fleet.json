@@ -2,15 +2,15 @@
   "generatedAt": "2026-10-03T12:00:00Z",
   "source": "demo",
   "summary": {
-    "machines": 5,
-    "machinesConnected": 2,
-    "runners": 9,
-    "runnersOnline": 6,
+    "machines": 6,
+    "machinesConnected": 3,
+    "runners": 10,
+    "runnersOnline": 7,
     "runnersBusy": 2,
     "runnersOffline": 1,
     "runnersUnknown": 2,
     "queuedJobs": 2,
-    "attention": 9
+    "attention": 12
   },
   "issues": [
     {
@@ -36,6 +36,17 @@
       "fix": null
     },
     {
+      "id": "ts:nMini:diagnostics",
+      "category": "diagnostic",
+      "title": "mac-mini-02: 1 diagnostic warning",
+      "detail": "Declared Xcode: Missing 16.4",
+      "machineId": "ts:nMini",
+      "runnerKey": null,
+      "stale": false,
+      "muted": false,
+      "fix": null
+    },
+    {
       "id": "ts:nMini:changes",
       "category": "inventory",
       "title": "mac-mini-02: runner plan needs attention",
@@ -52,6 +63,17 @@
       "title": "mac-mini-03 couldn't be checked",
       "detail": "SSH permission denied. Check the host's SSH login and tailnet access.",
       "machineId": "ts:nNew",
+      "runnerKey": null,
+      "stale": false,
+      "muted": false,
+      "fix": null
+    },
+    {
+      "id": "ts:nStudio:diagnostics",
+      "category": "diagnostic",
+      "title": "studio: 1 diagnostic warning",
+      "detail": "Screen lock: Locked",
+      "machineId": "ts:nStudio",
       "runnerKey": null,
       "stale": false,
       "muted": false,
@@ -111,6 +133,17 @@
       "stale": false,
       "muted": false,
       "fix": null
+    },
+    {
+      "id": "public-group:acme-demo:Community builds",
+      "category": "github",
+      "title": "Runner group Community builds allows public repositories",
+      "detail": "Public repositories can use the runner group Community builds. Anyone can open a pull request from a fork of a public repository, and its workflow can run on pi-01-a. These runners are persistent, so that code can read what earlier jobs left behind and tamper with later ones. Turn off public repositories for this group in the organization's runner group settings (docs/FLEET.md, Setup; https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#hardening-for-self-hosted-runners).",
+      "machineId": null,
+      "runnerKey": null,
+      "stale": false,
+      "muted": false,
+      "fix": null
     }
   ],
   "machines": [
@@ -157,7 +190,8 @@
           {
             "mountPoint": "/",
             "totalBytes": 1800000000000,
-            "availableBytes": 1250000000000
+            "availableBytes": 1250000000000,
+            "runnerRoot": true
           }
         ],
         "uptimeSecs": 792000,
@@ -235,17 +269,17 @@
             "id": "architecture",
             "group": "system",
             "title": "Architecture",
-            "status": "info",
-            "value": "arm64",
-            "detail": "Architecture reported by the operating system."
+            "status": "pass",
+            "value": "x86_64",
+            "detail": "Matches the inventory platform linux-x64."
           },
           {
-            "id": "disk-space",
-            "group": "system",
-            "title": "Disk space",
+            "id": "runner-disk",
+            "group": "runners",
+            "title": "Runner volume",
             "status": "pass",
-            "value": "At least 10% free",
-            "detail": "/: 1164.2 GiB free of 1676.4 GiB"
+            "value": "69% free",
+            "detail": "/ holds ~/gh-runners/acme-demo and each runner's _work directory: 1164.2 GiB free of 1676.4 GiB."
           },
           {
             "id": "runner-startup",
@@ -261,7 +295,7 @@
             "title": "linux-01-a",
             "status": "pass",
             "value": "Running",
-            "detail": "Service: active · version: 2.329.0 · ~/gh-runners/acme-demo/runner-01"
+            "detail": "Service: active · version: 2.328.0 · ~/gh-runners/acme-demo/runner-01"
           }
         ]
       },
@@ -270,6 +304,38 @@
         "maintenanceUntil": null,
         "alerts": [],
         "events": [
+          {
+            "id": "00000000000000000012",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:09:00Z",
+            "kind": "watchdogRecovered",
+            "detail": "linux-01-a is running again after an automatic restart."
+          },
+          {
+            "id": "00000000000000000011",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:09:00Z",
+            "kind": "runnerServiceChanged",
+            "detail": "linux-01-a: failed → running."
+          },
+          {
+            "id": "00000000000000000010",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:08:00Z",
+            "kind": "watchdogRestarted",
+            "detail": "Automatically restarted linux-01-a (attempt 1 of 3): its service was failed and GitHub showed it offline and idle."
+          },
+          {
+            "id": "00000000000000000009",
+            "machineKey": "inv:build-linux-01",
+            "machineName": "build-linux-01",
+            "at": "2026-10-03T11:06:00Z",
+            "kind": "runnerServiceChanged",
+            "detail": "linux-01-a: running → failed."
+          },
           {
             "id": "00000000000000000001",
             "machineKey": "inv:build-linux-01",
@@ -312,7 +378,7 @@
             "installDir": "~/gh-runners/acme-demo/runner-01",
             "configured": true,
             "serviceState": "active",
-            "version": "2.329.0",
+            "version": "2.328.0",
             "asOf": "2026-10-03T11:56:00Z",
             "stale": true
           },
@@ -334,7 +400,7 @@
               "githubState": "online",
               "serviceState": "unknown",
               "busy": false,
-              "version": "2.329.0",
+              "version": "2.328.0",
               "drift": "host unavailable",
               "desired": true
             },
@@ -474,7 +540,11 @@
           ],
           "serviceAccount": null,
           "enabled": true,
-          "sshTransport": "tailscale"
+          "sshTransport": "tailscale",
+          "xcode": [],
+          "simulatorRuntimes": [],
+          "macAddress": null,
+          "wakeVia": null
         },
         "plan": [
           {
@@ -543,7 +613,8 @@
           {
             "mountPoint": "/",
             "totalBytes": 245000000000,
-            "availableBytes": 14000000000
+            "availableBytes": 14000000000,
+            "runnerRoot": true
           }
         ],
         "uptimeSecs": 792000,
@@ -629,17 +700,97 @@
             "id": "architecture",
             "group": "system",
             "title": "Architecture",
-            "status": "info",
+            "status": "pass",
             "value": "arm64",
-            "detail": "Architecture reported by the operating system."
+            "detail": "Matches the inventory platform darwin-arm64."
           },
           {
-            "id": "disk-space",
-            "group": "system",
-            "title": "Disk space",
+            "id": "auto-login",
+            "group": "session",
+            "title": "Automatic login",
+            "status": "pass",
+            "value": "Enabled for ci",
+            "detail": "After a restart, macOS logs in as the runner account, so its LaunchAgents start."
+          },
+          {
+            "id": "console-session",
+            "group": "session",
+            "title": "Console session",
+            "status": "pass",
+            "value": "ci",
+            "detail": "The runner account is the console session, so GUI jobs have a display."
+          },
+          {
+            "id": "screen-lock",
+            "group": "session",
+            "title": "Screen lock",
+            "status": "pass",
+            "value": "Unlocked",
+            "detail": "From CGSSessionScreenIsLocked. GUI tests, such as UI tests in the simulator, fail on a locked desktop."
+          },
+          {
+            "id": "login-keychain",
+            "group": "session",
+            "title": "Login keychain",
+            "status": "info",
+            "value": "Locked for SSH sessions",
+            "detail": "SSH logins get their own security session, so this can't show whether the runner's LaunchAgent session has the keychain unlocked. Signing jobs need it unlocked there."
+          },
+          {
+            "id": "codesign-identities",
+            "group": "session",
+            "title": "Code-signing identities",
+            "status": "info",
+            "value": "3 valid",
+            "detail": "Valid code-signing identities in this account's keychains, counted without reading them."
+          },
+          {
+            "id": "xcode-installed",
+            "group": "toolchain",
+            "title": "Installed Xcode",
+            "status": "info",
+            "value": "26.1 (17B55)",
+            "detail": "26.1: /Applications/Xcode.app"
+          },
+          {
+            "id": "xcode-selected",
+            "group": "toolchain",
+            "title": "Selected developer directory",
+            "status": "pass",
+            "value": "Xcode 26.1",
+            "detail": "/Applications/Xcode.app/Contents/Developer"
+          },
+          {
+            "id": "xcode-license",
+            "group": "toolchain",
+            "title": "Xcode license",
+            "status": "pass",
+            "value": "Accepted",
+            "detail": "xcodebuild -license check passed for /Applications/Xcode.app/Contents/Developer."
+          },
+          {
+            "id": "xcode-declared",
+            "group": "toolchain",
+            "title": "Declared Xcode",
             "status": "warn",
-            "value": "Less than 10% free",
-            "detail": "/: 13.0 GiB free of 228.2 GiB"
+            "value": "Missing 16.4",
+            "detail": "The inventory declares Xcode 26.1, 16.4; installed: 26.1 (17B55). Jobs that select a missing version fail. The app never installs Xcode."
+          },
+          {
+            "id": "simulator-runtimes",
+            "group": "toolchain",
+            "title": "Simulator runtimes",
+            "status": "pass",
+            "value": "All installed",
+            "detail": "The inventory declares iOS 26.0; available: iOS 26.0, watchOS 26.0."
+          },
+          {
+            "id": "runner-disk",
+            "group": "runners",
+            "title": "Runner volume",
+            "status": "warn",
+            "value": "6% free",
+            "detail": "/ holds ~/gh-runners/acme-demo and each runner's _work directory: 13.0 GiB free of 228.2 GiB. Jobs fail when it fills up; clear old workspaces or caches."
           },
           {
             "id": "runner-startup",
@@ -676,7 +827,7 @@
         ],
         "events": [
           {
-            "id": "00000000000000000010",
+            "id": "00000000000000000015",
             "machineKey": "inv:mac-mini-02",
             "machineName": "mac-mini-02",
             "at": "2026-10-03T11:48:00Z",
@@ -810,7 +961,16 @@
           ],
           "serviceAccount": null,
           "enabled": true,
-          "sshTransport": "openssh"
+          "sshTransport": "openssh",
+          "xcode": [
+            "26.1",
+            "16.4"
+          ],
+          "simulatorRuntimes": [
+            "iOS 26.0"
+          ],
+          "macAddress": null,
+          "wakeVia": null
         },
         "plan": [
           {
@@ -952,7 +1112,11 @@
           ],
           "serviceAccount": null,
           "enabled": true,
-          "sshTransport": "openssh"
+          "sshTransport": "openssh",
+          "xcode": [],
+          "simulatorRuntimes": [],
+          "macAddress": null,
+          "wakeVia": null
         },
         "plan": [
           {
@@ -968,6 +1132,305 @@
         "pendingChanges": 0,
         "error": "SSH permission denied. Check the host's SSH login and tailnet access.",
         "checkedAt": "2026-10-03T11:56:00Z",
+        "checks": [],
+        "checksAt": null
+      }
+    },
+    {
+      "id": "ts:nPi",
+      "displayName": "pi-01",
+      "description": null,
+      "host": "builder@pi-01.demo.ts.net",
+      "os": "linux",
+      "osVersion": "Debian GNU/Linux 13 (trixie)",
+      "tailnet": {
+        "nodeId": "nPi",
+        "hostname": "pi-01",
+        "dnsName": "pi-01.demo.ts.net",
+        "os": "linux",
+        "ips": [
+          "100.64.0.0"
+        ],
+        "online": true,
+        "lastSeen": null,
+        "tags": [],
+        "sshHostKeys": [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDemoHostKeyForPreviewOnly"
+        ]
+      },
+      "connection": {
+        "kind": "connected",
+        "checkedAt": "2026-10-03T11:59:52Z"
+      },
+      "health": {
+        "asOf": "2026-10-03T11:59:52Z",
+        "stale": false,
+        "cpuPercent": 22.0,
+        "loadAverage": [
+          2.2,
+          1.8333333333333333,
+          1.5714285714285714
+        ],
+        "logicalCores": 4,
+        "memoryTotalBytes": 8000000000,
+        "memoryAvailableBytes": 5000000000,
+        "disks": [
+          {
+            "mountPoint": "/",
+            "totalBytes": 128000000000,
+            "availableBytes": 71000000000,
+            "runnerRoot": true
+          }
+        ],
+        "uptimeSecs": 792000,
+        "bootId": "demo-boot-session"
+      },
+      "diagnostics": {
+        "asOf": "2026-10-03T11:59:52Z",
+        "stale": false,
+        "checks": [
+          {
+            "id": "tailscale-install",
+            "group": "network",
+            "title": "Tailscale installation",
+            "status": "info",
+            "value": "CLI + daemon",
+            "detail": "CLI: /usr/local/bin/tailscale. GUI installations can also include a CLI."
+          },
+          {
+            "id": "tailscale-version",
+            "group": "network",
+            "title": "Tailscale version",
+            "status": "info",
+            "value": "1.90.0",
+            "detail": "Version reported by the local Tailscale daemon."
+          },
+          {
+            "id": "tailscale-state",
+            "group": "network",
+            "title": "Tailscale connection",
+            "status": "pass",
+            "value": "Running",
+            "detail": "Local daemon state from tailscale status."
+          },
+          {
+            "id": "tailscale-ssh",
+            "group": "network",
+            "title": "Tailscale SSH",
+            "status": "pass",
+            "value": "Enabled",
+            "detail": "The local RunSSH preference is enabled. Tailnet access rules still control who can connect."
+          },
+          {
+            "id": "tailscale-startup",
+            "group": "network",
+            "title": "Tailscale startup",
+            "status": "pass",
+            "value": "Starts at boot",
+            "detail": "Native service startup: enabled."
+          },
+          {
+            "id": "power-sleep",
+            "group": "power",
+            "title": "System sleep protection",
+            "status": "pass",
+            "value": "Blocked by systemd",
+            "detail": "sleep: masked; suspend: unknown; hibernate: unknown; hybrid-sleep: unknown; suspend-then-hibernate: unknown. Unmasked targets do not prove automatic sleep is enabled; desktop and logind policies can differ."
+          },
+          {
+            "id": "power-idle",
+            "group": "power",
+            "title": "Logind idle action",
+            "status": "pass",
+            "value": "ignore",
+            "detail": "Configuration on disk, including drop-ins. A desktop environment can have a separate policy; changes may need a service reload."
+          },
+          {
+            "id": "ssh-identity",
+            "group": "system",
+            "title": "SSH account",
+            "status": "info",
+            "value": "ci",
+            "detail": "Account used for this read-only inspection."
+          },
+          {
+            "id": "architecture",
+            "group": "system",
+            "title": "Architecture",
+            "status": "pass",
+            "value": "aarch64",
+            "detail": "Matches the inventory platform linux-arm64."
+          },
+          {
+            "id": "runner-disk",
+            "group": "runners",
+            "title": "Runner volume",
+            "status": "pass",
+            "value": "55% free",
+            "detail": "/ holds ~/gh-runners/acme-demo and each runner's _work directory: 66.1 GiB free of 119.2 GiB."
+          },
+          {
+            "id": "runner-startup",
+            "group": "runners",
+            "title": "Runner startup",
+            "status": "info",
+            "value": "System services",
+            "detail": "The inventory configures runners as native system services. Service state is checked separately below."
+          },
+          {
+            "id": "runner:pi-01-a",
+            "group": "runners",
+            "title": "pi-01-a",
+            "status": "pass",
+            "value": "Running",
+            "detail": "Service: active · version: 2.329.0 · ~/gh-runners/acme-demo/runner-01"
+          }
+        ]
+      },
+      "monitoring": {
+        "machineKey": "inv:pi-01",
+        "maintenanceUntil": null,
+        "alerts": [],
+        "events": [
+          {
+            "id": "00000000000000000004",
+            "machineKey": "inv:pi-01",
+            "machineName": "pi-01",
+            "at": "2026-10-03T10:00:00Z",
+            "kind": "monitoringStarted",
+            "detail": "Started observing this machine. Earlier events are not known."
+          }
+        ]
+      },
+      "runners": [
+        {
+          "key": "gh:acme-demo:601",
+          "name": "pi-01-a",
+          "org": "acme-demo",
+          "machineId": "ts:nPi",
+          "installed": "yes",
+          "connected": "yes",
+          "activity": {
+            "kind": "idle"
+          },
+          "github": {
+            "id": 601,
+            "status": "online",
+            "busy": false,
+            "labels": [
+              "self-hosted",
+              "Linux",
+              "ARM64",
+              "fleet",
+              "linux-experimental",
+              "raspberry-pi"
+            ],
+            "os": "Linux",
+            "version": "2.329.0",
+            "ephemeral": false,
+            "repo": null,
+            "asOf": "2026-10-03T11:59:51Z",
+            "stale": false
+          },
+          "local": {
+            "installDir": "~/gh-runners/acme-demo/runner-01",
+            "configured": true,
+            "serviceState": "active",
+            "version": "2.329.0",
+            "asOf": "2026-10-03T11:59:52Z",
+            "stale": false
+          },
+          "currentJob": null,
+          "warnings": [],
+          "desired": {
+            "hostId": "pi-01",
+            "role": {
+              "kind": "declared"
+            },
+            "desiredLabels": [
+              "fleet",
+              "linux-experimental",
+              "raspberry-pi"
+            ],
+            "status": {
+              "runner": "pi-01-a",
+              "host": "pi-01",
+              "githubState": "online",
+              "serviceState": "active",
+              "busy": false,
+              "version": "2.329.0",
+              "drift": "in sync",
+              "desired": true
+            },
+            "plan": [
+              {
+                "action": "no-change",
+                "apply": false,
+                "host": "pi-01",
+                "runner": "pi-01-a",
+                "reason": "desired state is satisfied",
+                "command": null,
+                "blocked": false
+              }
+            ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "missingSince": null,
+            "minorVersionsBehind": 0,
+            "overdue": false
+          }
+        }
+      ],
+      "warnings": [],
+      "desired": {
+        "host": {
+          "id": "pi-01",
+          "platform": "linux-arm64",
+          "sshTarget": "builder@pi-01.demo.ts.net",
+          "sshSetting": "builder@pi-01.demo.ts.net",
+          "root": "~/gh-runners/acme-demo",
+          "serviceMode": "systemd",
+          "labels": [
+            "fleet",
+            "linux-experimental",
+            "raspberry-pi"
+          ],
+          "runners": [
+            {
+              "name": "pi-01-a",
+              "directory": "runner-01",
+              "labels": [],
+              "excludeLabels": [],
+              "replaces": null,
+              "decommission": false
+            }
+          ],
+          "serviceAccount": null,
+          "enabled": true,
+          "sshTransport": "tailscale",
+          "xcode": [],
+          "simulatorRuntimes": [],
+          "macAddress": null,
+          "wakeVia": null
+        },
+        "plan": [
+          {
+            "action": "no-change",
+            "apply": false,
+            "host": "pi-01",
+            "runner": "pi-01-a",
+            "reason": "desired state is satisfied",
+            "command": null,
+            "blocked": false
+          }
+        ],
+        "pendingChanges": 0,
+        "error": null,
+        "checkedAt": "2026-10-03T11:59:52Z",
         "checks": [],
         "checksAt": null
       }
@@ -1012,7 +1475,14 @@
           {
             "mountPoint": "/",
             "totalBytes": 994000000000,
-            "availableBytes": 312000000000
+            "availableBytes": 312000000000,
+            "runnerRoot": false
+          },
+          {
+            "mountPoint": "/Volumes/Builds",
+            "totalBytes": 2000000000000,
+            "availableBytes": 380000000000,
+            "runnerRoot": true
           }
         ],
         "uptimeSecs": 792000,
@@ -1098,9 +1568,9 @@
             "id": "architecture",
             "group": "system",
             "title": "Architecture",
-            "status": "info",
+            "status": "pass",
             "value": "arm64",
-            "detail": "Architecture reported by the operating system."
+            "detail": "Matches the inventory platform darwin-arm64."
           },
           {
             "id": "disk-space",
@@ -1109,6 +1579,86 @@
             "status": "pass",
             "value": "At least 10% free",
             "detail": "/: 290.6 GiB free of 925.7 GiB"
+          },
+          {
+            "id": "auto-login",
+            "group": "session",
+            "title": "Automatic login",
+            "status": "pass",
+            "value": "Enabled for ci",
+            "detail": "After a restart, macOS logs in as the runner account, so its LaunchAgents start."
+          },
+          {
+            "id": "console-session",
+            "group": "session",
+            "title": "Console session",
+            "status": "pass",
+            "value": "ci",
+            "detail": "The runner account is the console session, so GUI jobs have a display."
+          },
+          {
+            "id": "screen-lock",
+            "group": "session",
+            "title": "Screen lock",
+            "status": "warn",
+            "value": "Locked",
+            "detail": "From CGSSessionScreenIsLocked. GUI tests, such as UI tests in the simulator, fail on a locked desktop."
+          },
+          {
+            "id": "login-keychain",
+            "group": "session",
+            "title": "Login keychain",
+            "status": "info",
+            "value": "Locked for SSH sessions",
+            "detail": "SSH logins get their own security session, so this can't show whether the runner's LaunchAgent session has the keychain unlocked. Signing jobs need it unlocked there."
+          },
+          {
+            "id": "codesign-identities",
+            "group": "session",
+            "title": "Code-signing identities",
+            "status": "info",
+            "value": "3 valid",
+            "detail": "Valid code-signing identities in this account's keychains, counted without reading them."
+          },
+          {
+            "id": "xcode-installed",
+            "group": "toolchain",
+            "title": "Installed Xcode",
+            "status": "info",
+            "value": "26.1 (17B55)",
+            "detail": "26.1: /Applications/Xcode.app"
+          },
+          {
+            "id": "xcode-selected",
+            "group": "toolchain",
+            "title": "Selected developer directory",
+            "status": "pass",
+            "value": "Xcode 26.1",
+            "detail": "/Applications/Xcode.app/Contents/Developer"
+          },
+          {
+            "id": "xcode-license",
+            "group": "toolchain",
+            "title": "Xcode license",
+            "status": "pass",
+            "value": "Accepted",
+            "detail": "xcodebuild -license check passed for /Applications/Xcode.app/Contents/Developer."
+          },
+          {
+            "id": "xcode-declared",
+            "group": "toolchain",
+            "title": "Declared Xcode",
+            "status": "pass",
+            "value": "All installed",
+            "detail": "The inventory declares Xcode 26.1; installed: 26.1 (17B55)."
+          },
+          {
+            "id": "runner-disk",
+            "group": "runners",
+            "title": "Runner volume",
+            "status": "pass",
+            "value": "19% free",
+            "detail": "/Volumes/Builds holds ~/gh-runners/acme-demo and each runner's _work directory: 353.9 GiB free of 1862.6 GiB."
           },
           {
             "id": "runner-startup",
@@ -1142,7 +1692,15 @@
         "alerts": [],
         "events": [
           {
-            "id": "00000000000000000009",
+            "id": "00000000000000000016",
+            "machineKey": "inv:studio",
+            "machineName": "studio",
+            "at": "2026-10-03T11:54:00Z",
+            "kind": "drainRequested",
+            "detail": "Draining studio-1: its service stops after the current job, as reviewed."
+          },
+          {
+            "id": "00000000000000000014",
             "machineKey": "inv:studio",
             "machineName": "studio",
             "at": "2026-10-03T11:23:00Z",
@@ -1150,7 +1708,7 @@
             "detail": "studio-1: inactive → running."
           },
           {
-            "id": "00000000000000000008",
+            "id": "00000000000000000013",
             "machineKey": "inv:studio",
             "machineName": "studio",
             "at": "2026-10-03T11:22:00Z",
@@ -1158,7 +1716,7 @@
             "detail": "A different operating-system boot session was observed."
           },
           {
-            "id": "00000000000000000004",
+            "id": "00000000000000000005",
             "machineKey": "inv:studio",
             "machineName": "studio",
             "at": "2026-10-03T10:00:00Z",
@@ -1456,7 +2014,13 @@
           ],
           "serviceAccount": null,
           "enabled": true,
-          "sshTransport": "openssh"
+          "sshTransport": "openssh",
+          "xcode": [
+            "26.1"
+          ],
+          "simulatorRuntimes": [],
+          "macAddress": null,
+          "wakeVia": null
         },
         "plan": [
           {
@@ -1534,7 +2098,8 @@
           {
             "mountPoint": "C:\\",
             "totalBytes": 512000000000,
-            "availableBytes": 140000000000
+            "availableBytes": 140000000000,
+            "runnerRoot": true
           }
         ],
         "uptimeSecs": 792000,
@@ -1644,17 +2209,17 @@
             "id": "architecture",
             "group": "system",
             "title": "Architecture",
-            "status": "info",
-            "value": "arm64",
-            "detail": "Architecture reported by the operating system."
+            "status": "pass",
+            "value": "AMD64",
+            "detail": "Matches the inventory platform windows-x64."
           },
           {
-            "id": "disk-space",
-            "group": "system",
-            "title": "Disk space",
+            "id": "runner-disk",
+            "group": "runners",
+            "title": "Runner volume",
             "status": "pass",
-            "value": "At least 10% free",
-            "detail": "C:\\: 130.4 GiB free of 476.8 GiB"
+            "value": "27% free",
+            "detail": "C:\\ holds C:\\gh-runners\\acme-demo and each runner's _work directory: 130.4 GiB free of 476.8 GiB."
           },
           {
             "id": "runner-startup",
@@ -1680,7 +2245,7 @@
         "alerts": [],
         "events": [
           {
-            "id": "00000000000000000005",
+            "id": "00000000000000000006",
             "machineKey": "inv:win-builder",
             "machineName": "win-builder",
             "at": "2026-10-03T10:00:00Z",
@@ -1786,7 +2351,11 @@
           ],
           "serviceAccount": ".\\builder",
           "enabled": true,
-          "sshTransport": "openssh"
+          "sshTransport": "openssh",
+          "xcode": [],
+          "simulatorRuntimes": [],
+          "macAddress": "02:00:5e:10:00:42",
+          "wakeVia": "build-linux-01"
         },
         "plan": [
           {
@@ -1839,7 +2408,7 @@
         "alerts": [],
         "events": [
           {
-            "id": "00000000000000000006",
+            "id": "00000000000000000007",
             "machineKey": "ts:nLaptop",
             "machineName": "dev-laptop",
             "at": "2026-10-03T10:00:00Z",
@@ -1885,7 +2454,7 @@
         "alerts": [],
         "events": [
           {
-            "id": "00000000000000000007",
+            "id": "00000000000000000008",
             "machineKey": "ts:nSpare",
             "machineName": "spare-ubuntu",
             "at": "2026-10-03T10:00:00Z",
@@ -2058,7 +2627,15 @@
       "runnerRepos": [
         "ml"
       ],
-      "runnerRepoErrors": []
+      "runnerRepoErrors": [],
+      "publicRunnerGroups": [
+        {
+          "name": "Community builds",
+          "runners": [
+            "pi-01-a"
+          ]
+        }
+      ]
     }
   ],
   "tailnet": {
@@ -2085,7 +2662,15 @@
     ],
     "events": [
       {
-        "id": "00000000000000000010",
+        "id": "00000000000000000016",
+        "machineKey": "inv:studio",
+        "machineName": "studio",
+        "at": "2026-10-03T11:54:00Z",
+        "kind": "drainRequested",
+        "detail": "Draining studio-1: its service stops after the current job, as reviewed."
+      },
+      {
+        "id": "00000000000000000015",
         "machineKey": "inv:mac-mini-02",
         "machineName": "mac-mini-02",
         "at": "2026-10-03T11:48:00Z",
@@ -2093,7 +2678,7 @@
         "detail": "/: 5.7% free (13.0 GiB of 228.2 GiB)."
       },
       {
-        "id": "00000000000000000009",
+        "id": "00000000000000000014",
         "machineKey": "inv:studio",
         "machineName": "studio",
         "at": "2026-10-03T11:23:00Z",
@@ -2101,7 +2686,7 @@
         "detail": "studio-1: inactive → running."
       },
       {
-        "id": "00000000000000000008",
+        "id": "00000000000000000013",
         "machineKey": "inv:studio",
         "machineName": "studio",
         "at": "2026-10-03T11:22:00Z",
@@ -2109,7 +2694,39 @@
         "detail": "A different operating-system boot session was observed."
       },
       {
-        "id": "00000000000000000007",
+        "id": "00000000000000000012",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:09:00Z",
+        "kind": "watchdogRecovered",
+        "detail": "linux-01-a is running again after an automatic restart."
+      },
+      {
+        "id": "00000000000000000011",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:09:00Z",
+        "kind": "runnerServiceChanged",
+        "detail": "linux-01-a: failed → running."
+      },
+      {
+        "id": "00000000000000000010",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:08:00Z",
+        "kind": "watchdogRestarted",
+        "detail": "Automatically restarted linux-01-a (attempt 1 of 3): its service was failed and GitHub showed it offline and idle."
+      },
+      {
+        "id": "00000000000000000009",
+        "machineKey": "inv:build-linux-01",
+        "machineName": "build-linux-01",
+        "at": "2026-10-03T11:06:00Z",
+        "kind": "runnerServiceChanged",
+        "detail": "linux-01-a: running → failed."
+      },
+      {
+        "id": "00000000000000000008",
         "machineKey": "ts:nSpare",
         "machineName": "spare-ubuntu",
         "at": "2026-10-03T10:00:00Z",
@@ -2117,7 +2734,7 @@
         "detail": "Started observing this machine. Earlier events are not known."
       },
       {
-        "id": "00000000000000000006",
+        "id": "00000000000000000007",
         "machineKey": "ts:nLaptop",
         "machineName": "dev-laptop",
         "at": "2026-10-03T10:00:00Z",
@@ -2125,7 +2742,7 @@
         "detail": "Started observing this machine. Earlier events are not known."
       },
       {
-        "id": "00000000000000000005",
+        "id": "00000000000000000006",
         "machineKey": "inv:win-builder",
         "machineName": "win-builder",
         "at": "2026-10-03T10:00:00Z",
@@ -2133,9 +2750,17 @@
         "detail": "Started observing this machine. Earlier events are not known."
       },
       {
-        "id": "00000000000000000004",
+        "id": "00000000000000000005",
         "machineKey": "inv:studio",
         "machineName": "studio",
+        "at": "2026-10-03T10:00:00Z",
+        "kind": "monitoringStarted",
+        "detail": "Started observing this machine. Earlier events are not known."
+      },
+      {
+        "id": "00000000000000000004",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
         "at": "2026-10-03T10:00:00Z",
         "kind": "monitoringStarted",
         "detail": "Started observing this machine. Earlier events are not known."
@@ -2166,10 +2791,86 @@
       }
     ]
   },
+  "automation": {
+    "drains": [
+      {
+        "runner": "studio-1",
+        "hostId": "studio",
+        "state": "draining",
+        "requestedAt": "2026-10-03T11:54:00Z",
+        "stoppedAt": null,
+        "error": null
+      }
+    ],
+    "watchdog": {
+      "enabled": true,
+      "runners": [
+        {
+          "runner": "linux-01-a",
+          "hostId": "build-linux-01",
+          "attempts": [
+            "2026-10-03T11:08:00Z"
+          ],
+          "downSince": null,
+          "nextAttemptAt": null,
+          "gaveUpAt": null,
+          "lastError": null
+        }
+      ]
+    },
+    "destinations": [
+      {
+        "id": "demo-slack",
+        "name": "#ci-alerts",
+        "kind": "slack",
+        "enabled": true,
+        "summary": "hooks.slack.com",
+        "pending": 0,
+        "deliveredAt": "2026-10-03T11:48:00Z",
+        "error": null
+      }
+    ],
+    "publish": {
+      "enabled": true,
+      "organization": "acme-demo",
+      "variable": "RUNNER_FLEET_STATUS",
+      "intervalMinutes": 5,
+      "value": "{\"healthy\":false,\"online\":{\"linux-build\":1,\"linux-experimental\":1,\"macos-build\":3,\"macos-e2e\":1,\"raspberry-pi\":1,\"ubuntu\":1,\"windows-build\":0,\"xcode\":2},\"updatedAt\":\"2026-10-03T11:51:00Z\"}",
+      "publishedAt": "2026-10-03T11:51:00Z",
+      "error": null,
+      "waiting": null
+    }
+  },
   "activity": {
     "historySince": "2026-09-03T12:00:00Z",
     "storageError": null,
     "recent": [
+      {
+        "id": 7060146261,
+        "runId": 960146261,
+        "org": "acme-demo",
+        "repo": "acme-demo/infra",
+        "name": "plan",
+        "workflowName": "Terraform",
+        "branch": "main",
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "conclusion": "success",
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "os": "linux",
+        "createdAt": "2026-10-03T11:29:05Z",
+        "startedAt": "2026-10-03T11:30:26Z",
+        "completedAt": "2026-10-03T11:54:19Z",
+        "queueSecs": 81,
+        "runSecs": 1433,
+        "htmlUrl": "https://github.com/acme-demo/infra/actions/runs/960146261/job/7060146261",
+        "source": "demo"
+      },
       {
         "id": 7020146261,
         "runId": 920146261,
@@ -2565,6 +3266,32 @@
         "source": "demo"
       },
       {
+        "id": 7060146257,
+        "runId": 960146257,
+        "org": "acme-demo",
+        "repo": "acme-demo/web",
+        "name": "deploy-preview",
+        "workflowName": "Deploy",
+        "branch": "main",
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "conclusion": "success",
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "os": "linux",
+        "createdAt": "2026-10-03T08:49:05Z",
+        "startedAt": "2026-10-03T08:50:59Z",
+        "completedAt": "2026-10-03T09:03:10Z",
+        "queueSecs": 114,
+        "runSecs": 731,
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146257/job/7060146257",
+        "source": "demo"
+      },
+      {
         "id": 7030246257,
         "runId": 930246257,
         "org": "acme-demo",
@@ -2669,6 +3396,35 @@
         "queueSecs": 71,
         "runSecs": 1576,
         "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246256/job/7010246256",
+        "source": "demo"
+      },
+      {
+        "id": 7060146256,
+        "runId": 960146256,
+        "org": "acme-demo",
+        "repo": "acme-demo/web",
+        "name": "deploy-preview",
+        "workflowName": "Deploy",
+        "branch": "release",
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "conclusion": "success",
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "os": "linux",
+        "createdAt": "2026-10-03T08:09:05Z",
+        "startedAt": "2026-10-03T08:09:40Z",
+        "completedAt": "2026-10-03T08:32:02Z",
+        "queueSecs": 35,
+        "runSecs": 1342,
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146256/job/7060146256",
         "source": "demo"
       },
       {
@@ -2803,6 +3559,35 @@
         "source": "demo"
       },
       {
+        "id": 7060146255,
+        "runId": 960146255,
+        "org": "acme-demo",
+        "repo": "acme-demo/web",
+        "name": "deploy-preview",
+        "workflowName": "Deploy",
+        "branch": "main",
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "conclusion": "success",
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "os": "linux",
+        "createdAt": "2026-10-03T07:29:05Z",
+        "startedAt": "2026-10-03T07:29:25Z",
+        "completedAt": "2026-10-03T07:43:58Z",
+        "queueSecs": 20,
+        "runSecs": 873,
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146255/job/7060146255",
+        "source": "demo"
+      },
+      {
         "id": 7010246255,
         "runId": 910246255,
         "org": "acme-demo",
@@ -2826,6 +3611,32 @@
         "queueSecs": 107,
         "runSecs": 888,
         "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246255/job/7010246255",
+        "source": "demo"
+      },
+      {
+        "id": 7060146254,
+        "runId": 960146254,
+        "org": "acme-demo",
+        "repo": "acme-demo/web",
+        "name": "deploy-preview",
+        "workflowName": "Deploy",
+        "branch": "main",
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "conclusion": "success",
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "os": "linux",
+        "createdAt": "2026-10-03T06:49:05Z",
+        "startedAt": "2026-10-03T06:49:28Z",
+        "completedAt": "2026-10-03T07:02:42Z",
+        "queueSecs": 23,
+        "runSecs": 794,
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146254/job/7060146254",
         "source": "demo"
       },
       {
@@ -2959,6 +3770,35 @@
         "queueSecs": 103,
         "runSecs": 1361,
         "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/909046253/job/7009046253",
+        "source": "demo"
+      },
+      {
+        "id": 7060146253,
+        "runId": 960146253,
+        "org": "acme-demo",
+        "repo": "acme-demo/web",
+        "name": "deploy-preview",
+        "workflowName": "Deploy",
+        "branch": "main",
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "conclusion": "success",
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "os": "linux",
+        "createdAt": "2026-10-03T06:09:05Z",
+        "startedAt": "2026-10-03T06:09:32Z",
+        "completedAt": "2026-10-03T06:26:38Z",
+        "queueSecs": 27,
+        "runSecs": 1026,
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146253/job/7060146253",
         "source": "demo"
       },
       {
@@ -3774,6 +4614,35 @@
         "source": "demo"
       },
       {
+        "id": 7060146243,
+        "runId": 960146243,
+        "org": "acme-demo",
+        "repo": "acme-demo/web",
+        "name": "lint",
+        "workflowName": "CI",
+        "branch": "release",
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "conclusion": "success",
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "os": "linux",
+        "createdAt": "2026-10-02T23:29:05Z",
+        "startedAt": "2026-10-02T23:30:40Z",
+        "completedAt": "2026-10-02T23:45:38Z",
+        "queueSecs": 95,
+        "runSecs": 898,
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146243/job/7060146243",
+        "source": "demo"
+      },
+      {
         "id": 7020146243,
         "runId": 920146243,
         "org": "acme-demo",
@@ -3879,6 +4748,32 @@
         "source": "demo"
       },
       {
+        "id": 7060146241,
+        "runId": 960146241,
+        "org": "acme-demo",
+        "repo": "acme-demo/infra",
+        "name": "plan",
+        "workflowName": "Terraform",
+        "branch": "release",
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "conclusion": "success",
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "os": "linux",
+        "createdAt": "2026-10-02T22:09:05Z",
+        "startedAt": "2026-10-02T22:09:57Z",
+        "completedAt": "2026-10-02T22:22:58Z",
+        "queueSecs": 52,
+        "runSecs": 781,
+        "htmlUrl": "https://github.com/acme-demo/infra/actions/runs/960146241/job/7060146241",
+        "source": "demo"
+      },
+      {
         "id": 7030146241,
         "runId": 930146241,
         "org": "acme-demo",
@@ -3933,6 +4828,32 @@
         "source": "demo"
       },
       {
+        "id": 7060146240,
+        "runId": 960146240,
+        "org": "acme-demo",
+        "repo": "acme-demo/web",
+        "name": "lint",
+        "workflowName": "CI",
+        "branch": "release",
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "conclusion": "success",
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "os": "linux",
+        "createdAt": "2026-10-02T21:29:05Z",
+        "startedAt": "2026-10-02T21:30:10Z",
+        "completedAt": "2026-10-02T21:37:14Z",
+        "queueSecs": 65,
+        "runSecs": 424,
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146240/job/7060146240",
+        "source": "demo"
+      },
+      {
         "id": 7030146239,
         "runId": 930146239,
         "org": "acme-demo",
@@ -3957,6 +4878,35 @@
         "queueSecs": 99,
         "runSecs": 1067,
         "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930146239/job/7030146239",
+        "source": "demo"
+      },
+      {
+        "id": 7060146238,
+        "runId": 960146238,
+        "org": "acme-demo",
+        "repo": "acme-demo/web",
+        "name": "lint",
+        "workflowName": "CI",
+        "branch": "main",
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "conclusion": "success",
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "os": "linux",
+        "createdAt": "2026-10-02T20:09:05Z",
+        "startedAt": "2026-10-02T20:09:29Z",
+        "completedAt": "2026-10-02T20:29:21Z",
+        "queueSecs": 24,
+        "runSecs": 1192,
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146238/job/7060146238",
         "source": "demo"
       },
       {

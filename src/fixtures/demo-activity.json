@@ -3,187 +3,187 @@
     "24h": {
       "buckets": [
         {
-          "busySecs": 4310,
-          "capacitySecs": 28800,
+          "busySecs": 5883,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 3,
+          "jobs": 4,
           "start": "2026-10-02T12:00:00Z"
         },
         {
           "busySecs": 2372,
-          "capacitySecs": 28800,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
           "jobs": 5,
           "start": "2026-10-02T13:00:00Z"
         },
         {
-          "busySecs": 7184,
-          "capacitySecs": 28800,
+          "busySecs": 7444,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 6,
+          "jobs": 7,
           "start": "2026-10-02T14:00:00Z"
         },
         {
-          "busySecs": 4375,
-          "capacitySecs": 28800,
+          "busySecs": 5163,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 7,
+          "jobs": 8,
           "start": "2026-10-02T15:00:00Z"
         },
         {
-          "busySecs": 7126,
-          "capacitySecs": 28800,
+          "busySecs": 7777,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 5,
+          "jobs": 6,
           "start": "2026-10-02T16:00:00Z"
         },
         {
           "busySecs": 3010,
-          "capacitySecs": 28800,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
           "jobs": 5,
           "start": "2026-10-02T17:00:00Z"
         },
         {
           "busySecs": 4958,
-          "capacitySecs": 28800,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
           "jobs": 3,
           "start": "2026-10-02T18:00:00Z"
         },
         {
-          "busySecs": 4283,
-          "capacitySecs": 28800,
+          "busySecs": 5587,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 8,
+          "jobs": 9,
           "start": "2026-10-02T19:00:00Z"
         },
         {
-          "busySecs": 6566,
-          "capacitySecs": 28800,
+          "busySecs": 7758,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 5,
+          "jobs": 6,
           "start": "2026-10-02T20:00:00Z"
         },
         {
-          "busySecs": 4559,
-          "capacitySecs": 28800,
+          "busySecs": 4983,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 6,
+          "jobs": 7,
           "start": "2026-10-02T21:00:00Z"
         },
         {
-          "busySecs": 2462,
-          "capacitySecs": 28800,
+          "busySecs": 3243,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 4,
+          "jobs": 5,
           "start": "2026-10-02T22:00:00Z"
         },
         {
-          "busySecs": 4665,
-          "capacitySecs": 28800,
+          "busySecs": 5563,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 6,
+          "jobs": 7,
           "start": "2026-10-02T23:00:00Z"
         },
         {
           "busySecs": 4789,
-          "capacitySecs": 28800,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
           "jobs": 6,
           "start": "2026-10-03T00:00:00Z"
         },
         {
           "busySecs": 5244,
-          "capacitySecs": 28800,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
           "jobs": 6,
           "start": "2026-10-03T01:00:00Z"
         },
         {
           "busySecs": 7058,
-          "capacitySecs": 28800,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
           "jobs": 5,
           "start": "2026-10-03T02:00:00Z"
         },
         {
           "busySecs": 1396,
-          "capacitySecs": 28800,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
           "jobs": 4,
           "start": "2026-10-03T03:00:00Z"
         },
         {
           "busySecs": 6787,
-          "capacitySecs": 28800,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
           "jobs": 6,
           "start": "2026-10-03T04:00:00Z"
         },
         {
           "busySecs": 5567,
-          "capacitySecs": 28800,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
           "jobs": 8,
           "start": "2026-10-03T05:00:00Z"
         },
         {
-          "busySecs": 6244,
-          "capacitySecs": 28800,
+          "busySecs": 7902,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 5,
+          "jobs": 6,
           "start": "2026-10-03T06:00:00Z"
         },
         {
-          "busySecs": 4006,
-          "capacitySecs": 28800,
+          "busySecs": 5041,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 4,
+          "jobs": 6,
           "start": "2026-10-03T07:00:00Z"
         },
         {
-          "busySecs": 7142,
-          "capacitySecs": 28800,
+          "busySecs": 9025,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 7,
+          "jobs": 8,
           "start": "2026-10-03T08:00:00Z"
         },
         {
-          "busySecs": 5486,
-          "capacitySecs": 28800,
+          "busySecs": 5676,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 6,
+          "jobs": 7,
           "start": "2026-10-03T09:00:00Z"
         },
         {
           "busySecs": 2808,
-          "capacitySecs": 28800,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
           "jobs": 4,
           "start": "2026-10-03T10:00:00Z"
         },
         {
-          "busySecs": 3457,
-          "capacitySecs": 28800,
+          "busySecs": 4890,
+          "capacitySecs": 32400,
           "coveredSecs": 3600,
-          "jobs": 5,
+          "jobs": 6,
           "start": "2026-10-03T11:00:00Z"
         }
       ],
-      "busyPercent": 16.76128472222222,
-      "busySecs": 115854,
-      "capacitySecs": 691200,
+      "busyPercent": 16.708333333333332,
+      "busySecs": 129924,
+      "capacitySecs": 777600,
       "coveredSecs": 86400,
       "from": "2026-10-02T12:00:00Z",
       "hostedCost": {
         "lines": [
           {
-            "jobs": 33,
-            "minutes": 493,
+            "jobs": 48,
+            "minutes": 736,
             "os": "linux",
             "rate": 0.006,
-            "usd": 2.958
+            "usd": 4.416
           },
           {
             "jobs": 7,
@@ -200,7 +200,7 @@
             "usd": 87.172
           }
         ],
-        "minutes": 1990,
+        "minutes": 2233,
         "rates": {
           "asOf": "2026-10-26",
           "linux": 0.006,
@@ -208,19 +208,9 @@
           "windows": 0.01
         },
         "unpricedJobs": 0,
-        "usd": 91.03999999999999
+        "usd": 92.49799999999999
       },
       "labelSets": [
-        {
-          "jobs": 18,
-          "labels": [
-            "Linux",
-            "self-hosted"
-          ],
-          "maxSecs": 565,
-          "p50Secs": 85,
-          "p95Secs": 565
-        },
         {
           "jobs": 1,
           "labels": [
@@ -231,6 +221,16 @@
           "maxSecs": 84,
           "p50Secs": 84,
           "p95Secs": 84
+        },
+        {
+          "jobs": 25,
+          "labels": [
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 565,
+          "p50Secs": 81,
+          "p95Secs": 277
         },
         {
           "jobs": 63,
@@ -273,6 +273,19 @@
           "maxSecs": 336,
           "p50Secs": 45,
           "p95Secs": 336
+        },
+        {
+          "jobs": 8,
+          "labels": [
+            "fleet",
+            "Linux",
+            "linux-experimental",
+            "raspberry-pi",
+            "self-hosted"
+          ],
+          "maxSecs": 283,
+          "p50Secs": 27,
+          "p95Secs": 283
         }
       ],
       "machines": [
@@ -310,6 +323,24 @@
             "runSecs": 17115,
             "succeeded": 18,
             "successRate": 0.9473684210526315
+          }
+        },
+        {
+          "busyPercent": 16.28472222222222,
+          "busySecs": 14070,
+          "machineKey": "inv:pi-01",
+          "name": "pi-01",
+          "runners": 1,
+          "totals": {
+            "cancelled": 0,
+            "failed": 0,
+            "jobs": 15,
+            "other": 0,
+            "queueP50Secs": 52,
+            "queueP95Secs": 283,
+            "runSecs": 14070,
+            "succeeded": 15,
+            "successRate": 1.0
           }
         },
         {
@@ -358,22 +389,22 @@
           "runSecs": 62205
         },
         {
-          "jobs": 39,
+          "jobs": 49,
           "name": "acme-demo/web",
           "repo": "acme-demo/web",
-          "runSecs": 30618
+          "runSecs": 40775
         },
         {
-          "jobs": 5,
+          "jobs": 8,
           "name": "acme-demo/infra",
           "repo": "acme-demo/infra",
-          "runSecs": 6780
+          "runSecs": 9645
         },
         {
-          "jobs": 6,
+          "jobs": 8,
           "name": "acme-demo/api",
           "repo": "acme-demo/api",
-          "runSecs": 5696
+          "runSecs": 6744
         },
         {
           "jobs": 7,
@@ -474,6 +505,27 @@
           }
         },
         {
+          "busyPercent": 16.28472222222222,
+          "busySecs": 14070,
+          "listed": true,
+          "machineKey": "inv:pi-01",
+          "machineName": "pi-01",
+          "name": "pi-01-a",
+          "org": "acme-demo",
+          "runnerKey": "gh:acme-demo:601",
+          "totals": {
+            "cancelled": 0,
+            "failed": 0,
+            "jobs": 15,
+            "other": 0,
+            "queueP50Secs": 52,
+            "queueP95Secs": 283,
+            "runSecs": 14070,
+            "succeeded": 15,
+            "successRate": 1.0
+          }
+        },
+        {
           "busyPercent": 34.07986111111111,
           "busySecs": 29445,
           "listed": true,
@@ -562,13 +614,13 @@
       "totals": {
         "cancelled": 5,
         "failed": 8,
-        "jobs": 129,
+        "jobs": 144,
         "other": 0,
         "queueP50Secs": 72,
-        "queueP95Secs": 416,
-        "runSecs": 115854,
-        "succeeded": 116,
-        "successRate": 0.9354838709677419
+        "queueP95Secs": 386,
+        "runSecs": 129924,
+        "succeeded": 131,
+        "successRate": 0.9424460431654677
       },
       "window": "24h",
       "workflows": [
@@ -579,10 +631,10 @@
           "runSecs": 44741
         },
         {
-          "jobs": 28,
+          "jobs": 31,
           "name": "CI",
           "repo": "acme-demo/web",
-          "runSecs": 23308
+          "runSecs": 25822
         },
         {
           "jobs": 22,
@@ -591,22 +643,22 @@
           "runSecs": 17464
         },
         {
-          "jobs": 11,
+          "jobs": 18,
           "name": "Deploy",
           "repo": "acme-demo/web",
-          "runSecs": 7310
+          "runSecs": 14953
         },
         {
-          "jobs": 5,
+          "jobs": 8,
           "name": "Terraform",
           "repo": "acme-demo/infra",
-          "runSecs": 6780
+          "runSecs": 9645
         },
         {
-          "jobs": 6,
+          "jobs": 8,
           "name": "CI",
           "repo": "acme-demo/api",
-          "runSecs": 5696
+          "runSecs": 6744
         },
         {
           "jobs": 7,
@@ -631,229 +683,229 @@
     "30d": {
       "buckets": [
         {
-          "busySecs": 106969,
-          "capacitySecs": 691200,
+          "busySecs": 123134,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 124,
+          "jobs": 140,
           "start": "2026-09-03T12:00:00Z"
         },
         {
-          "busySecs": 117358,
-          "capacitySecs": 691200,
+          "busySecs": 135228,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 126,
+          "jobs": 144,
           "start": "2026-09-04T12:00:00Z"
         },
         {
-          "busySecs": 99216,
-          "capacitySecs": 691200,
+          "busySecs": 109371,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 116,
+          "jobs": 131,
           "start": "2026-09-05T12:00:00Z"
         },
         {
-          "busySecs": 134575,
-          "capacitySecs": 691200,
+          "busySecs": 142102,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 136,
+          "jobs": 145,
           "start": "2026-09-06T12:00:00Z"
         },
         {
-          "busySecs": 120025,
-          "capacitySecs": 691200,
+          "busySecs": 134208,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 139,
+          "jobs": 155,
           "start": "2026-09-07T12:00:00Z"
         },
         {
-          "busySecs": 99504,
-          "capacitySecs": 691200,
+          "busySecs": 113842,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 114,
+          "jobs": 128,
           "start": "2026-09-08T12:00:00Z"
         },
         {
-          "busySecs": 109447,
-          "capacitySecs": 691200,
+          "busySecs": 119190,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 126,
+          "jobs": 138,
           "start": "2026-09-09T12:00:00Z"
         },
         {
-          "busySecs": 96719,
-          "capacitySecs": 691200,
+          "busySecs": 104263,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 120,
+          "jobs": 130,
           "start": "2026-09-10T12:00:00Z"
         },
         {
-          "busySecs": 111066,
-          "capacitySecs": 691200,
+          "busySecs": 121779,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 127,
+          "jobs": 138,
           "start": "2026-09-11T12:00:00Z"
         },
         {
-          "busySecs": 111441,
-          "capacitySecs": 691200,
+          "busySecs": 123214,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 127,
+          "jobs": 139,
           "start": "2026-09-12T12:00:00Z"
         },
         {
-          "busySecs": 109324,
-          "capacitySecs": 691200,
+          "busySecs": 118087,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 125,
+          "jobs": 137,
           "start": "2026-09-13T12:00:00Z"
         },
         {
-          "busySecs": 112613,
-          "capacitySecs": 691200,
+          "busySecs": 128627,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 126,
+          "jobs": 146,
           "start": "2026-09-14T12:00:00Z"
         },
         {
-          "busySecs": 100863,
-          "capacitySecs": 691200,
+          "busySecs": 114825,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 121,
+          "jobs": 136,
           "start": "2026-09-15T12:00:00Z"
         },
         {
-          "busySecs": 113916,
-          "capacitySecs": 691200,
+          "busySecs": 123239,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 127,
+          "jobs": 139,
           "start": "2026-09-16T12:00:00Z"
         },
         {
-          "busySecs": 118584,
-          "capacitySecs": 691200,
+          "busySecs": 128989,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 136,
+          "jobs": 146,
           "start": "2026-09-17T12:00:00Z"
         },
         {
-          "busySecs": 108941,
-          "capacitySecs": 691200,
+          "busySecs": 121434,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 125,
+          "jobs": 140,
           "start": "2026-09-18T12:00:00Z"
         },
         {
-          "busySecs": 108251,
-          "capacitySecs": 691200,
+          "busySecs": 120553,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 129,
+          "jobs": 144,
           "start": "2026-09-19T12:00:00Z"
         },
         {
-          "busySecs": 110391,
-          "capacitySecs": 691200,
+          "busySecs": 124666,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 127,
+          "jobs": 140,
           "start": "2026-09-20T12:00:00Z"
         },
         {
-          "busySecs": 112654,
-          "capacitySecs": 691200,
+          "busySecs": 125791,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 129,
+          "jobs": 143,
           "start": "2026-09-21T12:00:00Z"
         },
         {
-          "busySecs": 114087,
-          "capacitySecs": 691200,
+          "busySecs": 121918,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 125,
+          "jobs": 136,
           "start": "2026-09-22T12:00:00Z"
         },
         {
-          "busySecs": 104866,
-          "capacitySecs": 691200,
+          "busySecs": 114283,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 114,
+          "jobs": 124,
           "start": "2026-09-23T12:00:00Z"
         },
         {
-          "busySecs": 110153,
-          "capacitySecs": 691200,
+          "busySecs": 124482,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 127,
+          "jobs": 142,
           "start": "2026-09-24T12:00:00Z"
         },
         {
-          "busySecs": 119032,
-          "capacitySecs": 691200,
+          "busySecs": 129483,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 129,
+          "jobs": 143,
           "start": "2026-09-25T12:00:00Z"
         },
         {
-          "busySecs": 114863,
-          "capacitySecs": 691200,
+          "busySecs": 126448,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 122,
+          "jobs": 138,
           "start": "2026-09-26T12:00:00Z"
         },
         {
-          "busySecs": 122634,
-          "capacitySecs": 691200,
+          "busySecs": 138483,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 130,
+          "jobs": 146,
           "start": "2026-09-27T12:00:00Z"
         },
         {
-          "busySecs": 109098,
-          "capacitySecs": 691200,
+          "busySecs": 122232,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 117,
+          "jobs": 133,
           "start": "2026-09-28T12:00:00Z"
         },
         {
-          "busySecs": 104712,
-          "capacitySecs": 691200,
+          "busySecs": 117999,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 123,
+          "jobs": 139,
           "start": "2026-09-29T12:00:00Z"
         },
         {
-          "busySecs": 120891,
-          "capacitySecs": 691200,
+          "busySecs": 135006,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 136,
+          "jobs": 152,
           "start": "2026-09-30T12:00:00Z"
         },
         {
-          "busySecs": 124331,
-          "capacitySecs": 691200,
+          "busySecs": 140827,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 139,
+          "jobs": 155,
           "start": "2026-10-01T12:00:00Z"
         },
         {
-          "busySecs": 115854,
-          "capacitySecs": 691200,
+          "busySecs": 129924,
+          "capacitySecs": 777600,
           "coveredSecs": 86400,
-          "jobs": 129,
+          "jobs": 144,
           "start": "2026-10-02T12:00:00Z"
         }
       ],
-      "busyPercent": 16.215171682098767,
-      "busySecs": 3362378,
-      "capacitySecs": 20736000,
+      "busyPercent": 16.00491683813443,
+      "busySecs": 3733627,
+      "capacitySecs": 23328000,
       "coveredSecs": 2592000,
       "from": "2026-09-03T12:00:00Z",
       "hostedCost": {
         "lines": [
           {
-            "jobs": 999,
-            "minutes": 15177,
+            "jobs": 1419,
+            "minutes": 21572,
             "os": "linux",
             "rate": 0.006,
-            "usd": 91.062
+            "usd": 129.43200000000002
           },
           {
             "jobs": 149,
@@ -870,7 +922,7 @@
             "usd": 2511.062
           }
         ],
-        "minutes": 57876,
+        "minutes": 64271,
         "rates": {
           "asOf": "2026-10-26",
           "linux": 0.006,
@@ -878,7 +930,7 @@
           "windows": 0.01
         },
         "unpricedJobs": 0,
-        "usd": 2624.104
+        "usd": 2662.4739999999997
       },
       "labelSets": [
         {
@@ -892,14 +944,17 @@
           "p95Secs": 342
         },
         {
-          "jobs": 477,
+          "jobs": 203,
           "labels": [
+            "fleet",
             "Linux",
+            "linux-experimental",
+            "raspberry-pi",
             "self-hosted"
           ],
-          "maxSecs": 574,
+          "maxSecs": 583,
           "p50Secs": 74,
-          "p95Secs": 281
+          "p95Secs": 266
         },
         {
           "jobs": 659,
@@ -932,6 +987,16 @@
           "maxSecs": 602,
           "p50Secs": 70,
           "p95Secs": 362
+        },
+        {
+          "jobs": 694,
+          "labels": [
+            "Linux",
+            "self-hosted"
+          ],
+          "maxSecs": 574,
+          "p50Secs": 69,
+          "p95Secs": 287
         },
         {
           "jobs": 90,
@@ -983,6 +1048,24 @@
           }
         },
         {
+          "busyPercent": 14.322878086419752,
+          "busySecs": 371249,
+          "machineKey": "inv:pi-01",
+          "name": "pi-01",
+          "runners": 1,
+          "totals": {
+            "cancelled": 13,
+            "failed": 22,
+            "jobs": 420,
+            "other": 0,
+            "queueP50Secs": 65,
+            "queueP95Secs": 283,
+            "runSecs": 371249,
+            "succeeded": 385,
+            "successRate": 0.9459459459459459
+          }
+        },
+        {
           "busyPercent": 22.97011316872428,
           "busySecs": 1786156,
           "machineKey": "inv:studio",
@@ -1028,28 +1111,28 @@
           "runSecs": 1764393
         },
         {
-          "jobs": 1042,
+          "jobs": 1263,
           "name": "acme-demo/web",
           "repo": "acme-demo/web",
-          "runSecs": 936549
+          "runSecs": 1128290
         },
         {
-          "jobs": 249,
+          "jobs": 336,
           "name": "acme-demo/infra",
           "repo": "acme-demo/infra",
-          "runSecs": 224016
+          "runSecs": 303440
+        },
+        {
+          "jobs": 288,
+          "name": "acme-demo/api",
+          "repo": "acme-demo/api",
+          "runSecs": 255001
         },
         {
           "jobs": 183,
           "name": "acme-demo/ml",
           "repo": "acme-demo/ml",
           "runSecs": 155358
-        },
-        {
-          "jobs": 176,
-          "name": "acme-demo/api",
-          "repo": "acme-demo/api",
-          "runSecs": 154917
         },
         {
           "jobs": 149,
@@ -1144,6 +1227,27 @@
           }
         },
         {
+          "busyPercent": 14.322878086419752,
+          "busySecs": 371249,
+          "listed": true,
+          "machineKey": "inv:pi-01",
+          "machineName": "pi-01",
+          "name": "pi-01-a",
+          "org": "acme-demo",
+          "runnerKey": "gh:acme-demo:601",
+          "totals": {
+            "cancelled": 13,
+            "failed": 22,
+            "jobs": 420,
+            "other": 0,
+            "queueP50Secs": 65,
+            "queueP95Secs": 283,
+            "runSecs": 371249,
+            "succeeded": 385,
+            "successRate": 0.9459459459459459
+          }
+        },
+        {
           "busyPercent": 22.24344135802469,
           "busySecs": 576550,
           "listed": true,
@@ -1230,15 +1334,15 @@
       ],
       "to": "2026-10-03T12:00:00Z",
       "totals": {
-        "cancelled": 180,
-        "failed": 316,
-        "jobs": 3791,
+        "cancelled": 193,
+        "failed": 338,
+        "jobs": 4211,
         "other": 0,
         "queueP50Secs": 72,
-        "queueP95Secs": 336,
-        "runSecs": 3362378,
-        "succeeded": 3295,
-        "successRate": 0.912489615065079
+        "queueP95Secs": 328,
+        "runSecs": 3733627,
+        "succeeded": 3680,
+        "successRate": 0.9158785465405674
       },
       "window": "30d",
       "workflows": [
@@ -1249,10 +1353,10 @@
           "runSecs": 1155879
         },
         {
-          "jobs": 837,
+          "jobs": 945,
           "name": "CI",
           "repo": "acme-demo/web",
-          "runSecs": 759842
+          "runSecs": 846155
         },
         {
           "jobs": 678,
@@ -1261,22 +1365,22 @@
           "runSecs": 608514
         },
         {
-          "jobs": 249,
+          "jobs": 336,
           "name": "Terraform",
           "repo": "acme-demo/infra",
-          "runSecs": 224016
+          "runSecs": 303440
         },
         {
-          "jobs": 205,
+          "jobs": 318,
           "name": "Deploy",
           "repo": "acme-demo/web",
-          "runSecs": 176707
+          "runSecs": 282135
         },
         {
-          "jobs": 176,
+          "jobs": 288,
           "name": "CI",
           "repo": "acme-demo/api",
-          "runSecs": 154917
+          "runSecs": 255001
         },
         {
           "jobs": 149,
@@ -1301,215 +1405,215 @@
     "7d": {
       "buckets": [
         {
-          "busySecs": 21594,
-          "capacitySecs": 172800,
+          "busySecs": 22054,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 26,
+          "jobs": 27,
           "start": "2026-09-26T12:00:00Z"
         },
         {
-          "busySecs": 28132,
-          "capacitySecs": 172800,
+          "busySecs": 30895,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 27,
+          "jobs": 30,
           "start": "2026-09-26T18:00:00Z"
         },
         {
-          "busySecs": 33215,
-          "capacitySecs": 172800,
+          "busySecs": 38805,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 34,
+          "jobs": 41,
           "start": "2026-09-27T00:00:00Z"
         },
         {
-          "busySecs": 31922,
-          "capacitySecs": 172800,
+          "busySecs": 34694,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 35,
+          "jobs": 40,
           "start": "2026-09-27T06:00:00Z"
         },
         {
-          "busySecs": 28122,
-          "capacitySecs": 172800,
+          "busySecs": 31884,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 35,
+          "jobs": 39,
           "start": "2026-09-27T12:00:00Z"
         },
         {
-          "busySecs": 32019,
-          "capacitySecs": 172800,
+          "busySecs": 38701,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 34,
+          "jobs": 40,
           "start": "2026-09-27T18:00:00Z"
         },
         {
-          "busySecs": 34843,
-          "capacitySecs": 172800,
+          "busySecs": 38854,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 34,
+          "jobs": 38,
           "start": "2026-09-28T00:00:00Z"
         },
         {
-          "busySecs": 27650,
-          "capacitySecs": 172800,
+          "busySecs": 29044,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 27,
+          "jobs": 29,
           "start": "2026-09-28T06:00:00Z"
         },
         {
-          "busySecs": 26095,
-          "capacitySecs": 172800,
+          "busySecs": 29952,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 30,
+          "jobs": 35,
           "start": "2026-09-28T12:00:00Z"
         },
         {
-          "busySecs": 30803,
-          "capacitySecs": 172800,
+          "busySecs": 34567,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 33,
+          "jobs": 37,
           "start": "2026-09-28T18:00:00Z"
         },
         {
-          "busySecs": 27147,
-          "capacitySecs": 172800,
+          "busySecs": 29876,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 26,
+          "jobs": 30,
           "start": "2026-09-29T00:00:00Z"
         },
         {
-          "busySecs": 25053,
-          "capacitySecs": 172800,
+          "busySecs": 27837,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 28,
+          "jobs": 31,
           "start": "2026-09-29T06:00:00Z"
         },
         {
-          "busySecs": 22601,
-          "capacitySecs": 172800,
+          "busySecs": 24463,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 27,
+          "jobs": 31,
           "start": "2026-09-29T12:00:00Z"
         },
         {
-          "busySecs": 23267,
-          "capacitySecs": 172800,
+          "busySecs": 27105,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 31,
+          "jobs": 36,
           "start": "2026-09-29T18:00:00Z"
         },
         {
-          "busySecs": 28296,
-          "capacitySecs": 172800,
+          "busySecs": 34171,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 29,
+          "jobs": 34,
           "start": "2026-09-30T00:00:00Z"
         },
         {
-          "busySecs": 30548,
-          "capacitySecs": 172800,
+          "busySecs": 32260,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 36,
+          "jobs": 38,
           "start": "2026-09-30T06:00:00Z"
         },
         {
-          "busySecs": 22737,
-          "capacitySecs": 172800,
+          "busySecs": 26600,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 30,
+          "jobs": 33,
           "start": "2026-09-30T12:00:00Z"
         },
         {
-          "busySecs": 29546,
-          "capacitySecs": 172800,
+          "busySecs": 34198,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 31,
+          "jobs": 37,
           "start": "2026-09-30T18:00:00Z"
         },
         {
-          "busySecs": 36830,
-          "capacitySecs": 172800,
+          "busySecs": 39440,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 39,
+          "jobs": 42,
           "start": "2026-10-01T00:00:00Z"
         },
         {
-          "busySecs": 31778,
-          "capacitySecs": 172800,
+          "busySecs": 34768,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 36,
+          "jobs": 40,
           "start": "2026-10-01T06:00:00Z"
         },
         {
-          "busySecs": 40834,
-          "capacitySecs": 172800,
+          "busySecs": 46806,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 43,
+          "jobs": 48,
           "start": "2026-10-01T12:00:00Z"
         },
         {
-          "busySecs": 31613,
-          "capacitySecs": 172800,
+          "busySecs": 34112,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 34,
+          "jobs": 36,
           "start": "2026-10-01T18:00:00Z"
         },
         {
-          "busySecs": 25560,
-          "capacitySecs": 172800,
+          "busySecs": 28872,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 28,
+          "jobs": 32,
           "start": "2026-10-02T00:00:00Z"
         },
         {
-          "busySecs": 26324,
-          "capacitySecs": 172800,
+          "busySecs": 31037,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 34,
+          "jobs": 39,
           "start": "2026-10-02T06:00:00Z"
         },
         {
-          "busySecs": 28377,
-          "capacitySecs": 172800,
+          "busySecs": 31649,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 31,
+          "jobs": 35,
           "start": "2026-10-02T12:00:00Z"
         },
         {
-          "busySecs": 27493,
-          "capacitySecs": 172800,
+          "busySecs": 32092,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 32,
+          "jobs": 37,
           "start": "2026-10-02T18:00:00Z"
         },
         {
           "busySecs": 30841,
-          "capacitySecs": 172800,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
           "jobs": 35,
           "start": "2026-10-03T00:00:00Z"
         },
         {
-          "busySecs": 29143,
-          "capacitySecs": 172800,
+          "busySecs": 35342,
+          "capacitySecs": 194400,
           "coveredSecs": 21600,
-          "jobs": 31,
+          "jobs": 37,
           "start": "2026-10-03T06:00:00Z"
         }
       ],
-      "busyPercent": 16.790323247354497,
-      "busySecs": 812383,
-      "capacitySecs": 4838400,
+      "busyPercent": 16.734990446796,
+      "busySecs": 910919,
+      "capacitySecs": 5443200,
       "coveredSecs": 604800,
       "from": "2026-09-26T12:00:00Z",
       "hostedCost": {
         "lines": [
           {
-            "jobs": 248,
-            "minutes": 3834,
+            "jobs": 359,
+            "minutes": 5531,
             "os": "linux",
             "rate": 0.006,
-            "usd": 23.004
+            "usd": 33.186
           },
           {
             "jobs": 40,
@@ -1526,7 +1630,7 @@
             "usd": 595.696
           }
         ],
-        "minutes": 13970,
+        "minutes": 15667,
         "rates": {
           "asOf": "2026-10-26",
           "linux": 0.006,
@@ -1534,7 +1638,7 @@
           "windows": 0.01
         },
         "unpricedJobs": 0,
-        "usd": 623.98
+        "usd": 634.162
       },
       "labelSets": [
         {
@@ -1549,14 +1653,14 @@
           "p95Secs": 342
         },
         {
-          "jobs": 122,
+          "jobs": 186,
           "labels": [
             "Linux",
             "self-hosted"
           ],
           "maxSecs": 567,
-          "p50Secs": 77,
-          "p95Secs": 312
+          "p50Secs": 71,
+          "p95Secs": 274
         },
         {
           "jobs": 97,
@@ -1578,6 +1682,19 @@
           "maxSecs": 600,
           "p50Secs": 71,
           "p95Secs": 340
+        },
+        {
+          "jobs": 47,
+          "labels": [
+            "fleet",
+            "Linux",
+            "linux-experimental",
+            "raspberry-pi",
+            "self-hosted"
+          ],
+          "maxSecs": 283,
+          "p50Secs": 69,
+          "p95Secs": 163
         },
         {
           "jobs": 29,
@@ -1639,6 +1756,24 @@
           }
         },
         {
+          "busyPercent": 16.29232804232804,
+          "busySecs": 98536,
+          "machineKey": "inv:pi-01",
+          "name": "pi-01",
+          "runners": 1,
+          "totals": {
+            "cancelled": 2,
+            "failed": 9,
+            "jobs": 111,
+            "other": 0,
+            "queueP50Secs": 66,
+            "queueP95Secs": 163,
+            "runSecs": 98536,
+            "succeeded": 100,
+            "successRate": 0.9174311926605505
+          }
+        },
+        {
           "busyPercent": 22.9266975308642,
           "busySecs": 415982,
           "machineKey": "inv:studio",
@@ -1684,28 +1819,28 @@
           "runSecs": 414971
         },
         {
-          "jobs": 263,
+          "jobs": 322,
           "name": "acme-demo/web",
           "repo": "acme-demo/web",
-          "runSecs": 236827
+          "runSecs": 288479
         },
         {
-          "jobs": 51,
+          "jobs": 76,
           "name": "acme-demo/infra",
           "repo": "acme-demo/infra",
-          "runSecs": 53642
+          "runSecs": 76639
+        },
+        {
+          "jobs": 69,
+          "name": "acme-demo/api",
+          "repo": "acme-demo/api",
+          "runSecs": 61588
         },
         {
           "jobs": 51,
           "name": "acme-demo/ml",
           "repo": "acme-demo/ml",
           "runSecs": 38713
-        },
-        {
-          "jobs": 42,
-          "name": "acme-demo/api",
-          "repo": "acme-demo/api",
-          "runSecs": 37701
         },
         {
           "jobs": 40,
@@ -1800,6 +1935,27 @@
           }
         },
         {
+          "busyPercent": 16.29232804232804,
+          "busySecs": 98536,
+          "listed": true,
+          "machineKey": "inv:pi-01",
+          "machineName": "pi-01",
+          "name": "pi-01-a",
+          "org": "acme-demo",
+          "runnerKey": "gh:acme-demo:601",
+          "totals": {
+            "cancelled": 2,
+            "failed": 9,
+            "jobs": 111,
+            "other": 0,
+            "queueP50Secs": 66,
+            "queueP95Secs": 163,
+            "runSecs": 98536,
+            "succeeded": 100,
+            "successRate": 0.9174311926605505
+          }
+        },
+        {
           "busyPercent": 23.14649470899471,
           "busySecs": 139990,
           "listed": true,
@@ -1886,15 +2042,15 @@
       ],
       "to": "2026-10-03T12:00:00Z",
       "totals": {
-        "cancelled": 36,
-        "failed": 64,
-        "jobs": 896,
+        "cancelled": 38,
+        "failed": 73,
+        "jobs": 1007,
         "other": 0,
         "queueP50Secs": 72,
-        "queueP95Secs": 342,
-        "runSecs": 812383,
-        "succeeded": 796,
-        "successRate": 0.9255813953488372
+        "queueP95Secs": 310,
+        "runSecs": 910919,
+        "succeeded": 896,
+        "successRate": 0.9246646026831785
       },
       "window": "7d",
       "workflows": [
@@ -1905,10 +2061,10 @@
           "runSecs": 274916
         },
         {
-          "jobs": 215,
+          "jobs": 243,
           "name": "CI",
           "repo": "acme-demo/web",
-          "runSecs": 194720
+          "runSecs": 213883
         },
         {
           "jobs": 158,
@@ -1917,22 +2073,22 @@
           "runSecs": 140055
         },
         {
-          "jobs": 51,
+          "jobs": 76,
           "name": "Terraform",
           "repo": "acme-demo/infra",
-          "runSecs": 53642
+          "runSecs": 76639
         },
         {
-          "jobs": 48,
+          "jobs": 79,
           "name": "Deploy",
           "repo": "acme-demo/web",
-          "runSecs": 42107
+          "runSecs": 74596
         },
         {
-          "jobs": 42,
+          "jobs": 69,
           "name": "CI",
           "repo": "acme-demo/api",
-          "runSecs": 37701
+          "runSecs": 61588
         },
         {
           "jobs": 40,
@@ -1960,6 +2116,32 @@
     "hasMore": true,
     "historySince": "2026-09-03T12:00:00Z",
     "jobs": [
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T11:54:19Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T11:29:05Z",
+        "htmlUrl": "https://github.com/acme-demo/infra/actions/runs/960146261/job/7060146261",
+        "id": 7060146261,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "plan",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 81,
+        "repo": "acme-demo/infra",
+        "runId": 960146261,
+        "runSecs": 1433,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T11:30:26Z",
+        "workflowName": "Terraform"
+      },
       {
         "branch": "main",
         "completedAt": "2026-10-03T11:46:07Z",
@@ -2356,6 +2538,32 @@
       },
       {
         "branch": "main",
+        "completedAt": "2026-10-03T09:03:10Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:49:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146257/job/7060146257",
+        "id": 7060146257,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 114,
+        "repo": "acme-demo/web",
+        "runId": 960146257,
+        "runSecs": 731,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:50:59Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
         "completedAt": "2026-10-03T08:55:56Z",
         "conclusion": "success",
         "createdAt": "2026-10-03T08:41:12Z",
@@ -2460,6 +2668,35 @@
         "source": "demo",
         "startedAt": "2026-10-03T08:06:11Z",
         "workflowName": "Release"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-03T08:32:02Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T08:09:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146256/job/7060146256",
+        "id": 7060146256,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 35,
+        "repo": "acme-demo/web",
+        "runId": 960146256,
+        "runSecs": 1342,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T08:09:40Z",
+        "workflowName": "Deploy"
       },
       {
         "branch": "main",
@@ -2594,6 +2831,35 @@
       },
       {
         "branch": "main",
+        "completedAt": "2026-10-03T07:43:58Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T07:29:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146255/job/7060146255",
+        "id": 7060146255,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 20,
+        "repo": "acme-demo/web",
+        "runId": 960146255,
+        "runSecs": 873,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T07:29:25Z",
+        "workflowName": "Deploy"
+      },
+      {
+        "branch": "main",
         "completedAt": "2026-10-03T07:41:35Z",
         "conclusion": "success",
         "createdAt": "2026-10-03T07:25:00Z",
@@ -2617,6 +2883,32 @@
         "source": "demo",
         "startedAt": "2026-10-03T07:26:47Z",
         "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T07:02:42Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T06:49:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146254/job/7060146254",
+        "id": 7060146254,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 23,
+        "repo": "acme-demo/web",
+        "runId": 960146254,
+        "runSecs": 794,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T06:49:28Z",
+        "workflowName": "Deploy"
       },
       {
         "branch": "main",
@@ -2750,6 +3042,35 @@
         "source": "demo",
         "startedAt": "2026-10-03T06:07:17Z",
         "workflowName": "CI"
+      },
+      {
+        "branch": "main",
+        "completedAt": "2026-10-03T06:26:38Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-03T06:09:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146253/job/7060146253",
+        "id": 7060146253,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 27,
+        "repo": "acme-demo/web",
+        "runId": 960146253,
+        "runSecs": 1026,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-03T06:09:32Z",
+        "workflowName": "Deploy"
       },
       {
         "branch": "main",
@@ -3723,6 +4044,35 @@
         "workflowName": "CI"
       },
       {
+        "branch": "release",
+        "completedAt": "2026-10-02T23:45:38Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T23:29:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146243/job/7060146243",
+        "id": 7060146243,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 95,
+        "repo": "acme-demo/web",
+        "runId": 960146243,
+        "runSecs": 898,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T23:30:40Z",
+        "workflowName": "CI"
+      },
+      {
         "branch": "main",
         "completedAt": "2026-10-02T23:44:04Z",
         "conclusion": "success",
@@ -3880,6 +4230,32 @@
         "workflowName": "CI"
       },
       {
+        "branch": "release",
+        "completedAt": "2026-10-02T22:22:58Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T22:09:05Z",
+        "htmlUrl": "https://github.com/acme-demo/infra/actions/runs/960146241/job/7060146241",
+        "id": 7060146241,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "plan",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 52,
+        "repo": "acme-demo/infra",
+        "runId": 960146241,
+        "runSecs": 781,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T22:09:57Z",
+        "workflowName": "Terraform"
+      },
+      {
         "branch": "main",
         "completedAt": "2026-10-02T22:15:12Z",
         "conclusion": "success",
@@ -4011,6 +4387,32 @@
         "runnerName": "linux-01-b",
         "source": "demo",
         "startedAt": "2026-10-02T21:26:56Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "release",
+        "completedAt": "2026-10-02T21:37:14Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T21:29:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146240/job/7060146240",
+        "id": 7060146240,
+        "labels": [
+          "self-hosted",
+          "Linux"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 65,
+        "repo": "acme-demo/web",
+        "runId": 960146240,
+        "runSecs": 424,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T21:30:10Z",
         "workflowName": "CI"
       },
       {
@@ -4147,6 +4549,35 @@
       },
       {
         "branch": "main",
+        "completedAt": "2026-10-02T20:29:21Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T20:09:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146238/job/7060146238",
+        "id": 7060146238,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "lint",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 24,
+        "repo": "acme-demo/web",
+        "runId": 960146238,
+        "runSecs": 1192,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T20:09:29Z",
+        "workflowName": "CI"
+      },
+      {
+        "branch": "main",
         "completedAt": "2026-10-02T20:29:01Z",
         "conclusion": "success",
         "createdAt": "2026-10-02T20:06:52Z",
@@ -4251,6 +4682,35 @@
         "workflowName": "CI"
       },
       {
+        "branch": "release",
+        "completedAt": "2026-10-02T19:55:32Z",
+        "conclusion": "success",
+        "createdAt": "2026-10-02T19:29:05Z",
+        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/960146237/job/7060146237",
+        "id": 7060146237,
+        "labels": [
+          "self-hosted",
+          "Linux",
+          "fleet",
+          "linux-experimental",
+          "raspberry-pi"
+        ],
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
+        "name": "deploy-preview",
+        "org": "acme-demo",
+        "os": "linux",
+        "queueSecs": 283,
+        "repo": "acme-demo/web",
+        "runId": 960146237,
+        "runSecs": 1304,
+        "runnerKey": "gh:acme-demo:601",
+        "runnerName": "pi-01-a",
+        "source": "demo",
+        "startedAt": "2026-10-02T19:33:48Z",
+        "workflowName": "Deploy"
+      },
+      {
         "branch": "main",
         "completedAt": "2026-10-02T19:35:14Z",
         "conclusion": "cancelled",
@@ -4302,299 +4762,9 @@
         "source": "demo",
         "startedAt": "2026-10-02T19:26:57Z",
         "workflowName": "CI"
-      },
-      {
-        "branch": "release",
-        "completedAt": "2026-10-02T19:32:17Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T19:21:12Z",
-        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930246237/job/7030246237",
-        "id": 7030246237,
-        "labels": [
-          "self-hosted",
-          "Linux"
-        ],
-        "machineKey": "inv:build-linux-01",
-        "machineName": "build-linux-01",
-        "name": "deploy-preview",
-        "org": "acme-demo",
-        "os": "linux",
-        "queueSecs": 87,
-        "repo": "acme-demo/web",
-        "runId": 930246237,
-        "runSecs": 578,
-        "runnerKey": "gh:acme-demo:302",
-        "runnerName": "linux-01-b",
-        "source": "demo",
-        "startedAt": "2026-10-02T19:22:39Z",
-        "workflowName": "Deploy"
-      },
-      {
-        "branch": "release",
-        "completedAt": "2026-10-02T19:31:30Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T19:21:51Z",
-        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146237/job/7010146237",
-        "id": 7010146237,
-        "labels": [
-          "self-hosted",
-          "macOS",
-          "xcode-16"
-        ],
-        "machineKey": "inv:studio",
-        "machineName": "studio",
-        "name": "ui-tests",
-        "org": "acme-demo",
-        "os": "macos",
-        "queueSecs": 21,
-        "repo": "acme-demo/ios-app",
-        "runId": 910146237,
-        "runSecs": 558,
-        "runnerKey": "gh:acme-demo:101",
-        "runnerName": "studio-1",
-        "source": "demo",
-        "startedAt": "2026-10-02T19:22:12Z",
-        "workflowName": "CI"
-      },
-      {
-        "branch": "release",
-        "completedAt": "2026-10-02T19:13:41Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T18:46:52Z",
-        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/920146236/job/7020146236",
-        "id": 7020146236,
-        "labels": [
-          "self-hosted",
-          "macOS"
-        ],
-        "machineKey": "inv:mac-mini-02",
-        "machineName": "mac-mini-02",
-        "name": "archive",
-        "org": "acme-demo",
-        "os": "macos",
-        "queueSecs": 53,
-        "repo": "acme-demo/ios-app",
-        "runId": 920146236,
-        "runSecs": 1556,
-        "runnerKey": "gh:acme-demo:201",
-        "runnerName": "mini-02",
-        "source": "demo",
-        "startedAt": "2026-10-02T18:47:45Z",
-        "workflowName": "Release"
-      },
-      {
-        "branch": "main",
-        "completedAt": "2026-10-02T19:08:18Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T18:41:12Z",
-        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/930246236/job/7030246236",
-        "id": 7030246236,
-        "labels": [
-          "self-hosted",
-          "Linux"
-        ],
-        "machineKey": "inv:build-linux-01",
-        "machineName": "build-linux-01",
-        "name": "deploy-preview",
-        "org": "acme-demo",
-        "os": "linux",
-        "queueSecs": 79,
-        "repo": "acme-demo/web",
-        "runId": 930246236,
-        "runSecs": 1547,
-        "runnerKey": "gh:acme-demo:302",
-        "runnerName": "linux-01-b",
-        "source": "demo",
-        "startedAt": "2026-10-02T18:42:31Z",
-        "workflowName": "Deploy"
-      },
-      {
-        "branch": "release",
-        "completedAt": "2026-10-02T19:06:49Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T18:45:00Z",
-        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246236/job/7010246236",
-        "id": 7010246236,
-        "labels": [
-          "self-hosted",
-          "macOS",
-          "xcode-16"
-        ],
-        "machineKey": "inv:studio",
-        "machineName": "studio",
-        "name": "build (macOS)",
-        "org": "acme-demo",
-        "os": "macos",
-        "queueSecs": 97,
-        "repo": "acme-demo/ios-app",
-        "runId": 910246236,
-        "runSecs": 1212,
-        "runnerKey": "gh:acme-demo:102",
-        "runnerName": "studio-2",
-        "source": "demo",
-        "startedAt": "2026-10-02T18:46:37Z",
-        "workflowName": "CI"
-      },
-      {
-        "branch": "main",
-        "completedAt": "2026-10-02T19:06:08Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T18:41:51Z",
-        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910146236/job/7010146236",
-        "id": 7010146236,
-        "labels": [
-          "self-hosted",
-          "macOS"
-        ],
-        "machineKey": "inv:studio",
-        "machineName": "studio",
-        "name": "build (macOS)",
-        "org": "acme-demo",
-        "os": "macos",
-        "queueSecs": 111,
-        "repo": "acme-demo/ios-app",
-        "runId": 910146236,
-        "runSecs": 1346,
-        "runnerKey": "gh:acme-demo:101",
-        "runnerName": "studio-1",
-        "source": "demo",
-        "startedAt": "2026-10-02T18:43:42Z",
-        "workflowName": "CI"
-      },
-      {
-        "branch": "main",
-        "completedAt": "2026-10-02T18:59:25Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T18:45:34Z",
-        "htmlUrl": "https://github.com/acme-demo/web/actions/runs/909046236/job/7009046236",
-        "id": 7009046236,
-        "labels": [
-          "macOS",
-          "self-hosted"
-        ],
-        "machineKey": "inv:studio",
-        "machineName": "studio",
-        "name": "test-unit",
-        "org": "acme-demo",
-        "os": "macos",
-        "queueSecs": 600,
-        "repo": "acme-demo/web",
-        "runId": 909046236,
-        "runSecs": 231,
-        "runnerKey": "gh:acme-demo:90",
-        "runnerName": "Studio-Old-2",
-        "source": "demo",
-        "startedAt": "2026-10-02T18:55:34Z",
-        "workflowName": "CI"
-      },
-      {
-        "branch": "main",
-        "completedAt": "2026-10-02T18:23:45Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T18:06:52Z",
-        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/920146235/job/7020146235",
-        "id": 7020146235,
-        "labels": [
-          "self-hosted",
-          "macOS"
-        ],
-        "machineKey": "inv:mac-mini-02",
-        "machineName": "mac-mini-02",
-        "name": "archive",
-        "org": "acme-demo",
-        "os": "macos",
-        "queueSecs": 77,
-        "repo": "acme-demo/ios-app",
-        "runId": 920146235,
-        "runSecs": 936,
-        "runnerKey": "gh:acme-demo:201",
-        "runnerName": "mini-02",
-        "source": "demo",
-        "startedAt": "2026-10-02T18:08:09Z",
-        "workflowName": "Release"
-      },
-      {
-        "branch": "main",
-        "completedAt": "2026-10-02T18:17:47Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T18:05:00Z",
-        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246235/job/7010246235",
-        "id": 7010246235,
-        "labels": [
-          "self-hosted",
-          "macOS",
-          "xcode-16"
-        ],
-        "machineKey": "inv:studio",
-        "machineName": "studio",
-        "name": "archive",
-        "org": "acme-demo",
-        "os": "macos",
-        "queueSecs": 541,
-        "repo": "acme-demo/ios-app",
-        "runId": 910246235,
-        "runSecs": 226,
-        "runnerKey": "gh:acme-demo:102",
-        "runnerName": "studio-2",
-        "source": "demo",
-        "startedAt": "2026-10-02T18:14:01Z",
-        "workflowName": "Release"
-      },
-      {
-        "branch": "main",
-        "completedAt": "2026-10-02T17:48:34Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T17:25:00Z",
-        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/910246234/job/7010246234",
-        "id": 7010246234,
-        "labels": [
-          "self-hosted",
-          "macOS",
-          "xcode-16"
-        ],
-        "machineKey": "inv:studio",
-        "machineName": "studio",
-        "name": "build (macOS)",
-        "org": "acme-demo",
-        "os": "macos",
-        "queueSecs": 24,
-        "repo": "acme-demo/ios-app",
-        "runId": 910246234,
-        "runSecs": 1390,
-        "runnerKey": "gh:acme-demo:102",
-        "runnerName": "studio-2",
-        "source": "demo",
-        "startedAt": "2026-10-02T17:25:24Z",
-        "workflowName": "CI"
-      },
-      {
-        "branch": "main",
-        "completedAt": "2026-10-02T17:40:09Z",
-        "conclusion": "success",
-        "createdAt": "2026-10-02T17:26:52Z",
-        "htmlUrl": "https://github.com/acme-demo/ios-app/actions/runs/920146234/job/7020146234",
-        "id": 7020146234,
-        "labels": [
-          "self-hosted",
-          "macOS"
-        ],
-        "machineKey": "inv:mac-mini-02",
-        "machineName": "mac-mini-02",
-        "name": "ui-tests",
-        "org": "acme-demo",
-        "os": "macos",
-        "queueSecs": 24,
-        "repo": "acme-demo/ios-app",
-        "runId": 920146234,
-        "runSecs": 773,
-        "runnerKey": "gh:acme-demo:201",
-        "runnerName": "mini-02",
-        "source": "demo",
-        "startedAt": "2026-10-02T17:27:16Z",
-        "workflowName": "CI"
       }
     ],
-    "nextCursor": "0000000179096280900000000000007020146234",
+    "nextCursor": "0000000179096964300000000000007010246237",
     "order": "newestFirst",
     "storageError": null
   }

@@ -35,7 +35,8 @@ fn parses_health_and_exact_runner_facts() {
             disks: vec![DiskStats {
                 mount_point: "/".into(),
                 total_bytes: 500_000_000_000,
-                available_bytes: 300_000_000_000
+                available_bytes: 300_000_000_000,
+                runner_root: false,
             }],
             runners: [(
                 "mini-02".into(),
@@ -170,4 +171,199 @@ fn one_ssh_session_delivers_health_and_runner_checks_on_stdin() {
     assert!(argv.contains(&"ForwardAgent=no".into()));
     assert!(stdin.contains("/proc/meminfo"));
     assert!(stdin.contains("$HOME/gh-runners/acme-demo/runner-01") || stdin.contains("gh-runners/acme-demo/runner-01"));
+}
+
+#[test]
+fn runner_root_filesystem_is_marked_and_shares_an_entry_with_the_same_mount() {
+    let disk = |mount: &str, free: u64, runner_root: bool| DiskStats {
+        mount_point: mount.into(),
+        total_bytes: 1000,
+        available_bytes: free,
+        runner_root,
+    };
+    let health = MAC_HEALTH.replace(
+        "RFM\tdisk\t/\t500000000000\t300000000000\n",
+        "RFM\tdisk\t/\t1000\t400\nRFM\tdisk\t/System/Volumes/Data\t1000\t400\n",
+    );
+    for (root_row, expected) in [
+        (
+            "RFM\troot_disk\t/System/Volumes/Data\t1000\t400\n",
+            vec![disk("/", 400, false), disk("/System/Volumes/Data", 400, true)],
+        ),
+        (
+            "RFM\troot_disk\t/Volumes/CI SSD\t1000\t50\n",
+            vec![
+                disk("/", 400, false),
+                disk("/System/Volumes/Data", 400, false),
+                disk("/Volumes/CI SSD", 50, true),
+            ],
+        ),
+        (
+            "",
+            vec![disk("/", 400, false), disk("/System/Volumes/Data", 400, false)],
+        ),
+    ] {
+        let output = health.replace("RFM_END\n", &format!("{root_row}RFM_END\n")) + MAC_RUNNERS;
+        let report = parse_inspection(&host("mac-mini-02"), &output).unwrap();
+        assert_eq!(report.disks, expected);
+    }
+    for bad in [
+        "RFM\troot_disk\t/x\t0\t0\n",
+        "RFM\troot_disk\t/x\t10\t11\n",
+        "RFM\troot_disk\t\t10\t1\n",
+    ] {
+        let output = format!("{bad}{MAC_HEALTH}{MAC_RUNNERS}");
+        assert!(
+            parse_inspection(&host("mac-mini-02"), &output).is_err(),
+            "accepted {bad:?}"
+        );
+    }
+}
+
+#[test]
+fn the_runner_root_travels_quoted_in_the_script_for_each_shell() {
+    let mac = inspection_script(&host("mac-mini-02"));
+    assert!(
+        mac.starts_with("RFM_RUNNER_ROOT=\"$HOME\"/gh-runners/acme-demo\n"),
+        "{mac}"
+    );
+    let windows = inspection_script(&host("win-builder"));
+    assert!(
+        windows.starts_with("$RfmRunnerRoot = 'C:\\gh-runners\\acme-demo'\n"),
+        "{windows}"
+    );
+    let discovered = MachineTarget::Discovered(DiscoveredMachine {
+        id: "ts:n1".into(),
+        address: "n1".into(),
+        os: OsFamily::Linux,
+        ssh_transport: SshTransport::Openssh,
+    });
+    assert!(inspection_script(&discovered).starts_with(POSIX_HEALTH));
+}
+
+/// Runs the POSIX health part of the inspection script with `HOME` in a temporary directory.
+#[cfg(unix)]
+fn run_posix_health(target: &MachineTarget, home: &std::path::Path) -> String {
+    let script = inspection_script(target);
+    let health = script.split("\n(\n").next().unwrap();
+    let output = std::process::Command::new("/bin/bash")
+        .arg("-c")
+        .arg(health)
+        .env("HOME", home)
+        .current_dir(home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    String::from_utf8(output.stdout).unwrap()
+}
+
+#[cfg(unix)]
+#[test]
+fn posix_health_reports_the_filesystem_of_a_root_that_does_not_exist_yet() {
+    let home = tempfile::tempdir().unwrap();
+    let output = run_posix_health(&host("mac-mini-02"), home.path());
+    let row = output
+        .lines()
+        .find(|l| l.starts_with("RFM\troot_disk\t"))
+        .unwrap_or_else(|| panic!("no root_disk row in {output}"));
+    // `HOME` is reported too, and the missing root falls back to it.
+    let mount = |row: &str| row.split('\t').nth(2).map(str::to_string);
+    let disks: Vec<_> = output
+        .lines()
+        .filter(|l| l.starts_with("RFM\tdisk\t"))
+        .filter_map(mount)
+        .collect();
+    assert!(disks.contains(&mount(row).unwrap()), "{output}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_hostile_root_is_never_evaluated_by_the_remote_shell() {
+    let home = tempfile::tempdir().unwrap();
+    let mut hostile = inventory_host("mac-mini-02");
+    // Inventory validation rejects this; the script must stay inert even so.
+    hostile.root = "~/gh-runners/x'$(touch pwned)'\"$(touch pwned2)\"`touch pwned3`".into();
+    run_posix_health(&MachineTarget::Inventory(hostile), home.path());
+    for name in ["pwned", "pwned2", "pwned3"] {
+        assert!(!home.path().join(name).exists(), "{name} was created");
+    }
+}
+
+/// Fails the first run with `first_error`, then answers like `FakeCommands`.
+struct FlakyMux {
+    calls: Mutex<Vec<Vec<String>>>,
+    first_error: &'static str,
+}
+
+impl CommandRunner for FlakyMux {
+    fn run(
+        &self,
+        command: &[String],
+        _: Option<&str>,
+        _: Duration,
+        _: NonZeroExit,
+    ) -> Result<CommandResult, CommandError> {
+        let mut calls = self.calls.lock().unwrap();
+        calls.push(command.to_vec());
+        if calls.len() == 1 {
+            return Err(CommandError::new(command, 255, self.first_error));
+        }
+        Ok(CommandResult::ok(format!("{MAC_HEALTH}{MAC_RUNNERS}")))
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn shared_connections_keep_hardening_and_retry_a_broken_master_without_sharing() {
+    let sockets = tempfile::Builder::new().prefix("rd").tempdir_in("/tmp").unwrap();
+    let control = crate::ssh_reuse::ControlDir::prepare(&sockets.path().join("ssh")).unwrap();
+    let fake = Arc::new(FlakyMux {
+        calls: Mutex::default(),
+        first_error: "mux_client_request_session: read from master failed: Broken pipe",
+    });
+    let remote = RemoteClient::new(fake.clone(), Duration::from_secs(30), Programs::default());
+    remote.inspect_shared(&host("mac-mini-02"), &control).unwrap();
+    let calls = fake.calls.lock().unwrap();
+    let shared = &calls[0];
+    let target = shared.iter().position(|a| a == "--").unwrap();
+    let options = &shared[1..target];
+    for option in [
+        "BatchMode=yes",
+        "StrictHostKeyChecking=yes",
+        "ForwardAgent=no",
+        "ClearAllForwardings=yes",
+        "ControlMaster=auto",
+        "ControlPersist=120",
+    ] {
+        assert!(options.iter().any(|o| o == option), "{option} missing from {shared:?}");
+    }
+    let path = format!("ControlPath={}/%C", control.path().display());
+    assert!(options.contains(&path), "{shared:?}");
+    assert_eq!(&shared[target..], ["--", "mac-mini-02", "bash -s"]);
+    // The retry is an ordinary, unshared connection.
+    assert!(calls[1].iter().all(|a| !a.starts_with("Control")), "{:?}", calls[1]);
+    assert_eq!(calls.len(), 2);
+}
+
+#[cfg(unix)]
+#[test]
+fn machine_failures_are_not_retried_and_tailscale_ssh_is_never_shared() {
+    let sockets = tempfile::Builder::new().prefix("rd").tempdir_in("/tmp").unwrap();
+    let control = crate::ssh_reuse::ControlDir::prepare(&sockets.path().join("ssh")).unwrap();
+    let fake = Arc::new(FlakyMux {
+        calls: Mutex::default(),
+        first_error: "ssh: connect to host mac-mini-02 port 22: Operation timed out",
+    });
+    let remote = RemoteClient::new(fake.clone(), Duration::from_secs(30), Programs::default());
+    assert!(remote.inspect_shared(&host("mac-mini-02"), &control).is_err());
+    assert_eq!(fake.calls.lock().unwrap().len(), 1);
+
+    // The demo Linux host uses `tailscale ssh`, which takes no OpenSSH options.
+    let fake = Arc::new(FakeCommands::default());
+    let remote = RemoteClient::new(fake.clone(), Duration::from_secs(30), Programs::default());
+    // The fake answers as a Mac, so this read fails after the command is recorded.
+    let _ = remote.inspect_shared(&host("build-linux-01"), &control);
+    let calls = fake.0.lock().unwrap();
+    assert_eq!(calls[0].0[..2], ["tailscale".to_string(), "ssh".into()]);
+    assert!(calls[0].0.iter().all(|a| !a.contains("Control")), "{:?}", calls[0].0);
 }

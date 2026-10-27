@@ -7,13 +7,15 @@ on each machine's and runner's pane, and makes changes only after you review the
 rules and guards come from Runner Fleet's `bin/fleet` CLI.
 
 The fleet uses long-lived native services: no Docker, Kubernetes, ARC, Ansible or VMs.
-GitHub's runner auto-update stays on.
+GitHub's runner auto-update stays on; **Upgrade…** catches up a runner that fell behind.
 
 > Checking (status, plan, runner checks, logs) only reads. **Apply** never retires an existing
 > runner. **Retire** needs an online, idle, active replacement and the phrase typed, and keeps
 > the old directory. **Decommission** needs `decommission = true` in the inventory first, and
-> also keeps the directory. Every change opens a review; when you run it, the host is read
-> again and nothing happens if it changed since the review.
+> also keeps the directory. **Clean up**, **Upgrade**, **Drain** and **Resume** never touch a
+> busy runner. Every change opens a review; when you run it, the host is read again and nothing
+> happens if it changed since the review. The only changes without a review each time are the
+> two you turn on in Settings ([Automatic actions](#automatic-actions-opt-in)).
 
 ## Setup
 
@@ -55,6 +57,12 @@ These are persistent machines: anyone who can change a workflow in an eligible p
 repository can run code on them. Keep the runner group restricted to private repositories and
 limit write access.
 
+A runner group open to public repositories is worse: anyone can open a pull request from a
+fork, and its workflow runs on your machines and can leave changes behind for later jobs. The
+app warns (a GitHub finding) when the inventory's group allows public repositories, and, for
+organizations added in Settings, when any runner group with self-hosted runners does. See
+GitHub's [hardening for self-hosted runners](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#hardening-for-self-hosted-runners).
+
 ## Inventory format
 
 ```toml
@@ -80,7 +88,7 @@ group every runner registers into. Each `[[hosts]]` entry is one machine:
 | Key | Meaning |
 |---|---|
 | `id` | Unique host ID. The local API accepts `inv:<id>` for the host's machine. |
-| `platform` | `darwin-arm64`, `windows-arm64`, `windows-x64` or `linux-x64`. |
+| `platform` | `darwin-arm64`, `darwin-x64` (Intel Macs), `windows-arm64`, `windows-x64`, `linux-x64` or `linux-arm64` (Raspberry Pi, Ampere, Asahi). See [Platforms](#platforms). |
 | `ssh` | SSH target, or `${NAME}` to read it from the environment variable `NAME`. |
 | `ssh_transport` | `openssh` (default) or `tailscale`. |
 | `root` | The dedicated directory that holds this host's runners. |
@@ -88,6 +96,9 @@ group every runner registers into. Each `[[hosts]]` entry is one machine:
 | `service_account` | Windows only, and required for `windows-logon`. |
 | `labels` | Labels on every runner of the host: `fleet`, one platform capability label (`macos-build`, `windows-build`, `linux-build` or `linux-experimental`) and, by convention, `host-<id>`. |
 | `enabled` | `false` leaves the host out of checks and changes. Defaults to `true`. |
+| `xcode` | macOS only, optional: Xcode versions jobs expect, such as `["26.1"]`. See [Xcode and simulators](#xcode-and-simulators). |
+| `simulator_runtimes` | macOS only, optional: simulator runtimes jobs expect, such as `["iOS 26.0"]`. |
+| `mac_address`, `wake_via` | Optional, together: the address to wake with Wake-on-LAN and the host on the same network that sends the packet. See [Wake a sleeping machine](#wake-a-sleeping-machine). |
 | `runners` | At least one runner. |
 
 A runner takes `name`, unique across the inventory, and `directory`, one path component below
@@ -97,11 +108,31 @@ supersedes (add `repository = "org/repo"` for a repository-level one), and
 `decommission = true`. Validation rejects duplicate names or paths, traversal, the wrong service
 mode for the platform, and roots outside the runner area.
 
+## Platforms
+
+| `platform` | Runner release asset | `service_mode` | Capability label |
+|---|---|---|---|
+| `darwin-arm64` | `actions-runner-osx-arm64-*.tar.gz` | `launchagent` | `macos-build` |
+| `darwin-x64` | `actions-runner-osx-x64-*.tar.gz` | `launchagent` | `macos-build` |
+| `linux-x64` | `actions-runner-linux-x64-*.tar.gz` | `systemd` | `linux-build` or `linux-experimental` |
+| `linux-arm64` | `actions-runner-linux-arm64-*.tar.gz` | `systemd` | `linux-build` or `linux-experimental` |
+| `windows-x64` | `actions-runner-win-x64-*.zip` | `windows-service` or `windows-logon` | `windows-build` |
+| `windows-arm64` | `actions-runner-win-arm64-*.zip` | `windows-service` or `windows-logon` | `windows-build` |
+
+The architecture only selects the runner download. Install scripts, LaunchAgent and systemd
+paths, NixOS modules and runner checks are the same for both architectures of an operating
+system, and every download is verified against the SHA-256 digest GitHub publishes for that
+asset. Machine diagnostics warn when a machine reports a different architecture than its
+`platform`. `darwin-x64` and `linux-arm64` are not in Runner Fleet: an inventory that uses
+them doesn't load there, so leave them out of inventories you compare with
+[the parity script](#parity-with-runner-fleet).
+
 ## The example fleet
 
 [`inventory/fleet.example.toml`](../inventory/fleet.example.toml) demonstrates macOS LaunchAgents,
 Linux systemd, Windows services and Windows logon tasks. It includes a legacy migration, a
-decommissioned runner, a GUI lane separated from build work and a Linux canary.
+decommissioned runner, a GUI lane separated from build work, a Linux canary, an Intel Mac and
+a Raspberry Pi.
 
 Keep actual hardware, capacity and unattended-setup notes in your private inventory's comments.
 Runners live in one dedicated root per host, for example:
@@ -110,6 +141,11 @@ Runners live in one dedicated root per host, for example:
 macOS/Linux: ~/gh-runners/acme/runner-01
 Windows:     C:\gh-runners\acme\runner-01
 ```
+
+To keep runner workspaces on another volume, such as an external SSD on a Mac mini, make
+`~/gh-runners` a symlink to a directory on it. The machine's health then shows the runner
+volume's free space, its diagnostics include a **Runner volume** check, and low-disk alerts
+cover it like the system disk.
 
 ## Using the app
 
@@ -128,8 +164,11 @@ still present, runners pending decommission, and GitHub runners carrying its `ho
 - **Review apply…** (a machine's Changes section) installs or reconciles that host's runners:
   missing runners, labels, trusted-group membership, stopped services. On a host whose runners
   replace legacy ones, it applies one runner at a time.
-- On a runner's pane: **Restart…** (only when it's idle), **Retire…**, **Decommission…**, and
-  **Diagnostic log ▸ Show last 200 lines**, a read-only tail of its newest `_diag/Runner_*.log`.
+- On a runner's pane: **Restart…** (only when it's idle), **Retire…**, **Decommission…**,
+  **Upgrade…**, **Drain…** and **Resume…** ([Maintenance](#maintenance-cleanup-upgrades-and-drains)),
+  and **Diagnostic log ▸ Show last 200 lines**, a read-only tail of its newest
+  `_diag/Runner_*.log`.
+- A machine's **Maintenance** section: **Clean up…** and **Upgrade idle runners…**.
 - The Windows service-account password (`service_mode = "windows-service"` with
   `service_account`) and a Linux sudo password (for hosts without non-interactive sudo) are
   typed into the review when needed, used once, and never stored.
@@ -158,7 +197,10 @@ and `health HOST`).
 through Runner Fleet's `bin/fleet` and through this port, and compares the JSON. It needs a
 Runner Fleet checkout (`RUNNER_FLEET_DIR`, default `~/Code/soloterm/runner-fleet`) and python3.
 It reads `RUNNER_DASHBOARD_INVENTORY` like the app. Free-disk numbers and runners outside the
-inventory are ignored, since they move between the two runs.
+inventory are ignored, since they move between the two runs. The `darwin-x64` and
+`linux-arm64` platforms and the optional host keys `xcode`, `simulator_runtimes`,
+`mac_address` and `wake_via` are additions of this app; Runner Fleet rejects them, so compare
+inventories without them.
 
 ```sh
 scripts/fleet-parity.sh              # all four commands
@@ -228,6 +270,35 @@ Runner checks report each `power:*` setting. Nothing here ever changes power set
 Runners that share a user account also share its caches and machine access; concurrent jobs
 are not isolated. Record each host's capacity and operating constraints in the private inventory.
 
+**macOS readiness.** Machine diagnostics on a Mac also read, without changing anything or
+prompting: whether automatic login is set for the runner account
+(`com.apple.loginwindow autoLoginUser`); which user is on the console and whether its screen
+is locked (`IOConsoleUsers`, `CGSSessionScreenIsLocked`); whether the SSH session can read the
+login keychain (`security show-keychain-info`, exit status only); and how many valid
+code-signing identities there are (a count; identities never leave the machine). A locked
+screen or another user on the console is a warning on hosts with a GUI lane (an `*-e2e`
+label). SSH logins get their own security session, so a keychain that is locked for SSH may
+still be unlocked for the LaunchAgent; the check says so instead of guessing. Every command has
+a few seconds to finish, with stdin closed.
+
+### Xcode and simulators
+
+Diagnostics list the Xcode apps in `/Applications` (read from each app's `version.plist`), the
+selected developer directory (`xcode-select -p`) and whether the selected Xcode's license is
+accepted (`xcodebuild -license check`). They warn when the Command Line Tools are selected
+although Xcode is installed, and when the license isn't accepted. The `/usr/bin` shims are
+never run, so a Mac without developer tools isn't offered an install dialog.
+
+Declare the versions jobs rely on to get a warning when one is missing:
+
+```toml
+xcode = ["26.1", "16.4"]           # 26 accepts any 26.x; 26.1 accepts 26.1 and 26.1.x
+simulator_runtimes = ["iOS 26.0"]  # read with simctl list runtimes, only when declared
+```
+
+The app never installs Xcode or runtimes. Simulator runtimes can't be listed until the
+license is accepted.
+
 **Tailscale SSH hosts** use `ssh_transport = "tailscale"` and explicit
 `builder@HOST.example.ts.net` targets; scripts and transient passwords go over stdin. Tailscale
 SSH must already be enabled and authorized on the machine. On macOS that means the open-source
@@ -263,6 +334,26 @@ are verified. Don't also enable `services.github-runners` for inventory runners.
 
 3. In the app: **Check now**, then **Run checks** for the new host, then **Review apply…**.
 
+## Wake a sleeping machine
+
+A machine that sleeps or powers off drops off the tailnet, so nothing can reach it directly.
+If its network card supports Wake-on-LAN, declare its address and another inventory host on
+the same network:
+
+```toml
+mac_address = "02:00:5e:10:00:01"  # six hex pairs, ':' or '-'
+wake_via = "studio"                # another [[hosts]] id
+```
+
+When the machine is offline, its pane offers **Wake…**. The review shows the address, the
+sending host and the broadcast address (`255.255.255.255:9`); it's blocked unless the sending
+host is online on the tailnet and the machine isn't. Sending re-reads the inventory and the
+tailnet, then runs a small script on the sending host over SSH: python3, or perl, broadcasts
+one magic packet (a bash `/dev/udp` redirect can't broadcast); Windows hosts use .NET's
+`UdpClient`. Only the validated address reaches the script, as twelve hex digits. The machine's
+history records the wake. Enable Wake-on-LAN on the machine itself first (on macOS, **Wake for
+network access**, reported by diagnostics); a packet doesn't prove the machine woke.
+
 ## Replace and retire a runner
 
 Never move or rename a configured runner directory: LaunchAgent plists hold absolute paths.
@@ -297,6 +388,156 @@ listing the name and keeps the runner directory. The entry stays in the inventor
 tombstone that reserves the name and path; remove it, and the directory, later and
 deliberately.
 
+## Maintenance: cleanup, upgrades and drains
+
+These are reviewed changes like apply: the review re-reads GitHub and the host, and running it
+reads both again and refuses if anything changed. A busy runner is never cleaned, upgraded or
+stopped, and the host scripts check once more, immediately before acting, that no
+`Runner.Worker` from that runner's directory is running.
+
+### Clean up
+
+**Clean up…** on a machine measures, then (after review) removes, only these targets. Each is
+shown with its exact path and measured size:
+
+| Target | What is removed |
+|---|---|
+| `RUNNER/_work/_temp`, `RUNNER/_work/_actions` | Their contents, for idle runners. |
+| `RUNNER/_work` | Its whole contents (workspaces, tool cache, temp), only with the review's opt-in checkbox. |
+| `RUNNER/_diag` | `Runner_*.log` and `Worker_*.log` files directly in it, older than the chosen number of days (14 by default). The review lists each file; only those are removed. |
+| `RUNNER/bin.fleet-previous`, `RUNNER/externals.fleet-previous` | The previous binaries kept by the last upgrade. |
+| `~/Library/Developer/Xcode/DerivedData` (macOS) | Its contents, only when no runner on the machine is busy. |
+| Unavailable simulators (macOS) | `xcrun simctl delete unavailable`, only when no runner is busy. |
+| Docker (macOS, Linux) | `docker system prune -f` when Docker is installed and running: stopped containers, unused networks, dangling images and build cache. Never volumes. Only when no runner is busy. |
+
+`RUNNER` is a declared runner's exact inventory directory. The host derives every path from a
+fixed suffix of it (or of the home directory), requires `.runner` to name that runner, resolves
+the path, and refuses one that is a symlink, passes through one, or resolves anywhere else. It
+removes directory contents with `find -delete`, which neither follows links nor crosses into
+another file system, and keeps the directory itself. On Windows, child folders are removed with
+`rmdir /s`, which removes junctions without following them. `.runner`, `.credentials*`,
+configuration files, `bin` and `externals` are never targets. Legacy and decommissioned runner
+directories are left alone.
+
+This is a deliberate, narrow exception to Runner Fleet's "no broad or glob-based deletion"
+rule: these runner caches grow without bound, and each target is an enumerated, reviewed,
+exact path. Nothing else is ever removed recursively.
+
+**Cleaning after every job (manual recipe).** The runner can run a script after each job with
+`ACTIONS_RUNNER_HOOK_JOB_COMPLETED`. The app doesn't install one; if you want it, add to the
+runner directory's `.env` (one runner at a time, with its service stopped, then start it):
+
+```sh
+ACTIONS_RUNNER_HOOK_JOB_COMPLETED=/Users/builder/gh-runners/acme/job-completed.sh
+```
+
+and keep the script narrow, for example:
+
+```sh
+#!/bin/sh
+# Runs after each job, in the runner's own account. Remove only this job's temp files.
+set -eu
+[ -n "${RUNNER_TEMP:-}" ] && [ -d "$RUNNER_TEMP" ] || exit 0
+find "$RUNNER_TEMP" -xdev -mindepth 1 -delete
+```
+
+A failing hook fails the job, so test it on one runner first. `.env` survives upgrades, since
+upgrades replace only `bin/` and `externals/`.
+
+### Upgrade
+
+For a runner behind the latest `actions/runner` release, **Upgrade…** (a runner's pane) or
+**Upgrade idle runners…** (a machine's Maintenance section) shows each runner's current and
+target version; busy runners appear as not now. Running it handles one runner at a time: stop
+the idle service, download the release on the machine and verify the SHA-256 digest GitHub
+publishes (a release without one is refused), extract it, replace `bin/` and `externals/` inside
+the same directory (keeping the old ones as `bin.fleet-previous` and
+`externals.fleet-previous`), start the service, and confirm the runner reports the new version.
+The directory is never moved and `.runner`, `.credentials*` and `.env` are never touched. A
+runner that started a job in the meantime is skipped; a failure stops there and leaves that
+runner stopped (see [Recovery](#recovery)). If a newer release appears between review and run,
+the run refuses and you review again.
+
+### Drain and resume
+
+GitHub has no API to pause a runner, so **Drain…** works at the service level: the runner's
+service is stopped on the machine once it is idle, immediately if it already is. A busy runner
+keeps its job: the app keeps a durable drain (in `automation.json` beside its settings) and,
+about every 20 seconds, stops the service once GitHub shows the runner idle. That stop is
+authorised by the original review: it checks that the inventory still declares the same runner
+at the same path and that GitHub lists the same registration, refuses a busy runner, and is
+recorded in the machine's history. **Cancel drain** on the runner's pane removes a drain that
+hasn't stopped anything yet. The sidebar marks drained runners *draining* or *paused*.
+
+A drained runner shows offline on GitHub and the watchdog leaves it alone. **Resume…** starts its
+service and ends the drain. The stop lasts until the service manager starts it again: a
+LaunchAgent after the next login, a systemd unit or Windows service after a reboot. If the app
+then sees it running, it ends the drain and notes that in history. A logon-task runner's task is
+disabled while drained, so its repeating trigger can't restart it.
+
+A deferred stop runs without a password. On a Linux host without non-interactive sudo it can't
+stop the service; the drain stays and its pane shows why. Drain it again once it's idle, with the
+sudo password in the review.
+
+## Automatic actions (opt-in)
+
+Two settings let the app change things without a review each time. Both are off by default, and
+turning one on is the standing approval for exactly what it does. This is a deliberate, narrow
+exception to "only reviewed plans change machines". Neither runs with demo data.
+
+### Watchdog restarts
+
+**Settings ▸ General ▸ Automatically restart stopped runner services.** When on, the app
+restarts an inventory runner (not a legacy, decommissioned or drained one) on an enabled host
+when a fresh SSH read shows its service `inactive`, `failed` or `stopped` and fresh GitHub data
+shows it offline and not busy. It uses the same guarded restart as **Restart…**, which reads
+GitHub again and refuses a busy runner. It waits 2 minutes after first seeing the service
+stopped, then 5, 15 and 60 minutes between attempts, and makes at most 3 attempts per runner in
+6 hours. When a fourth would be due it gives up, raises an alert and stops trying until it sees
+the service running again. Every attempt, failure, give-up and recovery is recorded in the
+machine's history and sent through desktop notifications and alert destinations (maintenance
+mode pauses those). Attempts are saved before they are made, so restarting the app doesn't
+repeat one. Turning the setting off or on starts its history afresh. It never uses a password,
+so hosts that need a sudo password can't be restarted this way.
+
+### Fleet availability for workflows
+
+**Settings ▸ General ▸ Publish availability to an organization variable.** When on, the app
+writes the organization Actions variable `RUNNER_FLEET_STATUS` (the name is configurable),
+visible to the organization's private repositories, through `gh api` with the `gh` login (which
+needs organization admin, as for other changes):
+
+```json
+{"updatedAt":"2026-10-03T12:00:00Z","online":{"linux-build":1,"macos-build":2},"healthy":true}
+```
+
+`online` counts the inventory runners GitHub reports online for each label the inventory gives
+them, except `fleet` and `host-*`; `healthy` means every one of those labels has at least one.
+Online runners can still be busy. It is written only from fresh GitHub data (the organization
+must also be added in Settings ▸ GitHub), only when the counts change, and at most every 5
+minutes (configurable). Nothing else is written. The value is not updated while the app isn't
+running, so `updatedAt` can be old.
+
+Workflows can then fall back to GitHub-hosted runners when self-hosted capacity is down
+([community discussion #20019](https://github.com/orgs/community/discussions/20019)):
+
+```yaml
+jobs:
+  build:
+    runs-on: ${{ vars.RUNNER_FLEET_STATUS && fromJSON(vars.RUNNER_FLEET_STATUS).online['macos-build'] > 0 && fromJSON('["self-hosted","macos-build"]') || 'macos-latest' }}
+```
+
+To keep routing through the trusted group, return an object instead:
+
+```yaml
+    runs-on: ${{ vars.RUNNER_FLEET_STATUS && fromJSON(vars.RUNNER_FLEET_STATUS).online['macos-build'] > 0 && fromJSON('{"group":"Acme trusted builders","labels":"macos-build"}') || 'macos-latest' }}
+```
+
+`vars` is available in `runs-on`; the leading `vars.RUNNER_FLEET_STATUS &&` keeps `fromJSON`
+from failing before the variable exists, and a missing label reads as null, which isn't greater
+than 0. Expressions bind `>` before `&&` before `||`. Jobs that need the machines themselves
+(GUI lanes, signing) shouldn't fall back.
+
 ## Recovery
 
 - **Install failed before registration:** fix the reported prerequisite. A partial, unconfigured
@@ -311,7 +552,16 @@ deliberately.
 - **Restoring a retired runner:** its files are still at the legacy path, but its registration
   is gone. That's a manual procedure, not an automatic rollback.
 
-There's no recursive cleanup. Remove old directories by explicit path, separately.
+- **Upgrade failed:** the runner is left stopped. If its `bin/` was already replaced, the
+  previous files are in `bin.fleet-previous` and `externals.fleet-previous` in the same
+  directory (a failure while swapping puts them back by itself). Read **Diagnostic log**, then
+  **Resume…** or **Restart…**, or move the previous folders back by hand with the service
+  stopped.
+- **The watchdog gave up:** an alert says so. Read the diagnostic log, fix the cause, and
+  **Restart…** the runner; the watchdog tries again once it has seen the service running.
+
+The only recursive removal is **Clean up…**, and only for the exact targets it lists. Remove old
+runner directories by explicit path, separately.
 
 ## Troubleshooting
 
@@ -324,6 +574,7 @@ There's no recursive cleanup. Remove old directories by explicit path, separatel
 | Linux install fails on sudo | Use the sudo password field in the review, or configure narrowly scoped non-interactive sudo. |
 | Windows job can't see a certificate or profile | Check the runner's service identity; use a dedicated build account only when needed. |
 | Logon-task runner offline | **Run checks**: auto-logon must be set and the account's session active. |
-| GUI E2E fails with focus or visibility errors on a Mac | A locked desktop fails every GUI test: check `IOConsoleUsers`' `CGSSessionScreenIsLocked`. |
+| GUI E2E fails with focus or visibility errors on a Mac | A locked desktop fails every GUI test: the machine's **Screen lock** diagnostic reads `IOConsoleUsers`' `CGSSessionScreenIsLocked`. |
+| `xcodebuild` fails on a Mac with Xcode installed | Check the **Selected developer directory** and **Xcode license** diagnostics. |
 | "GitHub name exists but exact local directory is missing" | Resolve the collision by hand. Apply never uses `--replace`. |
 | Local `.runner` exists but GitHub has no runner | Inspect before re-registering. Apply won't tear it down. |

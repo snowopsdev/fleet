@@ -402,7 +402,14 @@ fn discovery_and_demo_cover_current_stale_offline_and_failed_ssh() {
     let names: Vec<_> = view.machines.iter().map(|m| m.display_name.as_str()).collect();
     assert_eq!(
         names,
-        ["build-linux-01", "mac-mini-02", "mac-mini-03", "studio", "win-builder"]
+        [
+            "build-linux-01",
+            "mac-mini-02",
+            "mac-mini-03",
+            "pi-01",
+            "studio",
+            "win-builder"
+        ]
     );
     assert!(!view.other_machines.iter().any(|m| m.display_name == "iphone"));
 }

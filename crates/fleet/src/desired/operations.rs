@@ -75,7 +75,7 @@ impl Secrets {
     }
 
     /// The sudo password, on hosts whose service changes go through sudo.
-    fn sudo_password_for(&self, host: &Host) -> &Transient {
+    pub(crate) fn sudo_password_for(&self, host: &Host) -> &Transient {
         if host.uses_sudo() {
             &self.linux_sudo_password
         } else {

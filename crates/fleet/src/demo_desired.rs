@@ -7,7 +7,10 @@ use std::collections::HashMap;
 use crate::desired::inventory::parse_inventory;
 use chrono::{DateTime, Utc};
 
-use crate::desired::model::{FleetSnapshot, GithubRunner, Inventory, LocalRunner};
+use crate::desired::github::ReleaseAsset;
+use crate::desired::maintenance::{CleanupKind, CleanupOptions, CleanupTarget};
+use crate::desired::model::{FleetSnapshot, GithubRunner, Host, Inventory, LocalRunner, ServiceMode};
+use crate::desired::remote::CleanupSurvey;
 use crate::fleet_plan::FleetPlanInputs;
 
 const INVENTORY: &str = r#"
@@ -23,6 +26,7 @@ ssh = "studio"
 root = "~/gh-runners/acme-demo"
 service_mode = "launchagent"
 labels = ["fleet", "macos-build", "xcode"]
+xcode = ["26.1"]
 runners = [
   { name = "studio-1", directory = "runner-01", labels = ["macos-e2e"] },
   { name = "studio-2", directory = "runner-02", replaces = { name = "Studio-Old-2", directory = "~/actions-runner-2" } },
@@ -35,6 +39,8 @@ ssh = "mac-mini-02"
 root = "~/gh-runners/acme-demo"
 service_mode = "launchagent"
 labels = ["fleet", "macos-build"]
+xcode = ["26.1", "16.4"]
+simulator_runtimes = ["iOS 26.0"]
 runners = [{ name = "mini-02", directory = "runner-01" }]
 
 [[hosts]]
@@ -58,7 +64,19 @@ root = "C:\\gh-runners\\acme-demo"
 service_mode = "windows-service"
 service_account = ".\\builder"
 labels = ["fleet", "windows-build"]
+mac_address = "02:00:5e:10:00:42"
+wake_via = "build-linux-01"
 runners = [{ name = "win-builder", directory = "runner-01" }]
+
+[[hosts]]
+id = "pi-01"
+platform = "linux-arm64"
+ssh = "builder@pi-01.demo.ts.net"
+ssh_transport = "tailscale"
+root = "~/gh-runners/acme-demo"
+service_mode = "systemd"
+labels = ["fleet", "linux-experimental", "raspberry-pi"]
+runners = [{ name = "pi-01-a", directory = "runner-01" }]
 
 [[hosts]]
 id = "mac-mini-03"
@@ -112,6 +130,21 @@ pub fn snapshot() -> FleetSnapshot {
             Some(true),
         )),
         group(GithubRunner::new(
+            106,
+            "pi-01-a",
+            "online",
+            false,
+            &[
+                "self-hosted",
+                "Linux",
+                "ARM64",
+                "fleet",
+                "linux-experimental",
+                "raspberry-pi",
+            ],
+            Some(true),
+        )),
+        group(GithubRunner::new(
             105,
             "linux-01-b",
             "online",
@@ -158,7 +191,7 @@ pub fn snapshot() -> FleetSnapshot {
             "~/gh-runners/acme-demo/runner-01",
             true,
             "active",
-            Some("2.329.0"),
+            Some("2.328.0"),
         ),
         LocalRunner::new(
             "linux-01-b",
@@ -168,6 +201,13 @@ pub fn snapshot() -> FleetSnapshot {
             Some("2.329.0"),
         ),
         LocalRunner::new("mini-03-01", "~/gh-runners/acme-demo/runner-01", false, "missing", None),
+        LocalRunner::new(
+            "pi-01-a",
+            "~/gh-runners/acme-demo/runner-01",
+            true,
+            "active",
+            Some("2.329.0"),
+        ),
     ];
     FleetSnapshot {
         github: github.into_iter().map(|g| (g.name.clone(), g)).collect(),
@@ -206,4 +246,86 @@ fn group(mut runner: GithubRunner) -> GithubRunner {
         .cloned()
         .collect();
     runner
+}
+
+/// The demo fleet's latest runner release, which `linux-01-a` (2.328.0) is behind.
+pub(crate) fn release(host: &Host) -> ReleaseAsset {
+    let platform = host.platform.runner_asset();
+    let suffix = if host.is_windows() { "zip" } else { "tar.gz" };
+    let name = format!("actions-runner-{platform}-2.329.0.{suffix}");
+    ReleaseAsset {
+        version: "2.329.0".into(),
+        url: format!("https://github.com/actions/runner/releases/download/v2.329.0/{name}"),
+        name,
+        sha256: Some("0".repeat(64)),
+    }
+}
+
+/// What a cleanup survey of a demo machine finds, with fictional sizes.
+pub(crate) fn cleanup_survey(host: &Host, options: &CleanupOptions) -> CleanupSurvey {
+    let home = if host.is_windows() {
+        "C:\\Users\\builder"
+    } else {
+        "/Users/builder"
+    };
+    let mut targets = Vec::new();
+    for (index, runner) in (1u64..).zip(host.desired_runners()) {
+        let root = host.runner_path(runner).replacen('~', home, 1);
+        let separator = if host.is_windows() { "\\" } else { "/" };
+        let at = |kind, suffix: &str, kib, count, files: Vec<String>| CleanupTarget {
+            kind,
+            runner: Some(runner.name.clone()),
+            path: Some(format!("{root}{separator}{}", suffix.replace('/', separator))),
+            kib: Some(kib),
+            count,
+            detail: None,
+            files,
+        };
+        if options.whole_work {
+            targets.push(at(CleanupKind::Work, "_work", 18_400_000 / index, None, Vec::new()));
+        } else {
+            targets.push(at(
+                CleanupKind::WorkTemp,
+                "_work/_temp",
+                1_320_000 / index,
+                None,
+                Vec::new(),
+            ));
+            targets.push(at(
+                CleanupKind::WorkActions,
+                "_work/_actions",
+                412_000 / index,
+                None,
+                Vec::new(),
+            ));
+        }
+        let logs: Vec<String> = (1..=3)
+            .map(|day| format!("Runner_2026090{day}-101500-utc.log"))
+            .collect();
+        targets.push(at(CleanupKind::Diag, "_diag", 9_800, Some(3), logs));
+    }
+    if host.service_mode == ServiceMode::Launchagent {
+        targets.push(CleanupTarget {
+            kind: CleanupKind::XcodeDerivedData,
+            runner: None,
+            path: Some(format!("{home}/Library/Developer/Xcode/DerivedData")),
+            kib: Some(23_700_000),
+            count: None,
+            detail: None,
+            files: Vec::new(),
+        });
+        targets.push(CleanupTarget {
+            kind: CleanupKind::UnavailableSimulators,
+            runner: None,
+            path: None,
+            kib: None,
+            count: Some(4),
+            detail: None,
+            files: Vec::new(),
+        });
+    }
+    CleanupSurvey {
+        targets,
+        refused: Vec::new(),
+    }
 }

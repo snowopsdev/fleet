@@ -3,9 +3,10 @@ import type { AppConfig } from "../bindings/AppConfig";
 import { Card, ErrorText, Pill, Switch } from "../components/ui";
 import { CopyValue } from "../components/CopyValue";
 import { commands, isTauri } from "../lib/tauri";
-import { Notifications } from "./Notifications";
+import type { FleetView } from "../bindings/FleetView";
+import { PublishSettings, WatchdogSettings } from "./Automation";
 
-export function GeneralSettings({ config }: { config: AppConfig }) {
+export function GeneralSettings({ config, view }: { config: AppConfig; view: FleetView }) {
   const demo = useMutation({ mutationFn: () => commands.setDemoMode(!config.demoMode) });
   return (
     <>
@@ -20,7 +21,8 @@ export function GeneralSettings({ config }: { config: AppConfig }) {
         {demo.isError && <ErrorText error={demo.error} className="mt-2" />}
       </Card>
 
-      <Notifications enabled={config.desktopNotifications} demo={config.demoMode} />
+      <WatchdogSettings view={view} />
+      <PublishSettings view={view} />
 
       <h2 className="mt-5 text-[13px] font-semibold">Local API for agents</h2>
       <p className="mt-1 text-[12px] text-ink-2">
@@ -29,12 +31,14 @@ export function GeneralSettings({ config }: { config: AppConfig }) {
       </p>
       <LocalApi enabled={config.localApi} />
 
+      <SshReuse enabled={config.sshConnectionReuse} />
+
       <h2 className="mt-5 text-[13px] font-semibold">How access works</h2>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-ink-2">
         <li>Machines are found with the Tailscale CLI on this Mac. No Tailscale API key is used.</li>
         <li>Health and runner configuration are read over SSH. No monitoring software needs to be installed on the machines.</li>
         <li>Busy/idle state and current jobs come from GitHub.</li>
-        <li>Monitoring is read-only. Runner changes require a reviewed plan and use your existing SSH access.</li>
+        <li>Monitoring is read-only. Runner changes require a reviewed plan and use your existing SSH access. The only exceptions are the ones you turn on here: watchdog restarts and the availability variable.</li>
       </ul>
     </>
   );
@@ -70,5 +74,27 @@ function LocalApi({ enabled }: { enabled: boolean }) {
         <div className="mt-1.5 truncate text-[11.5px] text-ink-3 selectable">Discovery file: <CopyValue value={status.discoveryFile} label="Discovery path" truncate /></div>
       )}
     </Card>
+  );
+}
+
+function SshReuse({ enabled }: { enabled: boolean }) {
+  const toggle = useMutation({ mutationFn: () => commands.setSshConnectionReuse(!enabled) });
+  return (
+    <>
+      <h2 className="mt-5 text-[13px] font-semibold">Shared SSH connections</h2>
+      <Card className="mt-2 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1 text-[12.5px] text-ink-2">
+            Keep one OpenSSH connection open per machine for up to two minutes after each check, so the
+            minute-by-minute health checks skip a full handshake. Only these read-only checks share it; reviewed
+            changes and <span className="mono">tailscale ssh</span> machines always connect separately. An open connection
+            keeps the authentication it started with, so a revoked key or a changed SSH configuration takes effect once
+            it closes. Turning this off closes shared connections within two minutes.
+          </div>
+          <Switch checked={enabled} label="Shared SSH connections" disabled={!isTauri || toggle.isPending} onChange={() => toggle.mutate()} />
+        </div>
+        {toggle.isError && <ErrorText error={toggle.error} className="mt-2" />}
+      </Card>
+    </>
   );
 }

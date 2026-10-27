@@ -12,10 +12,12 @@ use ts_rs::TS;
 
 use crate::desired::model::{Host, LocalRunner, Platform, SshTransport};
 use crate::desired::process::SubprocessRunner;
+use crate::desired::py::{ps_quote, sh_remote_path};
 use crate::desired::remote::{
     Connection, Programs, RemoteClient, RemoteError, parse_posix_probe, parse_windows_probe, probe_script,
 };
 use crate::model::{TailnetPeer, tailnet_machine_key};
+use crate::ssh_reuse::{ControlDir, is_control_failure};
 
 const POSIX_HEALTH: &str = include_str!("../scripts/machine-health.sh");
 const WINDOWS_HEALTH: &str = include_str!("../scripts/machine-health.ps1");
@@ -64,14 +66,14 @@ impl OsFamily {
 impl From<Platform> for OsFamily {
     fn from(platform: Platform) -> Self {
         match platform {
-            Platform::DarwinArm64 => Self::Macos,
+            Platform::DarwinArm64 | Platform::DarwinX64 => Self::Macos,
             Platform::WindowsArm64 | Platform::WindowsX64 => Self::Windows,
-            Platform::LinuxX64 => Self::Linux,
+            Platform::LinuxX64 | Platform::LinuxArm64 => Self::Linux,
         }
     }
 }
 
-/// Capacity of an OS or home filesystem (all fixed drives on Windows).
+/// Capacity of an OS, home or runner-root filesystem (all fixed drives on Windows).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
@@ -81,6 +83,20 @@ pub struct DiskStats {
     pub total_bytes: u64,
     #[ts(type = "number")]
     pub available_bytes: u64,
+    /// Holds the inventory host's runner `root`, and so every runner's `_work` directory.
+    #[serde(default)]
+    pub runner_root: bool,
+}
+
+impl DiskStats {
+    /// The mount point, marked when it holds the runner root.
+    pub(crate) fn label(&self) -> String {
+        if self.runner_root {
+            format!("{} (runner root)", self.mount_point)
+        } else {
+            self.mount_point.clone()
+        }
+    }
 }
 
 /// A successful SSH read, timestamped by the caller when it completes.
@@ -104,6 +120,10 @@ pub struct MachineReport {
 
 /// What a machine check connects to.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one target per machine per poll; boxing the host would only add indirection"
+)]
 pub enum MachineTarget {
     /// An inventory host: its runners are probed at their exact paths.
     Inventory(Host),
@@ -174,6 +194,13 @@ impl MachineTarget {
 pub trait MachineSource: Send + Sync {
     /// Blocks until the SSH read completes or times out. Call off the async runtime.
     fn inspect(&self, target: &MachineTarget) -> Result<MachineReport, RemoteError>;
+
+    /// Like `inspect`, sharing an OpenSSH control connection kept in `control` across
+    /// read-only checks. Sources without SSH ignore it.
+    fn inspect_shared(&self, target: &MachineTarget, control: &ControlDir) -> Result<MachineReport, RemoteError> {
+        let _ = control;
+        self.inspect(target)
+    }
 }
 
 /// Locate the same SSH programs used by the app's runner operations.
@@ -186,15 +213,40 @@ impl MachineSource for RemoteClient {
         let output = self.run_script(target.connection(), &inspection_script(target), None)?;
         parse_inspection(target, &output)
     }
+
+    fn inspect_shared(&self, target: &MachineTarget, control: &ControlDir) -> Result<MachineReport, RemoteError> {
+        let script = inspection_script(target);
+        let output = match self.run_script_with_options(target.connection(), &script, &control.options()) {
+            // A broken socket or master isn't the machine's fault: read once more on a fresh connection.
+            Err(e) if is_control_failure(&e.0) => {
+                tracing::warn!("shared SSH connection failed, reading without it: {e}");
+                self.run_script(target.connection(), &script, None)?
+            }
+            result => result?,
+        };
+        parse_inspection(target, &output)
+    }
 }
 
 /// The complete read-only script, exposed for diagnostics and fake transport tests.
+/// An inventory host's runner root is set ahead of the health script, quoted for the
+/// host's shell, so its filesystem is reported too.
 pub fn inspection_script(target: &MachineTarget) -> String {
     let probe = target.host().map(probe_script).unwrap_or_default();
+    let root = target.host().map(|h| h.root.as_str());
     if target.is_windows() {
-        format!("{WINDOWS_HEALTH}\n& {{\n{WINDOWS_DIAGNOSTICS}\n}}\nWrite-Output '{RUNNERS_MARKER}'\n{probe}")
+        let root = root
+            .map(|r| format!("$RfmRunnerRoot = {}\n", ps_quote(r)))
+            .unwrap_or_default();
+        format!("{root}{WINDOWS_HEALTH}\n& {{\n{WINDOWS_DIAGNOSTICS}\n}}\nWrite-Output '{RUNNERS_MARKER}'\n{probe}")
     } else {
-        format!("{POSIX_HEALTH}\n(\n{POSIX_DIAGNOSTICS}\n)\nprintf '{RUNNERS_MARKER}\\n'\n{probe}")
+        let mut root = root
+            .map(|r| format!("RFM_RUNNER_ROOT={}\n", sh_remote_path(r)))
+            .unwrap_or_default();
+        if target.host().is_some_and(|h| !h.simulator_runtimes.is_empty()) {
+            root.push_str("RFM_SIMULATOR_RUNTIMES=1\n");
+        }
+        format!("{root}{POSIX_HEALTH}\n(\n{POSIX_DIAGNOSTICS}\n)\nprintf '{RUNNERS_MARKER}\\n'\n{probe}")
     }
 }
 
@@ -214,24 +266,13 @@ pub fn parse_inspection(target: &MachineTarget, output: &str) -> Result<MachineR
             let Some((name, value)) = row.split_once('\t') else {
                 return Err(RemoteError("Malformed machine health row.".into()));
             };
-            if name == "disk" {
-                let parts: Vec<_> = value.split('\t').collect();
-                let [mount, total, available] = parts[..] else {
-                    return Err(RemoteError("Malformed disk health row.".into()));
-                };
-                let total_bytes = number::<u64>("disk capacity", total)?;
-                let available_bytes = number::<u64>("available disk space", available)?;
-                if total_bytes == 0 || available_bytes > total_bytes {
-                    return Err(RemoteError("Invalid disk capacity in the SSH report.".into()));
-                }
-                disks.insert(
-                    mount.to_string(),
-                    DiskStats {
-                        mount_point: mount.into(),
-                        total_bytes,
-                        available_bytes,
-                    },
-                );
+            if name == "disk" || name == "root_disk" {
+                let disk = parse_disk(value, name == "root_disk")?;
+                // The root's filesystem is often `/` or the home volume: keep one entry per mount.
+                disks
+                    .entry(disk.mount_point.clone())
+                    .and_modify(|d: &mut DiskStats| d.runner_root |= disk.runner_root)
+                    .or_insert(disk);
             } else {
                 fields.insert(name, value);
             }
@@ -331,6 +372,25 @@ pub fn parse_inspection(target: &MachineTarget, output: &str) -> Result<MachineR
         } else {
             Vec::new()
         },
+    })
+}
+
+/// One `mount<TAB>total<TAB>available` row, in bytes.
+fn parse_disk(value: &str, runner_root: bool) -> Result<DiskStats, RemoteError> {
+    let parts: Vec<_> = value.split('\t').collect();
+    let [mount, total, available] = parts[..] else {
+        return Err(RemoteError("Malformed disk health row.".into()));
+    };
+    let total_bytes = number::<u64>("disk capacity", total)?;
+    let available_bytes = number::<u64>("available disk space", available)?;
+    if total_bytes == 0 || available_bytes > total_bytes || mount.is_empty() {
+        return Err(RemoteError("Invalid disk capacity in the SSH report.".into()));
+    }
+    Ok(DiskStats {
+        mount_point: mount.into(),
+        total_bytes,
+        available_bytes,
+        runner_root,
     })
 }
 

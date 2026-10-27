@@ -34,6 +34,13 @@ pub struct AppConfig {
     /// repository's `inventory/fleet.toml`.
     #[serde(default)]
     pub inventory_path: Option<String>,
+    /// Watchdog restarts, alert destinations and the availability variable.
+    #[serde(default)]
+    pub automation: crate::automation::AutomationSettings,
+    /// Share one OpenSSH connection per machine across read-only monitoring checks
+    /// (`ControlMaster`). Off by default; reviewed changes never use it.
+    #[serde(default)]
+    pub ssh_connection_reuse: bool,
     /// Completed-job history settings: hosted-cost rates and the optional real-time job feed.
     #[serde(default)]
     pub job_activity: crate::jobs::FleetJobSettings,
@@ -50,6 +57,8 @@ impl Default for AppConfig {
             demo_mode: false,
             local_api: true,
             inventory_path: None,
+            automation: crate::automation::AutomationSettings::default(),
+            ssh_connection_reuse: false,
             job_activity: crate::jobs::FleetJobSettings::default(),
         }
     }
@@ -240,6 +249,10 @@ pub struct OrgObservation {
     pub error: Option<Timed<String>>,
     /// Latest job-poll or job authentication error, independent of runner polls.
     pub jobs_error: Option<Timed<String>>,
+    /// The organization's runner groups and their repository access policy.
+    pub runner_groups: Option<Timed<Vec<GhRunnerGroup>>>,
+    /// Kept apart from `error`: credentials that can list runners may not list groups.
+    pub runner_groups_error: Option<Timed<String>>,
     pub rate_limit: Option<RateLimit>,
     pub missing_token: bool,
     /// GitHub rate-limited this account; polls skip it until then.
@@ -277,6 +290,14 @@ pub struct RunnerRelease {
     /// Without the tag's leading `v`, e.g. `2.329.0`.
     pub version: String,
     pub published_at: Option<DateTime<Utc>>,
+}
+
+/// An organization runner group, as far as repository access goes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GhRunnerGroup {
+    pub id: u64,
+    pub name: String,
+    pub allows_public_repositories: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -354,6 +375,8 @@ pub struct FleetView {
     pub orgs: Vec<OrgStatusView>,
     pub tailnet: TailnetStatusView,
     pub monitoring: crate::monitoring::FleetMonitoring,
+    /// Drains, watchdog restarts, alert destinations and published availability.
+    pub automation: crate::automation::FleetAutomation,
     /// Recently completed jobs and the real-time job feed; analytics are a separate read.
     pub activity: crate::jobs::FleetActivity,
     /// The latest `actions/runner` release, when releases have been read.
@@ -612,6 +635,9 @@ pub struct OrgStatusView {
     pub runner_repos: Vec<String>,
     /// Runner repositories whose runners couldn't be listed; their last runners are kept.
     pub runner_repo_errors: Vec<RunnerRepoError>,
+    /// Runner groups with self-hosted runners that public repositories can use.
+    #[serde(default)]
+    pub public_runner_groups: Vec<PublicRunnerGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
@@ -622,6 +648,17 @@ pub struct RunnerRepoError {
     pub repo: String,
     pub error: String,
     pub at: DateTime<Utc>,
+}
+
+/// A runner group open to public repositories, whose fork pull requests can run code on
+/// its persistent runners.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicRunnerGroup {
+    pub name: String,
+    /// Self-hosted runners GitHub lists in the group.
+    pub runners: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]

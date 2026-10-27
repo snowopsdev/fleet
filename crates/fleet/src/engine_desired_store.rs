@@ -90,6 +90,20 @@ impl DesiredStore {
                 .is_some_and(|o| o.status == OperationStatus::Running)
     }
 
+    /// Reserves the change slot for automatic work, unless a change is running.
+    pub(crate) fn reserve(&mut self) -> bool {
+        if self.change_running() {
+            return false;
+        }
+        self.starting = true;
+        true
+    }
+
+    /// Releases a slot taken with [`Self::reserve`].
+    pub(crate) fn release(&mut self) {
+        self.starting = false;
+    }
+
     /// Forgets everything that was read from or reviewed against the inventory.
     pub(super) fn clear_inventory_facts(&mut self) {
         self.snapshot = None;

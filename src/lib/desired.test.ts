@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { driftText, groupByStem, labelDiff, machineNeedsChanges, requestTargetsMachine, requestTargetsRunner, roleLabel, runnerActions } from "./desired";
+import { drainOf, driftText, formatKib, groupByStem, isMaintenance, requestTitle, upgradableRunners, labelDiff, machineNeedsChanges, requestTargetsMachine, requestTargetsRunner, roleLabel, runnerActions } from "./desired";
 import { previewFleet } from "./preview";
 
 const view = previewFleet();
@@ -17,8 +17,10 @@ describe("runnerActions", () => {
   it("offers the apply step for drift and never restarts a busy runner", () => {
     expect(runnerActions(runner("mini-02"))).toEqual([
       { label: "Fix labels", request: { kind: "apply", host: "mac-mini-02", runner: "mini-02" } },
+      { label: "Drain", request: { kind: "drain", runner: "mini-02" } },
     ]);
-    expect(runnerActions(runner("studio-1"))).toEqual([]);
+    // A busy runner can only be drained: its service stops after the job.
+    expect(runnerActions(runner("studio-1"))).toEqual([{ label: "Drain", request: { kind: "drain", runner: "studio-1" } }]);
   });
 
   it("offers decommission only for declared runners, and nothing for unreachable hosts", () => {
@@ -111,5 +113,45 @@ describe("groupByStem", () => {
       { name: "depot-*", runners: { length: 3 } },
       { name: "cloud-gpu-1", runners: { length: 1 } },
     ]);
+  });
+});
+
+describe("maintenance actions", () => {
+  it("offers upgrade only to idle runners behind the latest release", () => {
+    // Its machine is unreachable in the demo, so nothing is offered until a check reads it.
+    expect(runnerActions(runner("linux-01-a"))).toEqual([]);
+    const checked = structuredClone(runner("linux-01-a"));
+    checked.desired!.status!.serviceState = "active";
+    expect(runnerActions(checked).map((a) => a.label)).toEqual(["Restart", "Upgrade", "Drain"]);
+    expect(runnerActions(runner("studio-2")).map((a) => a.label)).not.toContain("Upgrade");
+    expect(upgradableRunners(machine("build-linux-01")).map((r) => r.name)).toEqual(["linux-01-a"]);
+    checked.activity = { kind: "busy", since: null };
+    expect(runnerActions(checked).map((a) => a.label)).toEqual(["Drain"]);
+  });
+
+  it("shows a drained runner as such and offers resume, not another drain", () => {
+    const drain = drainOf(view, "studio-1");
+    expect(drain?.state).toBe("draining");
+    expect(runnerActions(runner("studio-1"), drain)).toEqual([]);
+    const stopped = { ...drain!, state: "stopped" as const };
+    expect(runnerActions(runner("studio-1"), stopped)).toEqual([{ label: "Resume", request: { kind: "resume", runner: "studio-1" } }]);
+    expect(drainOf(view, "studio-2")).toBeNull();
+  });
+
+  it("titles and targets maintenance requests", () => {
+    const cleanup = { kind: "cleanup", host: "studio", options: { wholeWork: false, diagOlderThanDays: 14 } } as const;
+    expect(requestTitle(cleanup)).toBe("Clean up studio");
+    expect(requestTitle({ kind: "upgrade", host: "studio", runner: null })).toBe("Upgrade idle runners");
+    expect(requestTargetsMachine({ kind: "drain", runner: "studio-1" }, machine("studio"))).toBe(true);
+    expect(requestTargetsRunner({ kind: "upgrade", host: "build-linux-01", runner: null }, runner("linux-01-a"))).toBe(true);
+    expect(requestTargetsRunner({ kind: "resume", runner: "studio-2" }, runner("studio-1"))).toBe(false);
+    expect(isMaintenance(cleanup)).toBe(true);
+    expect(isMaintenance({ kind: "restart", runner: "studio-1" })).toBe(false);
+  });
+
+  it("formats sizes like the host scripts", () => {
+    expect(formatKib(512)).toBe("512 KiB");
+    expect(formatKib(2048)).toBe("2.0 MiB");
+    expect(formatKib(2 * 1024 * 1024)).toBe("2.0 GiB");
   });
 });
