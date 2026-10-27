@@ -50,6 +50,8 @@ pub enum FleetEventKind {
     HeldStopped,
     /// A destination's alert queue was full and its oldest alerts were dropped.
     AlertsDropped,
+    /// A cleanup's machine-wide removal ran out of time and was stopped part-way.
+    CleanupTimedOut,
     /// A Wake-on-LAN magic packet was sent after a review.
     WakeRequested,
 }

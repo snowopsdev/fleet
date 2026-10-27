@@ -330,7 +330,12 @@ script on SSH stdin.
   share the runner's `.fleet-maintenance` lock (process groups, so a recycled PID fails closed),
   start scripts refuse while it's live or an upgrade's `.fleet-upgrade-swap` marker exists, and
   each cleanup removal runs in its own process group that the script's deadline kills and waits
-  for; a removal stopped that way (`RFT`) holds the runners like a lost connection. Cleanup stops each
+  for; a removal of a runner's own directory stopped that way (`RFT`) holds that runner like a
+  lost connection, while a machine-wide one restarts the runners stopped for it and records a
+  `cleanupTimedOut` event. Jobs get no stdin (the script arrives on stdin), a TERM to the script
+  stops the job group before the lock is released, and the locks rely on the engine's single
+  change slot rather than atomic creation. The real-script tests honour `FLEET_TEST_BASH`, so
+  they can run with a bash 3.2 build like macOS's `/bin/bash`. Cleanup stops each
   affected runner's service first (machine-wide targets need every inventory runner stopped) and
   restores it afterwards; it resolves
   fixed suffixes of the runner or home directory and refuses symlinks, the only recursive

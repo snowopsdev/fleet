@@ -708,3 +708,32 @@ fn a_runner_on_the_wrong_version_after_upgrading_is_stopped_and_held() {
     assert_eq!(report.left_stopped, ["linux-01"]);
     assert_eq!(fleet.world().local["linux-01"].service_state, "inactive");
 }
+
+#[test]
+fn a_machine_wide_removal_cut_short_restarts_the_runners_stopped_for_it() {
+    let inventory = example_inventory();
+    let fleet = linux_fleet(&inventory, "2.330.0");
+    fleet.world().cleanup_times_out = true;
+    let mut report = ChangeReport::default();
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host(
+            "linux",
+            &CleanupOptions::default(),
+            &[target(CleanupKind::Docker, None, "")],
+            &HeldRunners::default(),
+            &mut report,
+        )
+        .unwrap_err();
+    assert!(error.0.contains("ran out of time"), "{error}");
+    // No runner directory was touched: linux-01 is started again, not held.
+    assert!(report.left_stopped.is_empty(), "{report:?}");
+    assert_eq!(report.notes.len(), 1);
+    assert_eq!(
+        fleet.world().calls,
+        [
+            "stop linux linux-01",
+            "cleanup linux (ran out of time)",
+            "start linux linux-01"
+        ]
+    );
+}

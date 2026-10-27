@@ -451,11 +451,21 @@ them is alive. A lock whose processes are gone is stale and removed; one whose P
 reused by an unrelated process stays live, so a recycled PID fails closed (remove the lock by
 hand once you've checked nothing is working there). The script ignores a dropped connection and
 has a 14-minute deadline, before the app gives up waiting: each removal, size measurement and
-Docker prune runs in its own process group, and at the deadline the whole group is stopped and
-waited for, so nothing keeps deleting after the lock is released. A removal stopped part-way
-that way, or a lost connection, means the app does not start the runners it stopped: they stay
-stopped and held, since their directories may be half-emptied. If a runner can't be started
-again, the cleanup reports it and holds it stopped (see [Recovery](#recovery)).
+Docker prune runs in its own process group (with no stdin, so it can't read the rest of the
+script), none starts once the deadline has passed, and at the deadline, or if the script is
+terminated, the whole group is stopped and waited for (TERM, then KILL, for up to a minute) so
+nothing keeps deleting after the lock is released. A lock whose recorded process group still
+can't be confirmed stopped is kept, failing closed. A runner whose own directory was stopped
+part-way that way, or every runner after a lost connection, stays stopped and held, since its
+directory may be half-emptied; a machine-wide removal stopped part-way touches no runner
+directory, so the runners stopped for it start again and the event is recorded. If a runner
+can't be started again, the cleanup reports it and holds it stopped (see [Recovery](#recovery)).
+
+The lock isn't taken atomically (it's a file checked and then written). That's safe because the
+app runs one change at a time across the whole fleet: reviewed changes, deferred drains and
+watchdog restarts all share a single change slot, so two of its own scripts never race for the
+same runner's lock. The lock guards against a script the app lost track of, not a second
+controller.
 
 This is a deliberate, narrow exception to Runner Fleet's "no broad or glob-based deletion"
 rule: these runner caches grow without bound, and each target is an enumerated, reviewed,

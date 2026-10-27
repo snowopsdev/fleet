@@ -80,7 +80,7 @@ if ((Test-Path -LiteralPath $updateScript) -and (Get-Item -LiteralPath $updateSc
 $lock = Join-Path $root '.fleet-maintenance'
 if (Test-Path -LiteralPath $lock) {
   $live = @((Get-Content -LiteralPath $lock -Raw) -split '\s+' | Where-Object { $_ -match '^\d+$' } | Where-Object { Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue })
-  if ($live.Count -gt 0) { throw "a cleanup or another upgrade is still working in $root; try again when it has finished" }
+  if ($live.Count -gt 0) { throw "a cleanup or another upgrade is still working in $root (its processes are recorded in $lock); try again when it has finished. If those processes are unrelated, remove that file by hand" }
   Remove-Item -LiteralPath $lock -Force
 }
 Set-Content -LiteralPath $lock -Value $PID -NoNewline

@@ -163,6 +163,18 @@ impl Engine {
         }
     }
 
+    /// Records `kind` for the machine of inventory host `host`, if it's listed.
+    fn record_host_history(&self, host: &str, kind: FleetEventKind, detail: String, notify: bool) {
+        let view = self.view();
+        if let Some(machine) = view
+            .machines
+            .iter()
+            .find(|m| m.desired.as_ref().is_some_and(|d| d.host.id == host))
+        {
+            self.record_history(machine, kind, detail, notify);
+        }
+    }
+
     /// Records `kind` for the inventory runner `name` on `host`, if it's listed.
     fn record_runner_history(&self, host: &str, name: &str, kind: FleetEventKind, detail: String, notify: bool) {
         let view = self.view();
@@ -339,6 +351,16 @@ impl Engine {
             | ChangeRequest::Resume { .. } => return,
         };
         let Some(report) = report else { return };
+        for note in &report.notes {
+            self.record_host_history(
+                host,
+                FleetEventKind::CleanupTimedOut,
+                format!(
+                    "A cleanup ran out of time and stopped part-way: {note}. No runner directory was involved, so the runners stopped for it were started again."
+                ),
+                true,
+            );
+        }
         let now = Utc::now();
         let saved = self.update_automation(|j| {
             for name in begun.iter().filter(|n| !report.left_stopped.contains(n)) {

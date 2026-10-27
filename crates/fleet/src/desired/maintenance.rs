@@ -312,6 +312,8 @@ pub struct ChangeReport {
     pub left_stopped: Vec<String>,
     /// Runners an upgrade finished, running the new version.
     pub upgraded: Vec<String>,
+    /// Machine-wide removals the host's deadline stopped part-way, for history.
+    pub notes: Vec<String>,
 }
 
 /// Service states that mean the runner can't take a job.
@@ -457,34 +459,27 @@ impl Ops<'_> {
             _ => Ok(Vec::new()),
         };
         let mut failures = Vec::new();
-        // A removal the host's deadline stopped part-way leaves a half-emptied
-        // directory: treat it like a lost connection and keep the runners stopped.
         let outcomes = match outcomes {
-            Ok(outcomes) if outcomes.iter().any(|o| o.timed_out) => {
-                let names: Vec<String> = stopped.iter().map(|r| r.name.clone()).collect();
-                report.left_stopped.extend(names.iter().cloned());
-                let stopped_part_way: Vec<String> = outcomes
+            Ok(outcomes) => {
+                // A removal the host's deadline stopped part-way leaves that
+                // runner's directory half-emptied: it stays stopped and held. A
+                // machine-wide one touched no runner directory, and the host
+                // script reports it only once the removal has fully stopped, so
+                // the runners stopped for it start as usual.
+                let partial: BTreeSet<String> = outcomes
                     .iter()
                     .filter(|o| o.timed_out)
-                    .map(|o| o.message.clone())
+                    .filter_map(|o| o.runner.clone())
                     .collect();
-                let held_note = if names.is_empty() {
-                    String::new()
-                } else {
-                    format!(
-                        " {} stay stopped and held; check the machine, then resume them.",
-                        names.join(", ")
-                    )
-                };
-                return fail(format!(
-                    "cleanup on {} ran out of time: {}.{held_note}",
-                    host.id,
-                    stopped_part_way.join("; ")
-                ));
-            }
-            Ok(outcomes) => {
-                // Put every service the cleanup stopped back the way it was.
                 for runner in stopped {
+                    if partial.contains(&runner.name) {
+                        report.left_stopped.push(runner.name.clone());
+                        failures.push(format!(
+                            "{} stays stopped and held: its cleanup stopped part-way; check it, then resume it",
+                            runner.name
+                        ));
+                        continue;
+                    }
                     if let Err(e) = self.remote.start(host, runner, sudo) {
                         report.left_stopped.push(runner.name.clone());
                         failures.push(format!(
@@ -493,6 +488,12 @@ impl Ops<'_> {
                         ));
                     }
                 }
+                report.notes.extend(
+                    outcomes
+                        .iter()
+                        .filter(|o| o.timed_out && o.runner.is_none())
+                        .map(|o| o.message.clone()),
+                );
                 outcomes
             }
             Err(e) => {

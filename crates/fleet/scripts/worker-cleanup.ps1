@@ -200,7 +200,7 @@ function Invoke-RunnerTarget([string]$Kind, [string]$Runner, [string]$Root, [str
   if ($processes | Where-Object { $_.Name -eq 'Runner.Listener.exe' }) { Write-Row @('RFE', $Kind, $Runner, "$Runner's service is still running; it must be stopped before cleaning"); return }
   if ($processes -or (Test-Updating $Root)) { Write-Row @('RFE', $Kind, $Runner, "something is still running from $Root, or a runner self-update is in progress; left it alone"); return }
   if ((Get-Date) -ge $deadline) { Write-Row @('RFE', $Kind, $Runner, "the cleanup ran out of time before $real; nothing more was removed"); return }
-  if (-not (Lock-Root $Root)) { Write-Row @('RFE', $Kind, $Runner, "another cleanup is still working in $Root; left it alone"); return }
+  if (-not (Lock-Root $Root)) { Write-Row @('RFE', $Kind, $Runner, "another cleanup or an upgrade is still working in $Root (its processes are recorded in $Root\.fleet-maintenance); left it alone. If those processes are unrelated, remove that file by hand"); return }
   try {
     if ($Kind -eq 'diag') {
       $cutoff = (Get-Date).AddDays(-$days)

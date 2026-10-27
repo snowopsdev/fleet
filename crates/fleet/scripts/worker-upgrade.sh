@@ -82,7 +82,7 @@ lock_live() {
 }
 if [ -f "$lock" ]; then
   if lock_live; then
-    echo "a cleanup or another upgrade is still working in $root; try again when it has finished" >&2
+    echo "a cleanup or another upgrade is still working in $root (its processes are recorded in $lock); try again when it has finished. If those processes are unrelated, remove that file by hand" >&2
     exit 5
   fi
   rm -f -- "$lock"

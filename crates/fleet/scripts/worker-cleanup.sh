@@ -68,34 +68,62 @@ updating() {
 
 out_of_time() { [ "$(date +%s)" -ge "$deadline" ]; }
 
-# Runs a command in its own process group (job control), adding the group to
-# LOCK when one is given. At the deadline it kills the whole group (find, du,
-# docker and anything they started) and returns 124 only once every member
-# has exited, so nothing keeps removing files after the lock is released.
+# Runs a command in its own process group (job control), with stdin from
+# /dev/null (job control would otherwise hand it this script's own stdin: the
+# SSH pipe still delivering the rest of the script), adding the group to LOCK
+# when one is given. At the deadline, or on TERM/INT, the whole group (find,
+# du, docker and anything they started) is stopped and waited for, so nothing
+# keeps removing files after the lock is released. Returns the command's
+# status; 123 if the deadline had passed before it started (nothing ran); 124
+# if it was stopped part-way; 125 if it couldn't be confirmed stopped (its
+# lock is then kept: fail closed).
+current_job=""
 bounded() {
-  local lock="$1" pid waited
+  local lock="$1" pid
   shift
+  if out_of_time; then return 123; fi
   set -m
-  "$@" &
+  "$@" < /dev/null &
   pid=$!
   set +m
+  current_job="$pid"
   if [ -n "$lock" ]; then printf ' %s' "$pid" >> "$lock"; fi
   while kill -0 -- "-$pid" 2>/dev/null; do
     if out_of_time; then
-      kill -TERM -- "-$pid" 2>/dev/null
-      waited=0
-      while kill -0 -- "-$pid" 2>/dev/null; do
-        sleep 0.2
-        waited=$((waited + 1))
-        if [ "$waited" -ge 50 ]; then kill -KILL -- "-$pid" 2>/dev/null; fi
-      done
-      wait "$pid" 2>/dev/null
-      return 124
+      stop_group "$pid"
+      local stopped=$?
+      current_job=""
+      [ "$stopped" = 0 ] && return 124
+      return 125
     fi
     sleep 0.2
   done
+  current_job=""
   wait "$pid"
 }
+
+# Stops process group PID: TERM, then KILL after 10 seconds, waiting at most a
+# minute in all. Fails if anything in the group is still alive then.
+stop_group() {
+  local pid="$1" waited=0
+  kill -TERM -- "-$pid" 2>/dev/null
+  while kill -0 -- "-$pid" 2>/dev/null; do
+    if [ "$waited" -ge 300 ]; then return 1; fi
+    if [ "$waited" = 50 ]; then kill -KILL -- "-$pid" 2>/dev/null; fi
+    sleep 0.2
+    waited=$((waited + 1))
+  done
+  wait "$pid" 2>/dev/null
+  return 0
+}
+
+# On TERM or INT, stop the running removal and wait for it before the EXIT
+# trap releases the lock.
+stop_job() {
+  if [ -n "$current_job" ]; then stop_group "$current_job"; current_job=""; fi
+}
+trap 'stop_job; exit 143' TERM
+trap 'stop_job; exit 130' INT
 
 # A lock is live while any recorded process, or process group, still exists.
 # A recycled PID keeps it live: that fails closed.
@@ -109,9 +137,22 @@ lock_live() {
 }
 
 locks=""
+# Releases this run's locks, except one whose recorded process groups (other
+# than this shell) are still alive: then it stays, failing closed.
 release_locks() {
-  local lock
-  for lock in $locks; do rm -f -- "$lock"; done
+  local lock pid live
+  for lock in $locks; do
+    live=0
+    for pid in $(cat "$lock" 2>/dev/null); do
+      case "$pid" in ''|*[!0-9]*|"$$") continue ;; esac
+      if kill -0 "$pid" 2>/dev/null || kill -0 -- "-$pid" 2>/dev/null; then live=1; fi
+    done
+    if [ "$live" = 1 ]; then
+      echo "kept $lock: a removal it records is still running" >&2
+    else
+      rm -f -- "$lock"
+    fi
+  done
 }
 trap release_locks EXIT
 
@@ -130,6 +171,7 @@ lock_root() {
 # Size of a directory in KiB, bounded by the deadline (0 when it ran out).
 kib() {
   local out size=0
+  if out_of_time; then echo 0; return; fi
   out="$(mktemp "${TMPDIR:-/tmp}/fleet-du.XXXXXX")" || { echo 0; return; }
   if bounded "" du -skx "$1" > "$out" 2>/dev/null; then size="$(awk 'END { print $1 + 0 }' "$out")"; fi
   rm -f -- "$out"
@@ -314,7 +356,7 @@ runner_target() {
     refuse "the cleanup ran out of time before $real; nothing more was removed"; return
   fi
   if ! lock_root "$real_root"; then
-    refuse "another cleanup is still working in $real_root; left it alone"; return
+    refuse "another cleanup or an upgrade is still working in $real_root (its processes are recorded in $real_root/.fleet-maintenance); left it alone. If those processes are unrelated, remove that file by hand"; return
   fi
   local lock="$real_root/.fleet-maintenance"
   case "$kind" in
@@ -358,7 +400,9 @@ runner_target() {
         if [ "$status" = 0 ]; then
           removed=$((removed + 1))
           freed=$((freed + size))
-        elif [ "$status" = 124 ]; then
+        elif [ "$status" = 123 ]; then
+          refuse "the cleanup ran out of time before $real/$f; nothing more was removed"; return
+        elif [ "$status" = 124 ] || [ "$status" = 125 ]; then
           timed_out "$real/$f"; return
         else
           refuse "couldn't remove all of $real/$f"
@@ -384,7 +428,9 @@ runner_target() {
         if [ "$status" = 0 ]; then
           removed=$((removed + 1))
           freed=$((freed + size))
-        elif [ "$status" = 124 ]; then
+        elif [ "$status" = 123 ]; then
+          refuse "the cleanup ran out of time before $real/$f; nothing more was removed"; return
+        elif [ "$status" = 124 ] || [ "$status" = 125 ]; then
           timed_out "$real/$f"; return
         else
           refuse "couldn't remove all of $real/$f"
@@ -398,7 +444,9 @@ runner_target() {
       status=$?
       if [ "$status" = 0 ]; then
         row RFX "$kind" "$runner" "$real" "$size" "" ""
-      elif [ "$status" = 124 ]; then
+      elif [ "$status" = 123 ]; then
+        refuse "the cleanup ran out of time before $real; nothing was removed there"
+      elif [ "$status" = 124 ] || [ "$status" = 125 ]; then
         timed_out "$real"
       else
         refuse "couldn't remove everything inside $real"
@@ -440,7 +488,8 @@ machine_target() {
       bounded "" empty_dir "$real"
       status=$?
       if [ "$status" = 0 ]; then row RFX "$kind" "" "$real" "$size" "" ""
-      elif [ "$status" = 124 ]; then row RFT "$kind" "" "ran out of time emptying $real; stopped part-way"
+      elif [ "$status" = 123 ]; then refuse "the cleanup ran out of time before $real; nothing was removed there"
+      elif [ "$status" = 124 ] || [ "$status" = 125 ]; then row RFT "$kind" "" "ran out of time emptying $real; stopped part-way"
       else refuse "couldn't remove everything inside $real"; fi
       ;;
     simulators)
@@ -471,7 +520,9 @@ machine_target() {
       status=$?
       if [ "$status" = 0 ]; then
         row RFX "$kind" "" "" "" "" "$(tail -n 1 "$out")"
-      elif [ "$status" = 124 ]; then
+      elif [ "$status" = 123 ]; then
+        refuse "the cleanup ran out of time before docker system prune; it didn't run"
+      elif [ "$status" = 124 ] || [ "$status" = 125 ]; then
         row RFT "$kind" "" "docker system prune ran out of time and was stopped"
       else
         refuse "docker system prune -f failed: $(tail -n 1 "$out")"

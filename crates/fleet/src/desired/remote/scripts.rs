@@ -80,7 +80,7 @@ pub(super) const SH_LOCK_CHECK: &str = "lock=\"$root/.fleet-maintenance\"\n\
 if [ -f \"$lock\" ]; then\n\
   for pid in $(cat \"$lock\" 2>/dev/null); do\n\
     case \"$pid\" in ''|*[!0-9]*) continue ;; esac\n\
-    if kill -0 \"$pid\" 2>/dev/null || kill -0 -- \"-$pid\" 2>/dev/null; then echo \"a cleanup or upgrade is still working in $root; not starting the runner until it finishes\" >&2; exit 5; fi\n\
+    if kill -0 \"$pid\" 2>/dev/null || kill -0 -- \"-$pid\" 2>/dev/null; then echo \"a cleanup or upgrade is still working in $root (its processes are recorded in $lock); not starting the runner until it finishes. If those processes are unrelated, remove that file by hand\" >&2; exit 5; fi\n\
   done\n\
   rm -f -- \"$lock\"\n\
 fi\n\
@@ -93,7 +93,7 @@ fi\n";
 pub(super) const WIN_LOCK_CHECK: &str = "$lock = Join-Path $path '.fleet-maintenance'\n\
 if (Test-Path -LiteralPath $lock) {\n\
   $live = @((Get-Content -LiteralPath $lock -Raw) -split '\\s+' | Where-Object { $_ -match '^\\d+$' } | Where-Object { Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue })\n\
-  if ($live.Count -gt 0) { throw \"a cleanup or upgrade is still working in $path; not starting the runner until it finishes\" }\n\
+  if ($live.Count -gt 0) { throw \"a cleanup or upgrade is still working in $path (its processes are recorded in $lock); not starting the runner until it finishes. If those processes are unrelated, remove that file by hand\" }\n\
   Remove-Item -LiteralPath $lock -Force\n\
 }\n\
 if (Test-Path -LiteralPath (Join-Path $path '.fleet-upgrade-swap')) {\n\

@@ -16,9 +16,15 @@ const UPGRADE_SH: &str = include_str!("../../../scripts/worker-upgrade.sh");
 const CLEANUP_PS1: &str = include_str!("../../../scripts/worker-cleanup.ps1");
 const UPGRADE_PS1: &str = include_str!("../../../scripts/worker-upgrade.ps1");
 
+/// The bash the real-script tests run: `FLEET_TEST_BASH` (for example a bash
+/// 3.2 build, like macOS's /bin/bash), or `bash` from PATH.
+fn bash_program() -> String {
+    std::env::var("FLEET_TEST_BASH").unwrap_or_else(|_| "bash".into())
+}
+
 /// Runs `script` with bash, extra environment and PATH entries; returns (exit code, stdout, stderr).
 fn bash(script: &str, env: &[(&str, &Path)], path_first: Option<&Path>) -> (i32, String, String) {
-    let mut command = Command::new("bash");
+    let mut command = Command::new(bash_program());
     command
         .arg("-s")
         .stdin(Stdio::piped())
@@ -778,4 +784,116 @@ fn starting_a_runner_refuses_while_an_upgrade_is_mid_swap() {
     assert_eq!(code, 5, "{err}");
     assert!(err.contains("interrupted mid-swap"), "{err}");
     assert!(!root.join("started").exists());
+}
+
+/// A clean script whose `find -delete` is replaced by `body`, with a short deadline.
+fn shimmed_clean(root: &Path, host: &Host, kinds: &[CleanupKind], body: &str, seconds: u32) -> (String, PathBuf) {
+    let shims = root.parent().unwrap().join("shims");
+    write_exec(
+        &shims.join("find"),
+        &format!("#!/bin/sh\nfor a; do if [ \"$a\" = -delete ]; then {body}; fi; done\nexec /usr/bin/find \"$@\"\n"),
+    );
+    let options = CleanupOptions::default();
+    let candidates: Vec<_> = cleanup_candidates(host, &options)
+        .into_iter()
+        .filter(|c| kinds.contains(&c.kind))
+        .collect();
+    let survey = parse_survey(&bash(&survey_script(host, &candidates, &options), &[], None).1).unwrap();
+    let script = clean_script(host, &survey.targets, &options).unwrap().replacen(
+        "RF_SECONDS=840",
+        &format!("RF_SECONDS={seconds}"),
+        1,
+    );
+    (script, shims)
+}
+
+/// A removal that reads stdin must not swallow the rest of the script, which
+/// arrives on the same SSH pipe: the following target still runs.
+#[cfg(unix)]
+#[test]
+fn a_removal_reading_stdin_doesnt_swallow_the_rest_of_the_script() {
+    let (_tmp, root, host) = runner_dir();
+    std::fs::create_dir_all(root.join("_work/_actions/a")).unwrap();
+    let (script, shims) = shimmed_clean(
+        &root,
+        &host,
+        &[CleanupKind::WorkTemp, CleanupKind::WorkActions],
+        "cat > /dev/null; exit 0",
+        60,
+    );
+    let outcomes = parse_clean(&bash(&script, &[], Some(&shims)).1).unwrap();
+    let kinds: Vec<CleanupKind> = outcomes.iter().filter(|o| o.ok).map(|o| o.kind).collect();
+    assert_eq!(kinds, [CleanupKind::WorkTemp, CleanupKind::WorkActions], "{outcomes:?}");
+}
+
+/// TERM to the script mid-removal stops the removal's whole process group and
+/// waits for it before the lock is released.
+#[cfg(unix)]
+#[test]
+fn terminating_the_script_stops_the_removal_before_releasing_the_lock() {
+    let (_tmp, root, host) = runner_dir();
+    let pid_file = root.parent().unwrap().join("find.pid");
+    let (script, shims) = shimmed_clean(
+        &root,
+        &host,
+        &[CleanupKind::WorkTemp],
+        &format!("echo $$ > '{}'; exec sleep 60", pid_file.display()),
+        600,
+    );
+    let path = format!("{}:{}", shims.display(), std::env::var("PATH").unwrap_or_default());
+    let mut child = Command::new(bash_program())
+        .arg("-s")
+        .env("PATH", path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
+    let lock = root.join(".fleet-maintenance");
+    for _ in 0..100 {
+        if pid_file.exists() && lock.exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let find_pid = std::fs::read_to_string(&pid_file).unwrap();
+    let alive = |pid: &str| {
+        Command::new("kill")
+            .args(["-0", pid.trim()])
+            .status()
+            .unwrap()
+            .success()
+    };
+    assert!(alive(&find_pid));
+    Command::new("kill")
+        .args(["-TERM", &child.id().to_string()])
+        .status()
+        .unwrap();
+    // While the lock exists the removal may still run; once it's gone, the removal must be too.
+    for _ in 0..200 {
+        if !lock.exists() {
+            assert!(!alive(&find_pid), "the lock was released while the removal still ran");
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let status = child.wait().unwrap();
+    assert!(!status.success());
+    assert!(!lock.exists());
+    assert!(!alive(&find_pid));
+}
+
+/// Sizing used up the time: the removal isn't started (a clean refusal, not
+/// a removal stopped part-way), and nothing is removed.
+#[cfg(unix)]
+#[test]
+fn a_removal_isnt_started_after_the_deadline() {
+    let (_tmp, root, host) = runner_dir();
+    let (script, shims) = shimmed_clean(&root, &host, &[CleanupKind::WorkTemp], "exit 0", 2);
+    write_exec(&shims.join("du"), "#!/bin/sh\nexec sleep 60\n");
+    let outcomes = parse_clean(&bash(&script, &[], Some(&shims)).1).unwrap();
+    assert!(!outcomes[0].ok && !outcomes[0].timed_out, "{outcomes:?}");
+    assert!(outcomes[0].message.contains("ran out of time before"), "{outcomes:?}");
+    assert!(root.join("_work/_temp/job/file").exists());
 }
