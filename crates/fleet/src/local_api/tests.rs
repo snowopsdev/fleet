@@ -135,7 +135,7 @@ async fn views_carry_no_secrets() {
             login,
             OrgAuth::Token,
             Some(credential),
-            RepoScope::None,
+            RepoScope::None.into(),
             Some(api_base.clone()),
         )
         .await

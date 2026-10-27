@@ -83,7 +83,7 @@ async fn gh_login_is_used_and_never_stored() {
 
     // Missing scope: refused with the exact fix, nothing saved.
     let err = engine
-        .add_org("acme", OrgAuth::GhCli, None, RepoScope::None, Some(base.clone()))
+        .add_org("acme", OrgAuth::GhCli, None, RepoScope::None.into(), Some(base.clone()))
         .await
         .unwrap_err()
         .to_string();
@@ -96,7 +96,7 @@ async fn gh_login_is_used_and_never_stored() {
     // After the user refreshes the scope, it works and uses gh's token.
     *allowed.locked() = true;
     engine
-        .add_org("acme", OrgAuth::GhCli, None, RepoScope::None, Some(base))
+        .add_org("acme", OrgAuth::GhCli, None, RepoScope::None.into(), Some(base))
         .await
         .unwrap();
     assert_eq!(engine.config().orgs[0].auth, OrgAuth::GhCli);

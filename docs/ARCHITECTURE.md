@@ -95,6 +95,20 @@ macOS Keychain. Changes always use the `gh` login ([FLEET.md](FLEET.md#setup)). 
 and per-repository workflow jobs are fetched separately; repository scope is configurable in
 Settings.
 
+An account can also list runner repositories, whose repository-level runners
+(`/repos/{owner}/{repo}/actions/runners`) are polled with the org list and shown beside its
+runners. A personal account has only these, and scans its runner repositories for jobs. They're
+monitoring only: never joined to inventory hosts, and only compatible with their own
+repository's queued jobs. Each repository keeps its own read time and error, so one that can't
+be listed keeps its last runners (aging into stale) and hides no others; only a rejected token
+or a rate limit fails the account.
+
+Recent `actions/runner` releases (no drafts or pre-releases) are read at most hourly through the
+first github.com account. A runner whose GitHub-reported version is behind the latest has an
+update available. It's overdue when the oldest release it's missing was published over 30 days
+ago, since GitHub then stops sending it jobs. Both show on the runner pane and as a finding.
+Nothing upgrades runners.
+
 The local HTTP API ([HTTP_API.md](HTTP_API.md)) captures one fleet snapshot per request off
 the async runtime and adds provenance and a content-based revision to the response. The shared
 `issues` derivation feeds both the desktop's attention rows and `/v1/issues`; active alerts

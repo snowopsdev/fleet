@@ -298,17 +298,37 @@ fn runner_issues(view: &FleetView) -> Vec<FleetIssue> {
         .chain(&view.other_machines)
         .flat_map(|m| &m.runners)
         .chain(&view.unmatched_runners)
-        .filter(|runner| !runner.warnings.is_empty())
-        .map(|runner| {
-            let mut issue = FleetIssue::new(
-                format!("{}:warnings", runner.key),
-                Runner,
-                &runner.name,
-                runner.warnings.join(" · "),
-            );
-            issue.runner_key = Some(runner.key.clone());
-            issue.machine_id.clone_from(&runner.machine_id);
-            issue
+        .flat_map(|runner| {
+            let warnings = (!runner.warnings.is_empty()).then(|| {
+                FleetIssue::new(
+                    format!("{}:warnings", runner.key),
+                    Runner,
+                    &runner.name,
+                    runner.warnings.join(" · "),
+                )
+            });
+            let update = runner.github.as_ref().and_then(|g| Some((g.version.as_deref()?, g.update.as_ref()?)));
+            let update = update.map(|(version, update)| {
+                FleetIssue::new(
+                    format!("{}:update", runner.key),
+                    Runner,
+                    format!(
+                        "{}: runner update {}",
+                        runner.name,
+                        if update.overdue { "overdue" } else { "available" }
+                    ),
+                    format!(
+                        "Runs {version}; the latest release is {}. An update has been available since {}, and GitHub stops sending jobs to runners that miss one for 30 days.",
+                        update.latest,
+                        update.missing_since.format("%Y-%m-%d"),
+                    ),
+                )
+            });
+            [warnings, update].into_iter().flatten().map(|mut issue| {
+                issue.runner_key = Some(runner.key.clone());
+                issue.machine_id.clone_from(&runner.machine_id);
+                issue
+            })
         })
         .collect()
 }
@@ -361,6 +381,16 @@ fn github_issues(view: &FleetView) -> Vec<FleetIssue> {
                 Github,
                 format!("GitHub: {}", org.login),
                 error,
+            );
+            issue.fix = Some(FleetIssueFix::OrganizationSignIn);
+            issues.push(issue);
+        }
+        if !org.runner_repo_errors.is_empty() {
+            let mut issue = FleetIssue::new(
+                format!("org:{}:repos", org.login),
+                Github,
+                format!("GitHub: {} repository runners", org.login),
+                org.runner_repo_errors.join(" · "),
             );
             issue.fix = Some(FleetIssueFix::OrganizationSignIn);
             issues.push(issue);
