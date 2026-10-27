@@ -21,6 +21,8 @@ axum = { version = "0.8", default-features = false, features = ["http1", "json",
 tempfile.workspace = true
 base64 = "0.22"
 toml = "0.8"
+# HMAC for job feed signatures and its per-launch secret; already used by rustls.
+ring = "0.17"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["process"] }

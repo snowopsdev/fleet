@@ -1071,6 +1071,7 @@ dependencies = [
  "fleet",
  "futures",
  "reqwest 0.12.28",
+ "ring",
  "rustix",
  "schemars 1.2.2",
  "serde",

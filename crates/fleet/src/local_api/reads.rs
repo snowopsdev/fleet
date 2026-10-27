@@ -8,6 +8,8 @@ use super::checks::{CHECK_RETENTION, MAX_LOG_BYTES, MAX_LOG_LINES, MAX_RETAINED_
 use super::common::{ApiError, ApiState, Snapshot};
 use super::queries::{self, NoQuery, Parameters};
 use super::{CONCURRENT_LOGS, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
+use crate::jobs::history::{DEFAULT_JOB_PAGE, MAX_JOB_PAGE};
+use crate::jobs::{JOB_RETENTION, MAX_JOBS};
 use crate::model::DataSource;
 use crate::monitoring::{EVENT_PAGE_SIZE, EVENT_RETENTION, MAX_EVENTS};
 
@@ -17,11 +19,14 @@ pub(super) async fn index(Extension(s): Extension<Snapshot>, Parameters(_): Para
     Json(json!({
         "name": "Runner Dashboard local API", "version": env!("CARGO_PKG_VERSION"), "readOnly": true,
         "capabilities": { "schema": "/v1/openapi.json", "conditionalGet": true, "events": true, "issues": true,
+            "jobHistory": true, "analytics": ["24h", "7d", "30d"],
             "checks": ["refresh", "inventory", "doctor"], "logs": true, "runnerMutations": false },
         "limits": { "defaultPageSize": DEFAULT_PAGE_SIZE, "maxPageSize": MAX_PAGE_SIZE, "defaultEventPageSize": EVENT_PAGE_SIZE,
             "eventRetentionDays": EVENT_RETENTION.num_days(), "maxEvents": MAX_EVENTS, "maxLogLines": MAX_LOG_LINES,
             "maxLogBytes": MAX_LOG_BYTES, "concurrentChecks": 1, "retainedChecks": MAX_RETAINED_CHECKS,
-            "checkRetentionMinutes": CHECK_RETENTION.num_minutes(), "concurrentLogs": CONCURRENT_LOGS },
+            "checkRetentionMinutes": CHECK_RETENTION.num_minutes(), "concurrentLogs": CONCURRENT_LOGS,
+            "defaultJobPageSize": DEFAULT_JOB_PAGE, "maxJobPageSize": MAX_JOB_PAGE,
+            "jobRetentionDays": JOB_RETENTION.num_days(), "maxJobs": MAX_JOBS },
         "endpoints": super::schema::endpoint_descriptions(),
         "semantics": {
             "source": "demo means fictional data; on-demand checks and logs require live mode.",
@@ -36,9 +41,11 @@ pub(super) async fn index(Extension(s): Extension<Snapshot>, Parameters(_): Para
             "attention": "summary.attention equals issues.length, including unresolved stale or muted alerts.",
             "github": "orgs[].rateLimitedUntil is set while GitHub polls for that account are paused by a rate limit. Runners with github.repo set are repository runners: monitoring only, never matched to inventory hosts. runnerRelease is the latest actions/runner release; each runner's versionStatus compares its version with it.",
             "history": format!(
-                "Observed machine transitions only; no completed-job archive. Retention is at most {} days and {MAX_EVENTS} events.",
+                "Observed machine transitions only; completed jobs are in /v1/jobs/history. Retention is at most {} days and {MAX_EVENTS} events.",
                 EVENT_RETENTION.num_days()
             ),
+            "jobHistory": "Self-hosted jobs recorded while the app runs, newest first with exclusive before, or oldest first with exclusive after. Jobs that start and finish between two scans can be missing unless the real-time job feed is on.",
+            "analytics": "Busy percentages divide busy runner time by the recorded part of the window (see observedFrom). The hosted cost is an estimate at the editable rates in Settings.",
             "scope": s.view.source,
         }
     }))

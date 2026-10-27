@@ -38,6 +38,9 @@ pub struct AppConfig {
     /// (`ControlMaster`). Off by default; reviewed changes never use it.
     #[serde(default)]
     pub ssh_connection_reuse: bool,
+    /// Completed-job history settings: hosted-cost rates and the optional real-time job feed.
+    #[serde(default)]
+    pub job_activity: crate::jobs::FleetJobSettings,
 }
 
 /// Matches the serde defaults, so a missing settings file and an empty one mean the same.
@@ -52,6 +55,7 @@ impl Default for AppConfig {
             local_api: true,
             inventory_path: None,
             ssh_connection_reuse: false,
+            job_activity: crate::jobs::FleetJobSettings::default(),
         }
     }
 }
@@ -352,6 +356,8 @@ pub struct FleetView {
     pub orgs: Vec<OrgStatusView>,
     pub tailnet: TailnetStatusView,
     pub monitoring: crate::monitoring::FleetMonitoring,
+    /// Recently completed jobs and the real-time job feed; analytics are a separate read.
+    pub activity: crate::jobs::FleetActivity,
     /// The latest `actions/runner` release, when it has been read.
     pub runner_release: Option<RunnerReleaseView>,
 }

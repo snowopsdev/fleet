@@ -102,6 +102,13 @@ export function Icon({ name, size = 14 }: { name: IconName; size?: number }) {
           <path d="M4.5 8h7" />
         </svg>
       );
+    case "chart":
+      return (
+        <svg {...common}>
+          <path d="M2.5 13.5h11" />
+          <path d="M4.5 11V8M8 11V4.5M11.5 11V6.5" />
+        </svg>
+      );
     case "plan":
       return (
         <svg {...common}>
@@ -129,4 +136,5 @@ type IconName =
   | "check"
   | "x"
   | "dash"
-  | "plan";
+  | "plan"
+  | "chart";

@@ -88,6 +88,7 @@ pub(crate) fn derive_without_issues(
         },
         plan: plan_status(plan, checked.as_ref()),
         monitoring: crate::monitoring::FleetMonitoring::default(),
+        activity: crate::jobs::FleetActivity::default(),
         runner_release: obs.runner_release.as_ref().map(|r| RunnerReleaseView {
             version: r.value.version.clone(),
             published_at: r.value.published_at,
@@ -96,6 +97,7 @@ pub(crate) fn derive_without_issues(
     };
     if source == DataSource::Demo {
         crate::monitoring::demo::attach(&mut view, now);
+        crate::jobs::demo::attach(&mut view, now);
     }
     view
 }

@@ -76,7 +76,7 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
         e.poll_github_runners().await
     });
     spawn_loop(&app, &engine, &refresh, Duration::from_secs(45), |e| async move {
-        e.poll_github_jobs().await
+        e.poll_github_jobs_and_history().await
     });
 
     // Re-derive periodically even without new data so history is recorded and

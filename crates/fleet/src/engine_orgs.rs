@@ -216,6 +216,15 @@ impl Engine {
         }
     }
 
+    /// The client the regular polls created for an account, unless it's rate-limited. Job
+    /// history reads use it so they share the account's token, ETag cache and backoff.
+    pub(super) fn polled_client(&self, key: &str, now: DateTime<Utc>) -> Option<Arc<GithubClient>> {
+        if self.rate_limited(key, now) {
+            return None;
+        }
+        self.github.locked().get(key).and_then(|state| state.client.clone())
+    }
+
     fn rate_limited(&self, key: &str, now: DateTime<Utc>) -> bool {
         self.obs
             .read_locked()

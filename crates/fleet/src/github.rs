@@ -28,6 +28,8 @@ use crate::model::{
 };
 use crate::sync::{MutexExt, RwLockExt};
 
+mod completed;
+
 pub const API_VERSION: &str = "2026-03-10";
 /// Hard cap on repos scanned per org per cycle, whatever the scope says.
 pub const MAX_REPOS: usize = 50;
