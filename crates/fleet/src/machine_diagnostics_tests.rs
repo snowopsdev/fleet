@@ -178,3 +178,71 @@ esac
         }
     }
 }
+
+#[test]
+fn runner_volume_is_checked_separately_from_system_disks() {
+    let host = crate::demo_desired::inventory()
+        .find_host("mac-mini-02")
+        .unwrap()
+        .clone();
+    let disk = |mount: &str, free: u64, runner_root: bool| crate::machine::DiskStats {
+        mount_point: mount.into(),
+        total_bytes: 1000,
+        available_bytes: free,
+        runner_root,
+    };
+    let mut report = report("macos", &[]);
+    report.disks = vec![disk("/", 500, false), disk("/Volumes/Builds", 50, true)];
+    let checks = evaluate(&report, Some(&host));
+    let volume = check(&checks, "runner-disk");
+    assert_eq!(
+        (volume.status, volume.value.as_str()),
+        (DiagnosticStatus::Warn, "5% free")
+    );
+    assert!(
+        volume
+            .detail
+            .starts_with("/Volumes/Builds holds ~/gh-runners/acme-demo"),
+        "{}",
+        volume.detail
+    );
+    assert!(
+        check(&checks, "disk-space")
+            .detail
+            .contains("/Volumes/Builds (runner root): ")
+    );
+    report.disks = vec![disk("/", 500, true)];
+    assert_eq!(
+        check(&evaluate(&report, Some(&host)), "runner-disk").status,
+        DiagnosticStatus::Pass
+    );
+    report.disks = vec![disk("/", 500, false)];
+    assert_eq!(
+        check(&evaluate(&report, Some(&host)), "runner-disk").status,
+        DiagnosticStatus::Unknown
+    );
+    assert!(evaluate(&report, None).iter().all(|c| c.id != "runner-disk"));
+}
+
+#[test]
+fn architecture_is_compared_with_the_inventory_platform() {
+    use crate::desired::model::Platform;
+    let mut host = crate::demo_desired::inventory()
+        .find_host("mac-mini-02")
+        .unwrap()
+        .clone();
+    let status = |host: &Host, arch: &str| {
+        let report = report("macos", &[("architecture", arch)]);
+        check(&evaluate(&report, Some(host)), "architecture").status
+    };
+    assert_eq!(status(&host, "arm64"), DiagnosticStatus::Pass);
+    assert_eq!(status(&host, "x86_64"), DiagnosticStatus::Warn);
+    host.platform = Platform::DarwinX64;
+    assert_eq!(status(&host, "x86_64"), DiagnosticStatus::Pass);
+    assert_eq!(status(&host, "arm64"), DiagnosticStatus::Warn);
+    host.platform = Platform::LinuxArm64;
+    assert_eq!(status(&host, "aarch64"), DiagnosticStatus::Pass);
+    assert_eq!(status(&host, "riscv64"), DiagnosticStatus::Info);
+    let discovered = evaluate(&report("linux", &[("architecture", "aarch64")]), None);
+    assert_eq!(check(&discovered, "architecture").status, DiagnosticStatus::Info);
+}

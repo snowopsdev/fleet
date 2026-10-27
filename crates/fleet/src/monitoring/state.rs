@@ -220,12 +220,13 @@ impl MachineState {
             state.free = disk.available_bytes;
             state.total = disk.total_bytes;
             let percent = free_percent(disk.available_bytes, disk.total_bytes);
+            let label = disk.label();
             if percent < LOW_DISK_FREE_PERCENT {
                 let since = *state.pending_since.get_or_insert(health.as_of);
                 if health.as_of - since >= DISK_DELAY && state.active_since.is_none() {
                     state.active_since = Some(since);
                     state.announced = !muted;
-                    changes.push(change(Kind::LowDisk, disk_detail(&disk.mount_point, state), !muted));
+                    changes.push(change(Kind::LowDisk, disk_detail(&label, state), !muted));
                 }
             } else {
                 state.pending_since = None;
@@ -234,7 +235,7 @@ impl MachineState {
                 {
                     changes.push(change(
                         Kind::DiskRecovered,
-                        format!("Disk space recovered. {}", disk_detail(&disk.mount_point, state)),
+                        format!("Disk space recovered. {}", disk_detail(&label, state)),
                         state.announced && !muted,
                     ));
                     state.announced = false;
@@ -246,7 +247,7 @@ impl MachineState {
                     Kind::AlertsResumed,
                     format!(
                         "Disk space is still low after maintenance. {}",
-                        disk_detail(&disk.mount_point, state)
+                        disk_detail(&label, state)
                     ),
                     true,
                 ));
@@ -277,16 +278,24 @@ impl MachineState {
         }
         // One disk alert per machine. Keep distinct capacity readings in the detail;
         // shared filesystems (such as macOS System/Data) share a single reading.
-        let mut disk_groups: BTreeMap<(u64, u64), Vec<&str>> = BTreeMap::new();
+        let mut disk_groups: BTreeMap<(u64, u64), Vec<String>> = BTreeMap::new();
         let mut disk_since = None;
         let mut disk_stale = false;
         for (mount, disk) in &self.disks {
             if let Some(since) = disk.active_since {
-                disk_stale |= m.health.as_ref().is_none_or(|h| {
-                    h.stale || !h.disks.iter().any(|d| d.mount_point == *mount) || disk.at != Some(h.as_of)
-                });
+                let current = m
+                    .health
+                    .as_ref()
+                    .and_then(|h| h.disks.iter().find(|d| d.mount_point == *mount));
+                disk_stale |= m
+                    .health
+                    .as_ref()
+                    .is_none_or(|h| h.stale || current.is_none() || disk.at != Some(h.as_of));
                 disk_since = Some(disk_since.map_or(since, |old: DateTime<Utc>| old.min(since)));
-                disk_groups.entry((disk.free, disk.total)).or_default().push(mount);
+                disk_groups
+                    .entry((disk.free, disk.total))
+                    .or_default()
+                    .push(current.map_or_else(|| mount.clone(), crate::machine::DiskStats::label));
             }
         }
         if let Some(since) = disk_since {

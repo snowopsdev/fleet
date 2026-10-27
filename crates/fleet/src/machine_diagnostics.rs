@@ -73,8 +73,9 @@ pub(crate) fn evaluate(report: &MachineReport, host: Option<&Host>) -> Vec<Machi
             "No native power-policy collector is available for this operating system.".into(),
         ),
     }
-    checks.system();
+    checks.system(host);
     if let Some(host) = host.filter(|h| h.runners.iter().any(|r| !r.decommission)) {
+        checks.runner_disk(host);
         checks.runners(host);
     }
     checks.checks
@@ -391,7 +392,7 @@ impl<'a> Checks<'a> {
         );
     }
 
-    fn system(&mut self) {
+    fn system(&mut self, host: Option<&Host>) {
         self.add_fact(
             "ssh-identity",
             System,
@@ -399,13 +400,7 @@ impl<'a> Checks<'a> {
             self.get("identity"),
             "Account used for this read-only inspection.",
         );
-        self.add_fact(
-            "architecture",
-            System,
-            "Architecture",
-            self.get("architecture"),
-            "Architecture reported by the operating system.",
-        );
+        self.architecture(host);
         let disks = &self.report.disks;
         if disks.is_empty() {
             self.add(
@@ -426,7 +421,7 @@ impl<'a> Checks<'a> {
             .map(|d| {
                 format!(
                     "{}: {:.1} GiB free of {:.1} GiB",
-                    d.mount_point,
+                    d.label(),
                     gib(d.available_bytes),
                     gib(d.total_bytes)
                 )
@@ -445,6 +440,87 @@ impl<'a> Checks<'a> {
             if low { Warn } else { Pass },
             &value,
             detail,
+        );
+    }
+
+    /// The architecture the machine reports, compared with its inventory platform.
+    fn architecture(&mut self, host: Option<&Host>) {
+        let reported = self.get("architecture");
+        let Some(host) = host else {
+            self.add_fact(
+                "architecture",
+                System,
+                "Architecture",
+                reported,
+                "Architecture reported by the operating system.",
+            );
+            return;
+        };
+        let arm64 = reported.map(|a| matches!(a.to_ascii_lowercase().as_str(), "arm64" | "aarch64"));
+        let x64 = reported.map(|a| matches!(a.to_ascii_lowercase().as_str(), "x86_64" | "amd64"));
+        let (status, detail) = match (arm64, x64) {
+            (Some(arm64), Some(x64)) if (arm64 && host.platform.is_arm64()) || (x64 && !host.platform.is_arm64()) => {
+                (Pass, format!("Matches the inventory platform {}.", host.platform))
+            }
+            (Some(true), _) | (_, Some(true)) => (
+                Warn,
+                format!(
+                    "The inventory platform is {}, so apply would install the {} runner build. Fix the host's `platform`.",
+                    host.platform,
+                    host.platform.runner_asset()
+                ),
+            ),
+            _ => (
+                if reported.is_some() { Info } else { Unknown },
+                format!(
+                    "Can't compare this architecture with the inventory platform {}.",
+                    host.platform
+                ),
+            ),
+        };
+        self.add(
+            "architecture",
+            System,
+            "Architecture",
+            status,
+            reported.unwrap_or("Unknown"),
+            detail,
+        );
+    }
+
+    /// The filesystem holding the runner root, where every job's `_work` directory grows.
+    fn runner_disk(&mut self, host: &Host) {
+        let Some(disk) = self.report.disks.iter().find(|d| d.runner_root) else {
+            self.add(
+                "runner-disk",
+                Runners,
+                "Runner volume",
+                Unknown,
+                "Unknown",
+                format!("The filesystem holding {} couldn't be read.", host.root),
+            );
+            return;
+        };
+        let percent = free_percent(disk.available_bytes, disk.total_bytes);
+        let low = percent < LOW_DISK_FREE_PERCENT;
+        self.add(
+            "runner-disk",
+            Runners,
+            "Runner volume",
+            if low { Warn } else { Pass },
+            &format!("{percent:.0}% free"),
+            format!(
+                "{} holds {} and each runner's _work directory: {:.1} GiB free of {:.1} GiB.{}",
+                disk.mount_point,
+                host.root,
+                gib(disk.available_bytes),
+                gib(disk.total_bytes),
+                if low {
+                    " Jobs fail when it fills up; clear old workspaces or caches."
+                } else {
+                    ""
+                }
+            ),
         );
     }
 

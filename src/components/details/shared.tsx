@@ -3,7 +3,7 @@ import type { FleetView } from "../../bindings/FleetView";
 import type { HealthView } from "../../bindings/HealthView";
 import type { JobView } from "../../bindings/JobView";
 import type { RunnerView } from "../../bindings/RunnerView";
-import { memoryUsedFraction, primaryDisk, diskUsedFraction } from "../../lib/health";
+import { memoryUsedFraction, primaryDisk, diskUsedFraction, runnerDisk } from "../../lib/health";
 import { useNow } from "../../hooks";
 import { formatBytes, formatClock, formatPercent, timeAgo } from "../../lib/format";
 import { driftText, isBuiltinLabel } from "../../lib/desired";
@@ -119,9 +119,10 @@ export function HealthMeters({ h }: { h: HealthView }) {
   const now = useNow();
   const memUsed = memoryUsedFraction(h);
   const disk = primaryDisk(h);
+  const runners = runnerDisk(h);
   const asOf = h.stale && <span className="shrink-0 text-[11px] text-warn">as of {timeAgo(h.asOf, now)}</span>;
   return (
-    <StatStrip cols={3}>
+    <StatStrip cols={runners ? 4 : 3}>
       <Stat
         label="CPU"
         aside={asOf}
@@ -149,6 +150,17 @@ export function HealthMeters({ h }: { h: HealthView }) {
       >
         <MeterSlot fraction={diskUsedFraction(disk)} stale={h.stale} />
       </Stat>
+      {runners && (
+        <Stat
+          label="Runner disk free"
+          aside={asOf}
+          stale={h.stale}
+          value={formatBytes(runners.availableBytes)}
+          sub={`of ${formatBytes(runners.totalBytes)} on ${runners.mountPoint}`}
+        >
+          <MeterSlot fraction={diskUsedFraction(runners)} stale={h.stale} />
+        </Stat>
+      )}
     </StatStrip>
   );
 }

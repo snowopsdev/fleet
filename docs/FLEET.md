@@ -129,6 +129,11 @@ macOS/Linux: ~/gh-runners/acme/runner-01
 Windows:     C:\gh-runners\acme\runner-01
 ```
 
+To keep runner workspaces on another volume, such as an external SSD on a Mac mini, make
+`~/gh-runners` a symlink to a directory on it. The machine's health then shows the runner
+volume's free space, its diagnostics include a **Runner volume** check, and low-disk alerts
+cover it like the system disk.
+
 ## Using the app
 
 Machines come from the tailnet. Each inventory host is matched to its tailnet machine (as

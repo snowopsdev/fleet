@@ -191,11 +191,22 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
                 runners.insert(old.name.clone(), local.clone());
             }
         }
+        let mut report = report(os, cpu, memory, disk, runners);
+        if id == "studio" {
+            // Runner workspaces live on an external SSD.
+            report.disks[0].runner_root = false;
+            report.disks.push(DiskStats {
+                mount_point: "/Volumes/Builds".into(),
+                total_bytes: 2_000_000_000_000,
+                available_bytes: 380_000_000_000,
+                runner_root: true,
+            });
+        }
         obs.machines.insert(
             inventory_machine_key(id),
             MachineObservation {
                 target: MachineTarget::Inventory(host.clone()),
-                report: Some(Timed::new(ago(age), report(os, cpu, memory, disk, runners))),
+                report: Some(Timed::new(ago(age), report)),
                 last_error: error.map(|message| Timed::new(ago(5), message.into())),
             },
         );
@@ -320,6 +331,7 @@ fn report(
             },
             total_bytes: disk_gb.0 * GB,
             available_bytes: disk_gb.1 * GB,
+            runner_root: true,
         }],
         runners,
         warnings: vec![],

@@ -22,7 +22,11 @@ run off the async runtime, with a 30-second timeout per machine.
 `machine.rs` combines the native health script with the inventory runner probe in one SSH
 session. macOS uses sysctl, vm_stat, top and df; Linux uses procfs and df; Windows uses CIM.
 An unavailable metric remains null. Truncated responses, invalid numbers and incomplete runner
-lists fail the read. The runner probe checks only declared and legacy paths and native service
+lists fail the read. Besides `/` and the home volume (every fixed drive on Windows), it reports
+the filesystem holding an inventory host's runner `root`, or the root's nearest existing
+parent, which is often an external volume; the root travels quoted in the script, with `~`
+expanded on the machine. Filesystems are deduplicated by mount point, and the runner root's
+is marked, checked as the runner volume and named in low-disk alerts. The runner probe checks only declared and legacy paths and native service
 state. No runner credential files are read.
 
 The same SSH session includes native machine diagnostics. `machine_diagnostics.rs` interprets
