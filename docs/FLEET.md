@@ -96,6 +96,7 @@ group every runner registers into. Each `[[hosts]]` entry is one machine:
 | `enabled` | `false` leaves the host out of checks and changes. Defaults to `true`. |
 | `xcode` | macOS only, optional: Xcode versions jobs expect, such as `["26.1"]`. See [Xcode and simulators](#xcode-and-simulators). |
 | `simulator_runtimes` | macOS only, optional: simulator runtimes jobs expect, such as `["iOS 26.0"]`. |
+| `mac_address`, `wake_via` | Optional, together: the address to wake with Wake-on-LAN and the host on the same network that sends the packet. See [Wake a sleeping machine](#wake-a-sleeping-machine). |
 | `runners` | At least one runner. |
 
 A runner takes `name`, unique across the inventory, and `directory`, one path component below
@@ -327,6 +328,26 @@ are verified. Don't also enable `services.github-runners` for inventory runners.
    ```
 
 3. In the app: **Check now**, then **Run checks** for the new host, then **Review apply…**.
+
+## Wake a sleeping machine
+
+A machine that sleeps or powers off drops off the tailnet, so nothing can reach it directly.
+If its network card supports Wake-on-LAN, declare its address and another inventory host on
+the same network:
+
+```toml
+mac_address = "02:00:5e:10:00:01"  # six hex pairs, ':' or '-'
+wake_via = "studio"                # another [[hosts]] id
+```
+
+When the machine is offline, its pane offers **Wake…**. The review shows the address, the
+sending host and the broadcast address (`255.255.255.255:9`); it's blocked unless the sending
+host is online on the tailnet and the machine isn't. Sending re-reads the inventory and the
+tailnet, then runs a small script on the sending host over SSH: python3, or perl, broadcasts
+one magic packet (a bash `/dev/udp` redirect can't broadcast); Windows hosts use .NET's
+`UdpClient`. Only the validated address reaches the script, as twelve hex digits. The machine's
+history records the wake. Enable Wake-on-LAN on the machine itself first (on macOS, **Wake for
+network access**, reported by diagnostics); a packet doesn't prove the machine woke.
 
 ## Replace and retire a runner
 

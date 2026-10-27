@@ -10,6 +10,7 @@ import type { FleetMachineEvent } from "../bindings/FleetMachineEvent";
 import type { ChangeRequest } from "../bindings/ChangeRequest";
 import type { ChangeSecrets } from "../bindings/ChangeSecrets";
 import type { ReviewView } from "../bindings/ReviewView";
+import type { FleetWakeReview } from "../bindings/FleetWakeReview";
 import type { GhStatus } from "../bindings/GhStatus";
 import type { AccountKind } from "../bindings/AccountKind";
 import type { OrgAuth } from "../bindings/OrgAuth";
@@ -75,6 +76,9 @@ export const commands = {
   desiredExecute: (reviewId: string, secrets: ChangeSecrets, confirmation: string | null) =>
     invoke<void>("desired_execute", { reviewId, secrets, confirmation }),
   desiredDismissOperation: () => invoke<void>("desired_dismiss_operation"),
+  // Wake-on-LAN: reviewed first, then sent once from the machine's wake_via host.
+  wakeReview: (id: string) => invoke<FleetWakeReview>("wake_review", { id }),
+  wakeExecute: (reviewId: string) => invoke<string>("wake_execute", { reviewId }),
 
   // Local read-only API for agents
   getLocalApiStatus: (): Promise<LocalApiStatus> =>

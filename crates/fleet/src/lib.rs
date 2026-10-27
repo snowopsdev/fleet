@@ -33,6 +33,7 @@ pub mod ssh_reuse;
 pub mod sync;
 pub mod tailscale;
 pub mod view_updates;
+pub mod wake;
 
 #[cfg(test)]
 mod derive_tests;

@@ -188,6 +188,8 @@ pub fn run() {
             commands::desired_doctor,
             commands::desired_logs,
             commands::desired_review,
+            commands::wake_review,
+            commands::wake_execute,
             commands::desired_execute,
             commands::desired_dismiss_operation,
         ])

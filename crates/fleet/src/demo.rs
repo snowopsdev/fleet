@@ -44,6 +44,7 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         peer("nLinux", "build-linux-01", "linux", true, None),
         peer("nWin", "win-builder", "windows", false, Some(ago(3 * 3600))),
         peer("nNew", "mac-mini-03", "macOS", true, None),
+        peer("nPi", "pi-01", "linux", true, None),
         peer("nSpare", "spare-ubuntu", "linux", true, None),
         peer("nLaptop", "dev-laptop", "macOS", true, None),
         peer("nNas", "home-nas", "linux", true, None),
@@ -60,6 +61,19 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
             ..gh(301, "linux-01-a", false, &["self-hosted", "Linux", "X64", "docker"])
         },
         gh(302, "linux-01-b", false, &["self-hosted", "Linux", "X64", "docker"]),
+        gh(
+            601,
+            "pi-01-a",
+            false,
+            &[
+                "self-hosted",
+                "Linux",
+                "ARM64",
+                "fleet",
+                "linux-experimental",
+                "raspberry-pi",
+            ],
+        ),
         offline(gh(401, "win-builder", false, &["self-hosted", "Windows", "X64"])),
         // Registered to the acme-demo/ml repository rather than the organization, in a
         // runner group open to public repositories.
@@ -214,6 +228,7 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
             360,
             Some("SSH connection timed out."),
         ),
+        ("pi-01", OsFamily::Linux, 22.0, (8, 5), (128, 71), 8, None),
         (
             "win-builder",
             OsFamily::Windows,
@@ -242,6 +257,11 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
             }
         }
         let mut report = report(os, cpu, memory, disk, runners);
+        if id == "pi-01" {
+            report.os_version = Some("Debian GNU/Linux 13 (trixie)".into());
+            report.logical_cores = Some(4);
+            report.diagnostics.insert("architecture".into(), "aarch64".into());
+        }
         if id == "studio" {
             // Runner workspaces live on an external SSD.
             report.disks[0].runner_root = false;

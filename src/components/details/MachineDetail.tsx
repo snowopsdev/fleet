@@ -22,6 +22,7 @@ import { MachineMonitoring } from "./Monitoring";
 import { RunnerChecks } from "./RunnerChecks";
 import { RunnerTable } from "./RunnerTable";
 import { CopyValue } from "../CopyValue";
+import { WakeMachine } from "./WakeCard";
 
 const OS_NAME = { macos: "macOS", linux: "Linux", windows: "Windows", other: "Other" } as const;
 
@@ -66,6 +67,7 @@ export function MachineDetail({ machine: m, view }: { machine: MachineView; view
       {d && <MachineChanges d={d} change={change} live={live && !busy} />}
       <ChangePanel change={change} busy={busy} />
       <ConnectionNotice m={m} />
+      <WakeMachine key={`${view.source}:${m.id}`} machine={m} live={live} />
       <MachineMonitoring key={`${view.source}:${m.id}`} machine={m} view={view} />
       <MachineDiagnostics machine={m} />
 

@@ -43,7 +43,7 @@ async fn index_and_reads() {
     assert_eq!(body["source"], "demo");
 
     let (_, body) = call(&e, get("/v1/summary")).await;
-    assert_eq!(body["summary"]["machines"], 5);
+    assert_eq!(body["summary"]["machines"], 6);
 
     let (_, body) = call(&e, get("/v1/machines/studio")).await;
     assert_eq!(body["displayName"], "studio");
@@ -51,7 +51,7 @@ async fn index_and_reads() {
     let (_, body) = call(&e, get("/v1/runners")).await;
     let runners = body["runners"].as_array().unwrap();
     // Inventory runners, a retained legacy runner, and one hosted pool runner.
-    assert_eq!(runners.len(), 9);
+    assert_eq!(runners.len(), 10);
     assert!(
         runners
             .iter()
@@ -254,10 +254,10 @@ fn runner_keys_precede_names_and_org_disambiguates_names() {
 async fn metadata_scopes_filters_and_host_plans_are_complete() {
     let (_dir, engine) = engine(true);
     let (_, all) = call(&engine, get("/v1/machines")).await;
-    assert_eq!(all["machines"].as_array().unwrap().len(), 7);
+    assert_eq!(all["machines"].as_array().unwrap().len(), 8);
     let (_, fleet) = call(&engine, get("/v1/machines?scope=fleet")).await;
     let (_, others) = call(&engine, get("/v1/machines?scope=discovered")).await;
-    assert_eq!((fleet["total"].as_u64(), others["total"].as_u64()), (Some(5), Some(2)));
+    assert_eq!((fleet["total"].as_u64(), others["total"].as_u64()), (Some(6), Some(2)));
     for path in [
         "/v1/machines/inv:studio",
         "/v1/runners/gh:acme-demo:101",

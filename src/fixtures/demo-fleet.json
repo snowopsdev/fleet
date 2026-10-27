@@ -2,10 +2,10 @@
   "generatedAt": "2026-10-03T12:00:00Z",
   "source": "demo",
   "summary": {
-    "machines": 5,
-    "machinesConnected": 2,
-    "runners": 9,
-    "runnersOnline": 6,
+    "machines": 6,
+    "machinesConnected": 3,
+    "runners": 10,
+    "runnersOnline": 7,
     "runnersBusy": 2,
     "runnersOffline": 1,
     "runnersUnknown": 2,
@@ -508,7 +508,9 @@
           "enabled": true,
           "sshTransport": "tailscale",
           "xcode": [],
-          "simulatorRuntimes": []
+          "simulatorRuntimes": [],
+          "macAddress": null,
+          "wakeVia": null
         },
         "plan": [
           {
@@ -791,7 +793,7 @@
         ],
         "events": [
           {
-            "id": "00000000000000000010",
+            "id": "00000000000000000011",
             "machineKey": "inv:mac-mini-02",
             "machineName": "mac-mini-02",
             "at": "2026-10-03T11:48:00Z",
@@ -931,7 +933,9 @@
           ],
           "simulatorRuntimes": [
             "iOS 26.0"
-          ]
+          ],
+          "macAddress": null,
+          "wakeVia": null
         },
         "plan": [
           {
@@ -1075,7 +1079,9 @@
           "enabled": true,
           "sshTransport": "openssh",
           "xcode": [],
-          "simulatorRuntimes": []
+          "simulatorRuntimes": [],
+          "macAddress": null,
+          "wakeVia": null
         },
         "plan": [
           {
@@ -1091,6 +1097,304 @@
         "pendingChanges": 0,
         "error": "SSH permission denied. Check the host's SSH login and tailnet access.",
         "checkedAt": "2026-10-03T11:56:00Z",
+        "checks": [],
+        "checksAt": null
+      }
+    },
+    {
+      "id": "ts:nPi",
+      "displayName": "pi-01",
+      "description": null,
+      "host": "builder@pi-01.demo.ts.net",
+      "os": "linux",
+      "osVersion": "Debian GNU/Linux 13 (trixie)",
+      "tailnet": {
+        "nodeId": "nPi",
+        "hostname": "pi-01",
+        "dnsName": "pi-01.demo.ts.net",
+        "os": "linux",
+        "ips": [
+          "100.64.0.0"
+        ],
+        "online": true,
+        "lastSeen": null,
+        "tags": [],
+        "sshHostKeys": [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDemoHostKeyForPreviewOnly"
+        ]
+      },
+      "connection": {
+        "kind": "connected",
+        "checkedAt": "2026-10-03T11:59:52Z"
+      },
+      "health": {
+        "asOf": "2026-10-03T11:59:52Z",
+        "stale": false,
+        "cpuPercent": 22.0,
+        "loadAverage": [
+          2.2,
+          1.8333333333333333,
+          1.5714285714285714
+        ],
+        "logicalCores": 4,
+        "memoryTotalBytes": 8000000000,
+        "memoryAvailableBytes": 5000000000,
+        "disks": [
+          {
+            "mountPoint": "/",
+            "totalBytes": 128000000000,
+            "availableBytes": 71000000000,
+            "runnerRoot": true
+          }
+        ],
+        "uptimeSecs": 792000,
+        "bootId": "demo-boot-session"
+      },
+      "diagnostics": {
+        "asOf": "2026-10-03T11:59:52Z",
+        "stale": false,
+        "checks": [
+          {
+            "id": "tailscale-install",
+            "group": "network",
+            "title": "Tailscale installation",
+            "status": "info",
+            "value": "CLI + daemon",
+            "detail": "CLI: /usr/local/bin/tailscale. GUI installations can also include a CLI."
+          },
+          {
+            "id": "tailscale-version",
+            "group": "network",
+            "title": "Tailscale version",
+            "status": "info",
+            "value": "1.90.0",
+            "detail": "Version reported by the local Tailscale daemon."
+          },
+          {
+            "id": "tailscale-state",
+            "group": "network",
+            "title": "Tailscale connection",
+            "status": "pass",
+            "value": "Running",
+            "detail": "Local daemon state from tailscale status."
+          },
+          {
+            "id": "tailscale-ssh",
+            "group": "network",
+            "title": "Tailscale SSH",
+            "status": "pass",
+            "value": "Enabled",
+            "detail": "The local RunSSH preference is enabled. Tailnet access rules still control who can connect."
+          },
+          {
+            "id": "tailscale-startup",
+            "group": "network",
+            "title": "Tailscale startup",
+            "status": "pass",
+            "value": "Starts at boot",
+            "detail": "Native service startup: enabled."
+          },
+          {
+            "id": "power-sleep",
+            "group": "power",
+            "title": "System sleep protection",
+            "status": "pass",
+            "value": "Blocked by systemd",
+            "detail": "sleep: masked; suspend: unknown; hibernate: unknown; hybrid-sleep: unknown; suspend-then-hibernate: unknown. Unmasked targets do not prove automatic sleep is enabled; desktop and logind policies can differ."
+          },
+          {
+            "id": "power-idle",
+            "group": "power",
+            "title": "Logind idle action",
+            "status": "pass",
+            "value": "ignore",
+            "detail": "Configuration on disk, including drop-ins. A desktop environment can have a separate policy; changes may need a service reload."
+          },
+          {
+            "id": "ssh-identity",
+            "group": "system",
+            "title": "SSH account",
+            "status": "info",
+            "value": "ci",
+            "detail": "Account used for this read-only inspection."
+          },
+          {
+            "id": "architecture",
+            "group": "system",
+            "title": "Architecture",
+            "status": "pass",
+            "value": "aarch64",
+            "detail": "Matches the inventory platform linux-arm64."
+          },
+          {
+            "id": "runner-disk",
+            "group": "runners",
+            "title": "Runner volume",
+            "status": "pass",
+            "value": "55% free",
+            "detail": "/ holds ~/gh-runners/acme-demo and each runner's _work directory: 66.1 GiB free of 119.2 GiB."
+          },
+          {
+            "id": "runner-startup",
+            "group": "runners",
+            "title": "Runner startup",
+            "status": "info",
+            "value": "System services",
+            "detail": "The inventory configures runners as native system services. Service state is checked separately below."
+          },
+          {
+            "id": "runner:pi-01-a",
+            "group": "runners",
+            "title": "pi-01-a",
+            "status": "pass",
+            "value": "Running",
+            "detail": "Service: active · version: 2.329.0 · ~/gh-runners/acme-demo/runner-01"
+          }
+        ]
+      },
+      "monitoring": {
+        "machineKey": "inv:pi-01",
+        "maintenanceUntil": null,
+        "alerts": [],
+        "events": [
+          {
+            "id": "00000000000000000004",
+            "machineKey": "inv:pi-01",
+            "machineName": "pi-01",
+            "at": "2026-10-03T10:00:00Z",
+            "kind": "monitoringStarted",
+            "detail": "Started observing this machine. Earlier events are not known."
+          }
+        ]
+      },
+      "runners": [
+        {
+          "key": "gh:acme-demo:601",
+          "name": "pi-01-a",
+          "org": "acme-demo",
+          "machineId": "ts:nPi",
+          "installed": "yes",
+          "connected": "yes",
+          "activity": {
+            "kind": "idle"
+          },
+          "github": {
+            "id": 601,
+            "status": "online",
+            "busy": false,
+            "labels": [
+              "self-hosted",
+              "Linux",
+              "ARM64",
+              "fleet",
+              "linux-experimental",
+              "raspberry-pi"
+            ],
+            "os": "Linux",
+            "version": "2.329.0",
+            "ephemeral": false,
+            "repo": null,
+            "asOf": "2026-10-03T11:59:51Z",
+            "stale": false
+          },
+          "local": {
+            "installDir": "~/gh-runners/acme-demo/runner-01",
+            "configured": true,
+            "serviceState": "active",
+            "version": "2.329.0",
+            "asOf": "2026-10-03T11:59:52Z",
+            "stale": false
+          },
+          "currentJob": null,
+          "warnings": [],
+          "desired": {
+            "hostId": "pi-01",
+            "role": {
+              "kind": "declared"
+            },
+            "desiredLabels": [
+              "fleet",
+              "linux-experimental",
+              "raspberry-pi"
+            ],
+            "status": {
+              "runner": "pi-01-a",
+              "host": "pi-01",
+              "githubState": "online",
+              "serviceState": "active",
+              "busy": false,
+              "version": "2.329.0",
+              "drift": "in sync",
+              "desired": true
+            },
+            "plan": [
+              {
+                "action": "no-change",
+                "apply": false,
+                "host": "pi-01",
+                "runner": "pi-01-a",
+                "reason": "desired state is satisfied",
+                "command": null,
+                "blocked": false
+              }
+            ]
+          },
+          "versionStatus": {
+            "current": "2.329.0",
+            "latest": "2.329.0",
+            "latestPublishedAt": "2026-09-21T12:00:00Z",
+            "updateAvailable": false,
+            "minorVersionsBehind": 0,
+            "overdue": false
+          }
+        }
+      ],
+      "warnings": [],
+      "desired": {
+        "host": {
+          "id": "pi-01",
+          "platform": "linux-arm64",
+          "sshTarget": "builder@pi-01.demo.ts.net",
+          "sshSetting": "builder@pi-01.demo.ts.net",
+          "root": "~/gh-runners/acme-demo",
+          "serviceMode": "systemd",
+          "labels": [
+            "fleet",
+            "linux-experimental",
+            "raspberry-pi"
+          ],
+          "runners": [
+            {
+              "name": "pi-01-a",
+              "directory": "runner-01",
+              "labels": [],
+              "excludeLabels": [],
+              "replaces": null,
+              "decommission": false
+            }
+          ],
+          "serviceAccount": null,
+          "enabled": true,
+          "sshTransport": "tailscale",
+          "xcode": [],
+          "simulatorRuntimes": [],
+          "macAddress": null,
+          "wakeVia": null
+        },
+        "plan": [
+          {
+            "action": "no-change",
+            "apply": false,
+            "host": "pi-01",
+            "runner": "pi-01-a",
+            "reason": "desired state is satisfied",
+            "command": null,
+            "blocked": false
+          }
+        ],
+        "pendingChanges": 0,
+        "error": null,
+        "checkedAt": "2026-10-03T11:59:52Z",
         "checks": [],
         "checksAt": null
       }
@@ -1352,7 +1656,7 @@
         "alerts": [],
         "events": [
           {
-            "id": "00000000000000000009",
+            "id": "00000000000000000010",
             "machineKey": "inv:studio",
             "machineName": "studio",
             "at": "2026-10-03T11:23:00Z",
@@ -1360,7 +1664,7 @@
             "detail": "studio-1: inactive → running."
           },
           {
-            "id": "00000000000000000008",
+            "id": "00000000000000000009",
             "machineKey": "inv:studio",
             "machineName": "studio",
             "at": "2026-10-03T11:22:00Z",
@@ -1368,7 +1672,7 @@
             "detail": "A different operating-system boot session was observed."
           },
           {
-            "id": "00000000000000000004",
+            "id": "00000000000000000005",
             "machineKey": "inv:studio",
             "machineName": "studio",
             "at": "2026-10-03T10:00:00Z",
@@ -1667,7 +1971,9 @@
           "xcode": [
             "26.1"
           ],
-          "simulatorRuntimes": []
+          "simulatorRuntimes": [],
+          "macAddress": null,
+          "wakeVia": null
         },
         "plan": [
           {
@@ -1892,7 +2198,7 @@
         "alerts": [],
         "events": [
           {
-            "id": "00000000000000000005",
+            "id": "00000000000000000006",
             "machineKey": "inv:win-builder",
             "machineName": "win-builder",
             "at": "2026-10-03T10:00:00Z",
@@ -1999,7 +2305,9 @@
           "enabled": true,
           "sshTransport": "openssh",
           "xcode": [],
-          "simulatorRuntimes": []
+          "simulatorRuntimes": [],
+          "macAddress": "02:00:5e:10:00:42",
+          "wakeVia": "build-linux-01"
         },
         "plan": [
           {
@@ -2052,7 +2360,7 @@
         "alerts": [],
         "events": [
           {
-            "id": "00000000000000000006",
+            "id": "00000000000000000007",
             "machineKey": "ts:nLaptop",
             "machineName": "dev-laptop",
             "at": "2026-10-03T10:00:00Z",
@@ -2098,7 +2406,7 @@
         "alerts": [],
         "events": [
           {
-            "id": "00000000000000000007",
+            "id": "00000000000000000008",
             "machineKey": "ts:nSpare",
             "machineName": "spare-ubuntu",
             "at": "2026-10-03T10:00:00Z",
@@ -2304,7 +2612,7 @@
     ],
     "events": [
       {
-        "id": "00000000000000000010",
+        "id": "00000000000000000011",
         "machineKey": "inv:mac-mini-02",
         "machineName": "mac-mini-02",
         "at": "2026-10-03T11:48:00Z",
@@ -2312,7 +2620,7 @@
         "detail": "/: 5.7% free (13.0 GiB of 228.2 GiB)."
       },
       {
-        "id": "00000000000000000009",
+        "id": "00000000000000000010",
         "machineKey": "inv:studio",
         "machineName": "studio",
         "at": "2026-10-03T11:23:00Z",
@@ -2320,7 +2628,7 @@
         "detail": "studio-1: inactive → running."
       },
       {
-        "id": "00000000000000000008",
+        "id": "00000000000000000009",
         "machineKey": "inv:studio",
         "machineName": "studio",
         "at": "2026-10-03T11:22:00Z",
@@ -2328,7 +2636,7 @@
         "detail": "A different operating-system boot session was observed."
       },
       {
-        "id": "00000000000000000007",
+        "id": "00000000000000000008",
         "machineKey": "ts:nSpare",
         "machineName": "spare-ubuntu",
         "at": "2026-10-03T10:00:00Z",
@@ -2336,7 +2644,7 @@
         "detail": "Started observing this machine. Earlier events are not known."
       },
       {
-        "id": "00000000000000000006",
+        "id": "00000000000000000007",
         "machineKey": "ts:nLaptop",
         "machineName": "dev-laptop",
         "at": "2026-10-03T10:00:00Z",
@@ -2344,7 +2652,7 @@
         "detail": "Started observing this machine. Earlier events are not known."
       },
       {
-        "id": "00000000000000000005",
+        "id": "00000000000000000006",
         "machineKey": "inv:win-builder",
         "machineName": "win-builder",
         "at": "2026-10-03T10:00:00Z",
@@ -2352,9 +2660,17 @@
         "detail": "Started observing this machine. Earlier events are not known."
       },
       {
-        "id": "00000000000000000004",
+        "id": "00000000000000000005",
         "machineKey": "inv:studio",
         "machineName": "studio",
+        "at": "2026-10-03T10:00:00Z",
+        "kind": "monitoringStarted",
+        "detail": "Started observing this machine. Earlier events are not known."
+      },
+      {
+        "id": "00000000000000000004",
+        "machineKey": "inv:pi-01",
+        "machineName": "pi-01",
         "at": "2026-10-03T10:00:00Z",
         "kind": "monitoringStarted",
         "detail": "Started observing this machine. Earlier events are not known."

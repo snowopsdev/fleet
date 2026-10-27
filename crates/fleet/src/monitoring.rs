@@ -28,6 +28,8 @@ pub enum FleetEventKind {
     MaintenanceStarted,
     MaintenanceEnded,
     AlertsResumed,
+    /// A Wake-on-LAN magic packet was sent after a review.
+    WakeRequested,
 }
 
 /// A timestamped observation, not a claim about events between polling samples.

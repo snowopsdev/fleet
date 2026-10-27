@@ -95,6 +95,9 @@ ssh = "intel-mac"
 root = "~/gh-runners/acme"
 service_mode = "launchagent"
 labels = ["fleet", "macos-build", "host-intel-mac"]
+# Optional Wake-on-LAN: the studio, on the same network, sends the magic packet.
+mac_address = "02:00:5e:10:00:01"
+wake_via = "studio"
 runners = [{ name = "intel-mac-01", directory = "runner-01" }]
 
 [[hosts]]

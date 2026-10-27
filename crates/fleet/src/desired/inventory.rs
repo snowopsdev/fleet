@@ -92,6 +92,14 @@ fn strings(data: &toml::Table, key: &str) -> Result<Vec<String>> {
     }
 }
 
+fn optional_string(data: &toml::Table, key: &str) -> Result<Option<String>> {
+    match data.get(key) {
+        None => Ok(None),
+        Some(Value::String(s)) if !s.trim().is_empty() => Ok(Some(s.trim().to_string())),
+        Some(_) => err(format!("{key} must be a non-empty string")),
+    }
+}
+
 fn resolve_ssh(value: &str, environ: &HashMap<String, String>) -> (Option<String>, String) {
     let setting = value.trim().to_string();
     if let Some(name) = env_reference(&setting) {
@@ -182,9 +190,20 @@ fn parse_host(raw: &Value, environ: &HashMap<String, String>) -> Result<Host> {
     let service_mode = ServiceMode::parse(&service_mode).ok_or_else(|| service_mode_error(&id, platform))?;
     let xcode = strings(data, "xcode")?;
     let simulator_runtimes = strings(data, "simulator_runtimes")?;
+    let mac_address = match optional_string(data, "mac_address")? {
+        Some(mac) => Some(
+            mac.parse::<crate::wake::MacAddress>()
+                .map_err(|e| InventoryError(format!("{id}: {e}")))?
+                .to_string(),
+        ),
+        None => None,
+    };
+    let wake_via = optional_string(data, "wake_via")?;
     Ok(Host {
         xcode,
         simulator_runtimes,
+        mac_address,
+        wake_via,
         id,
         platform,
         ssh_target,
@@ -237,6 +256,7 @@ fn validate_inventory(inventory: &Inventory) -> Result<()> {
     }
     let mut declared = Declared::default();
     for host in &inventory.hosts {
+        validate_wake(inventory, host)?;
         validate_host(host, &mut declared)?;
         for runner in &host.runners {
             validate_runner(host, runner, &mut declared)?;
@@ -291,6 +311,19 @@ fn validate_host<'a>(host: &'a Host, declared: &mut Declared<'a>) -> Result<()> 
         ));
     }
     Ok(())
+}
+
+/// Wake-on-LAN needs both the address and another inventory host to send from.
+fn validate_wake(inventory: &Inventory, host: &Host) -> Result<()> {
+    match (&host.mac_address, &host.wake_via) {
+        (None, None) => Ok(()),
+        (Some(_), Some(via)) if via == &host.id => err(format!("{}: wake_via must name another host", host.id)),
+        (Some(_), Some(via)) if !inventory.hosts.iter().any(|h| &h.id == via) => {
+            err(format!("{}: wake_via names an unknown host: {}", host.id, repr(via)))
+        }
+        (Some(_), Some(_)) => Ok(()),
+        _ => err(format!("{}: mac_address and wake_via go together", host.id)),
+    }
 }
 
 /// `26`, `26.1` or `26.1.1`.

@@ -20,4 +20,13 @@ xcode: Array<string>,
 /**
  * macOS only: simulator runtimes jobs expect, such as `iOS 26.0`. Not in Runner Fleet.
  */
-simulatorRuntimes: Array<string>, };
+simulatorRuntimes: Array<string>, 
+/**
+ * The network interface to wake with Wake-on-LAN, normalized to `aa:bb:cc:dd:ee:ff`.
+ * Not in Runner Fleet.
+ */
+macAddress: string | null, 
+/**
+ * The inventory host on the same network that sends the magic packet. Not in Runner Fleet.
+ */
+wakeVia: string | null, };

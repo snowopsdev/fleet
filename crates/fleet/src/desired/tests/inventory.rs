@@ -191,6 +191,53 @@ fn macos_hosts_can_declare_xcode_versions_and_simulator_runtimes() {
 }
 
 #[test]
+fn wake_on_lan_needs_a_valid_address_and_another_host_to_send_from() {
+    let relay = base()
+        .replace("id = \"test\"", "id = \"relay\"")
+        .replace("test-host", "relay-host")
+        .replace("test-01", "relay-01");
+    let relay = &relay[relay.find("[[hosts]]").unwrap()..];
+    let with = |fields: &str| {
+        format!(
+            "{}{relay}",
+            base().replace(
+                "service_mode = \"launchagent\"",
+                &format!("service_mode = \"launchagent\"\n{fields}")
+            )
+        )
+    };
+    let host = load(&with("mac_address = \"AA-BB-CC-00-11-22\"\nwake_via = \"relay\""))
+        .unwrap()
+        .hosts
+        .remove(0);
+    assert_eq!(
+        (host.mac_address.as_deref(), host.wake_via.as_deref()),
+        (Some("aa:bb:cc:00:11:22"), Some("relay"))
+    );
+    for (fields, message) in [
+        (
+            "mac_address = \"aa:bb:cc:00:11\"\nwake_via = \"relay\"",
+            "test: invalid mac_address: 'aa:bb:cc:00:11' (use six pairs of hex digits, like 'aa:bb:cc:dd:ee:ff')",
+        ),
+        (
+            "mac_address = \"aa:bb:cc:00:11:22\"",
+            "test: mac_address and wake_via go together",
+        ),
+        ("wake_via = \"relay\"", "test: mac_address and wake_via go together"),
+        (
+            "mac_address = \"aa:bb:cc:00:11:22\"\nwake_via = \"test\"",
+            "test: wake_via must name another host",
+        ),
+        (
+            "mac_address = \"aa:bb:cc:00:11:22\"\nwake_via = \"nowhere\"",
+            "test: wake_via names an unknown host: 'nowhere'",
+        ),
+    ] {
+        assert_eq!(load_err(&with(fields)), message, "{fields}");
+    }
+}
+
+#[test]
 fn linux_host_requires_exactly_one_workload_class() {
     let linux = base()
         .replace("platform = \"darwin-arm64\"", "platform = \"linux-x64\"")

@@ -120,6 +120,10 @@ pub struct MachineReport {
 
 /// What a machine check connects to.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one target per machine per poll; boxing the host would only add indirection"
+)]
 pub enum MachineTarget {
     /// An inventory host: its runners are probed at their exact paths.
     Inventory(Host),

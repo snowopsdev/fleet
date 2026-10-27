@@ -42,6 +42,8 @@ pub struct Engine {
     machine_source: Arc<dyn crate::machine::MachineSource>,
     /// Where shared SSH connections keep their sockets, when the setting is on.
     ssh_control_dir: PathBuf,
+    wake_sender: Arc<dyn crate::wake::WakeSender>,
+    wake_reviews: Mutex<waking::WakeReviews>,
     machine_poll: tokio::sync::Mutex<()>,
     desired_refresh_gate: tokio::sync::Mutex<()>,
     doctor_gate: tokio::sync::Mutex<()>,
@@ -67,8 +69,11 @@ mod monitoring;
 mod orgs;
 #[path = "engine_secrets.rs"]
 mod secrets;
+#[path = "engine_wake.rs"]
+mod waking;
 pub use orgs::AccountSetup;
 pub use secrets::{MemorySecrets, SecretStore};
+pub use waking::WakeReview;
 
 impl Engine {
     pub fn load(config_path: impl Into<PathBuf>, secrets: Arc<dyn SecretStore>) -> Result<Self, EngineError> {
@@ -92,6 +97,8 @@ impl Engine {
             desired_io: desired::DesiredIo::default(),
             machine_source: Arc::new(crate::machine::remote_client()),
             ssh_control_dir: crate::ssh_reuse::ControlDir::default_path(),
+            wake_sender: Arc::new(crate::machine::remote_client()),
+            wake_reviews: Mutex::default(),
             machine_poll: tokio::sync::Mutex::new(()),
             desired_refresh_gate: tokio::sync::Mutex::new(()),
             doctor_gate: tokio::sync::Mutex::new(()),

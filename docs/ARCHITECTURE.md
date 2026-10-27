@@ -191,3 +191,6 @@ script on SSH stdin.
   [the parity script](FLEET.md#parity-with-runner-fleet).
 - **Demo:** `demo_desired.rs` is a fictional inventory and snapshot run through the same view
   builder.
+- **Wake-on-LAN (`engine_wake.rs`, `wake.rs`):** like a change, a wake is reviewed first and
+  single-use; sending re-reads the inventory and the view and refuses if the address, the
+  `wake_via` host or their tailnet state changed. `WakeSender` is the boundary tests fake.

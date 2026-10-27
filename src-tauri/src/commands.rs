@@ -206,6 +206,20 @@ pub async fn desired_logs(engine: EngineState<'_>, runner: String, lines: u32) -
     Ok(engine.desired_logs(runner, lines).await?)
 }
 
+/// Read-only: what waking an offline machine with Wake-on-LAN would do.
+#[tauri::command]
+pub async fn wake_review(engine: EngineState<'_>, id: String) -> Result<fleet::engine::WakeReview> {
+    Ok(engine.wake_review(&id).await?)
+}
+
+/// Sends a reviewed wake packet from the machine's `wake_via` host.
+#[tauri::command]
+pub async fn wake_execute(app: AppHandle, engine: EngineState<'_>, review_id: String) -> Result<String> {
+    let message = engine.wake_execute(&review_id).await?;
+    emit_view(&app, &engine);
+    Ok(message)
+}
+
 #[tauri::command]
 pub async fn desired_review(engine: EngineState<'_>, request: ChangeRequest) -> Result<ReviewView> {
     Ok(engine.inner().desired_review(request).await?)

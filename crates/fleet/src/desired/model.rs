@@ -233,6 +233,13 @@ pub struct Host {
     /// macOS only: simulator runtimes jobs expect, such as `iOS 26.0`. Not in Runner Fleet.
     #[serde(default)]
     pub simulator_runtimes: Vec<String>,
+    /// The network interface to wake with Wake-on-LAN, normalized to `aa:bb:cc:dd:ee:ff`.
+    /// Not in Runner Fleet.
+    #[serde(default)]
+    pub mac_address: Option<String>,
+    /// The inventory host on the same network that sends the magic packet. Not in Runner Fleet.
+    #[serde(default)]
+    pub wake_via: Option<String>,
 }
 
 impl Host {

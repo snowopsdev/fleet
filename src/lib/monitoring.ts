@@ -19,6 +19,7 @@ export const eventStyle: Record<FleetEventKind, { label: string; tone: Tone }> =
   maintenanceStarted: { label: "Maintenance started", tone: "muted" },
   maintenanceEnded: { label: "Maintenance ended", tone: "muted" },
   alertsResumed: { label: "Alert after maintenance", tone: "warn" },
+  wakeRequested: { label: "Wake requested", tone: "info" },
 };
 
 /** History pages hold this many events: `PAGE_SIZE` in crates/fleet/src/monitoring/store.rs. */
