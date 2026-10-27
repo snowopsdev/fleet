@@ -75,9 +75,9 @@ impl EtagCache {
     }
 }
 
-struct Collection<T> {
-    items: Vec<T>,
-    truncated: bool,
+pub(crate) struct Collection<T> {
+    pub(crate) items: Vec<T>,
+    pub(crate) truncated: bool,
 }
 
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]
@@ -320,7 +320,8 @@ impl GithubClient {
         })
     }
 
-    async fn run_jobs(&self, org: &str, repo: &str, run_id: u64) -> Result<Collection<GhJob>, GithubError> {
+    /// Jobs in a run's latest attempt.
+    pub(crate) async fn run_jobs(&self, org: &str, repo: &str, run_id: u64) -> Result<Collection<GhJob>, GithubError> {
         let jobs = self
             .collection::<RawJob>(
                 &format!("/repos/{org}/{repo}/actions/runs/{run_id}/jobs?filter=latest"),
@@ -464,6 +465,8 @@ struct RawJob {
     runner_name: Option<String>,
     created_at: Option<DateTime<Utc>>,
     started_at: Option<DateTime<Utc>>,
+    completed_at: Option<DateTime<Utc>>,
+    conclusion: Option<String>,
     html_url: Option<String>,
     head_branch: Option<String>,
 }
@@ -482,6 +485,8 @@ impl RawJob {
             runner_name: self.runner_name.filter(|n| !n.is_empty()),
             created_at: self.created_at,
             started_at: self.started_at,
+            completed_at: self.completed_at,
+            conclusion: self.conclusion,
             html_url: self.html_url,
             head_branch: self.head_branch,
         }

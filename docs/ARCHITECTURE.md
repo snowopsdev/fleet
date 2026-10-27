@@ -74,6 +74,30 @@ announcement state prevent duplicates after a restart. Stable inventory keys pre
 across tailnet node replacements; a changed SSH target resets alert and boot baselines. Demo
 history is fictional, generated separately, and never touches the journal or sends alerts.
 
+## Job history and Activity
+
+`job_history/` keeps `job-history.json` beside the app settings, written atomically and with the
+same versioning and preserve-on-error rules as `monitoring.json`. After each job scan,
+`engine_job_history.rs` remembers the runs of queued and running self-hosted jobs: jobs that
+ask for `self-hosted`, ran on one of the organization's runners, or whose labels are compatible
+with one. When a run leaves the scan, its latest attempt is read once
+(`GET /repos/{o}/{r}/actions/runs/{id}/jobs?filter=latest`, at most 20 runs per organization per
+round) and its completed self-hosted jobs are recorded, deduplicated by job ID. A run with no
+unfinished self-hosted job is never read again; an unfinished or truncated one is re-read after
+five minutes, and runs unseen for a day are dropped. Jobs that start and finish between two
+scans are missed.
+
+The journal also keeps recorded time: spans when the app was running and every scanned
+organization's latest job scan succeeded. Gaps longer than three minutes start a new span, so
+time the app was closed never counts as idle. Retention is 30 days, at most 5,000 jobs and 2,000
+spans. `job_history/summary.rs` derives the Activity page in Rust for 24 hours, 7 days and 30
+days ending at the latest recorded moment: totals, nearest-rank queue-wait median and p95, top
+repositories, and busy percentage per machine, which is time on jobs within recorded spans
+divided by recorded time times the runners GitHub lists on that machine now. The hosted-cost
+estimate rounds each job up to a minute at fixed standard rates, with the date they were
+checked. Demo mode never reads or writes the journal; `job_history/demo.rs` generates
+fictional history through the same summary.
+
 ## Status rules
 
 - Installed/configured and service state come from SSH; connected, busy and idle come from GitHub.
