@@ -34,6 +34,10 @@ pub struct AppConfig {
     /// repository's `inventory/fleet.toml`.
     #[serde(default)]
     pub inventory_path: Option<String>,
+    /// Share one OpenSSH connection per machine across read-only monitoring checks
+    /// (`ControlMaster`). Off by default; reviewed changes never use it.
+    #[serde(default)]
+    pub ssh_connection_reuse: bool,
 }
 
 /// Matches the serde defaults, so a missing settings file and an empty one mean the same.
@@ -47,6 +51,7 @@ impl Default for AppConfig {
             demo_mode: false,
             local_api: true,
             inventory_path: None,
+            ssh_connection_reuse: false,
         }
     }
 }

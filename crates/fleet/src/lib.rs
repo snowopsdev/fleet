@@ -29,6 +29,7 @@ pub mod machine_diagnostics;
 pub mod model;
 pub mod monitoring;
 pub mod runner_version;
+pub mod ssh_reuse;
 pub mod sync;
 pub mod tailscale;
 pub mod view_updates;

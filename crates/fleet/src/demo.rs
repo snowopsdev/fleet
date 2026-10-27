@@ -34,6 +34,7 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         demo_mode: true,
         local_api: true,
         inventory_path: None,
+        ssh_connection_reuse: false,
         machine_preferences: Default::default(),
     };
 

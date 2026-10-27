@@ -288,3 +288,82 @@ fn a_hostile_root_is_never_evaluated_by_the_remote_shell() {
         assert!(!home.path().join(name).exists(), "{name} was created");
     }
 }
+
+/// Fails the first run with `first_error`, then answers like `FakeCommands`.
+struct FlakyMux {
+    calls: Mutex<Vec<Vec<String>>>,
+    first_error: &'static str,
+}
+
+impl CommandRunner for FlakyMux {
+    fn run(
+        &self,
+        command: &[String],
+        _: Option<&str>,
+        _: Duration,
+        _: NonZeroExit,
+    ) -> Result<CommandResult, CommandError> {
+        let mut calls = self.calls.lock().unwrap();
+        calls.push(command.to_vec());
+        if calls.len() == 1 {
+            return Err(CommandError::new(command, 255, self.first_error));
+        }
+        Ok(CommandResult::ok(format!("{MAC_HEALTH}{MAC_RUNNERS}")))
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn shared_connections_keep_hardening_and_retry_a_broken_master_without_sharing() {
+    let sockets = tempfile::Builder::new().prefix("rd").tempdir_in("/tmp").unwrap();
+    let control = crate::ssh_reuse::ControlDir::prepare(&sockets.path().join("ssh")).unwrap();
+    let fake = Arc::new(FlakyMux {
+        calls: Mutex::default(),
+        first_error: "mux_client_request_session: read from master failed: Broken pipe",
+    });
+    let remote = RemoteClient::new(fake.clone(), Duration::from_secs(30), Programs::default());
+    remote.inspect_shared(&host("mac-mini-02"), &control).unwrap();
+    let calls = fake.calls.lock().unwrap();
+    let shared = &calls[0];
+    let target = shared.iter().position(|a| a == "--").unwrap();
+    let options = &shared[1..target];
+    for option in [
+        "BatchMode=yes",
+        "StrictHostKeyChecking=yes",
+        "ForwardAgent=no",
+        "ClearAllForwardings=yes",
+        "ControlMaster=auto",
+        "ControlPersist=120",
+    ] {
+        assert!(options.iter().any(|o| o == option), "{option} missing from {shared:?}");
+    }
+    let path = format!("ControlPath={}/%C", control.path().display());
+    assert!(options.contains(&path), "{shared:?}");
+    assert_eq!(&shared[target..], ["--", "mac-mini-02", "bash -s"]);
+    // The retry is an ordinary, unshared connection.
+    assert!(calls[1].iter().all(|a| !a.starts_with("Control")), "{:?}", calls[1]);
+    assert_eq!(calls.len(), 2);
+}
+
+#[cfg(unix)]
+#[test]
+fn machine_failures_are_not_retried_and_tailscale_ssh_is_never_shared() {
+    let sockets = tempfile::Builder::new().prefix("rd").tempdir_in("/tmp").unwrap();
+    let control = crate::ssh_reuse::ControlDir::prepare(&sockets.path().join("ssh")).unwrap();
+    let fake = Arc::new(FlakyMux {
+        calls: Mutex::default(),
+        first_error: "ssh: connect to host mac-mini-02 port 22: Operation timed out",
+    });
+    let remote = RemoteClient::new(fake.clone(), Duration::from_secs(30), Programs::default());
+    assert!(remote.inspect_shared(&host("mac-mini-02"), &control).is_err());
+    assert_eq!(fake.calls.lock().unwrap().len(), 1);
+
+    // The demo Linux host uses `tailscale ssh`, which takes no OpenSSH options.
+    let fake = Arc::new(FakeCommands::default());
+    let remote = RemoteClient::new(fake.clone(), Duration::from_secs(30), Programs::default());
+    // The fake answers as a Mac, so this read fails after the command is recorded.
+    let _ = remote.inspect_shared(&host("build-linux-01"), &control);
+    let calls = fake.0.lock().unwrap();
+    assert_eq!(calls[0].0[..2], ["tailscale".to_string(), "ssh".into()]);
+    assert!(calls[0].0.iter().all(|a| !a.contains("Control")), "{:?}", calls[0].0);
+}

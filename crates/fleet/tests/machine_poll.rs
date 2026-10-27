@@ -405,3 +405,48 @@ async fn http_refresh_waits_for_polling_then_collects_its_own_fresh_sample() {
         MachineConnection::Connected { .. }
     ));
 }
+
+/// Records whether each read shared a connection, and through which socket directory.
+#[derive(Default)]
+struct SharingProbe(Mutex<Vec<Option<std::path::PathBuf>>>);
+
+impl MachineSource for SharingProbe {
+    fn inspect(&self, target: &MachineTarget) -> Result<MachineReport, RemoteError> {
+        self.0.lock().unwrap().push(None);
+        FakeMachine::default().inspect(target)
+    }
+
+    fn inspect_shared(
+        &self,
+        target: &MachineTarget,
+        control: &fleet::ssh_reuse::ControlDir,
+    ) -> Result<MachineReport, RemoteError> {
+        self.0.lock().unwrap().push(Some(control.path().to_path_buf()));
+        FakeMachine::default().inspect(target)
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn connection_reuse_is_opt_in_and_uses_the_private_socket_directory() {
+    use std::os::unix::fs::PermissionsExt;
+    let probe = Arc::new(SharingProbe::default());
+    let (_dir, engine) = fixture(probe.clone(), INVENTORY);
+    let sockets = tempfile::Builder::new().prefix("rd").tempdir_in("/tmp").unwrap();
+    let control = sockets.path().join("ssh");
+    let engine = engine.with_ssh_control_dir(&control);
+    engine.poll_tailscale().await;
+    assert!(!engine.config().ssh_connection_reuse, "off by default");
+    engine.poll_machines().await;
+    engine.set_ssh_connection_reuse(true).unwrap();
+    assert_eq!(std::fs::metadata(&control).unwrap().permissions().mode() & 0o777, 0o700);
+    engine.poll_machines().await;
+    engine.set_ssh_connection_reuse(false).unwrap();
+    engine.poll_machines().await;
+    assert_eq!(*probe.0.lock().unwrap(), [None, Some(control.clone()), None]);
+
+    // A directory others can enter is refused, and checks keep working without sharing.
+    std::fs::set_permissions(&control, std::fs::Permissions::from_mode(0o777)).unwrap();
+    assert!(engine.set_ssh_connection_reuse(true).is_err());
+    assert!(!engine.config().ssh_connection_reuse);
+}

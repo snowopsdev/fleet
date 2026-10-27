@@ -182,6 +182,12 @@ pub fn set_local_api(engine: EngineState, on: bool) -> Result<()> {
     Ok(engine.set_local_api(on)?)
 }
 
+/// Shares one OpenSSH connection per machine across read-only monitoring checks.
+#[tauri::command]
+pub fn set_ssh_connection_reuse(engine: EngineState, on: bool) -> Result<()> {
+    Ok(engine.set_ssh_connection_reuse(on)?)
+}
+
 // Desired state: checks are read-only. Changes run only from a review the user saw,
 // and only if the host still matches it; passwords are used once and never stored.
 

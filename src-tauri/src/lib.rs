@@ -183,6 +183,7 @@ pub fn run() {
             commands::get_gh_status,
             commands::use_gh_for_org,
             commands::set_local_api,
+            commands::set_ssh_connection_reuse,
             commands::desired_refresh,
             commands::desired_doctor,
             commands::desired_logs,

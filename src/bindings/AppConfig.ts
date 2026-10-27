@@ -20,4 +20,9 @@ localApi: boolean,
  * The desired-state inventory (`fleet.toml`). Defaults to this
  * repository's `inventory/fleet.toml`.
  */
-inventoryPath: string | null, };
+inventoryPath: string | null, 
+/**
+ * Share one OpenSSH connection per machine across read-only monitoring checks
+ * (`ControlMaster`). Off by default; reviewed changes never use it.
+ */
+sshConnectionReuse: boolean, };

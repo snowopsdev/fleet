@@ -40,6 +40,8 @@ pub struct Engine {
     desired_changed: tokio::sync::watch::Sender<u64>,
     desired_io: desired::DesiredIo,
     machine_source: Arc<dyn crate::machine::MachineSource>,
+    /// Where shared SSH connections keep their sockets, when the setting is on.
+    ssh_control_dir: PathBuf,
     machine_poll: tokio::sync::Mutex<()>,
     desired_refresh_gate: tokio::sync::Mutex<()>,
     doctor_gate: tokio::sync::Mutex<()>,
@@ -89,6 +91,7 @@ impl Engine {
             desired_changed: tokio::sync::watch::channel(0).0,
             desired_io: desired::DesiredIo::default(),
             machine_source: Arc::new(crate::machine::remote_client()),
+            ssh_control_dir: crate::ssh_reuse::ControlDir::default_path(),
             machine_poll: tokio::sync::Mutex::new(()),
             desired_refresh_gate: tokio::sync::Mutex::new(()),
             doctor_gate: tokio::sync::Mutex::new(()),

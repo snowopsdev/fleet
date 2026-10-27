@@ -41,7 +41,7 @@ async function updateConfig(cmd: string, args?: Record<string, unknown>): Promis
 export const commands = {
   getFleet: (): Promise<FleetView> => (isTauri ? invoke("get_fleet") : Promise.resolve(previewFleet())),
   getConfig: (): Promise<AppConfig> =>
-    isTauri ? invoke("get_config") : Promise.resolve({ orgs: [], ignoredPeers: [], machinePreferences: {}, demoMode: true, localApi: false, desktopNotifications: false, inventoryPath: null }),
+    isTauri ? invoke("get_config") : Promise.resolve({ orgs: [], ignoredPeers: [], machinePreferences: {}, demoMode: true, localApi: false, desktopNotifications: false, inventoryPath: null, sshConnectionReuse: false }),
   refreshNow: () => invoke<void>("refresh_now"),
   addOrg: (login: string, auth: OrgAuth, token: string | null, repoScope: RepoScope, kind: AccountKind = "organization", runnerRepos: string[] = []) =>
     updateConfig("add_org", { login, auth, token, repoScope, kind, runnerRepos }),
@@ -82,6 +82,7 @@ export const commands = {
       ? invoke("get_local_api_status")
       : Promise.resolve({ enabled: false, url: null, error: "Only in the desktop app", discoveryFile: null }),
   setLocalApi: (on: boolean) => updateConfig("set_local_api", { on }),
+  setSshConnectionReuse: (on: boolean) => updateConfig("set_ssh_connection_reuse", { on }),
 };
 
 /** Mirrors `LocalApiStatus` in src-tauri/src/local_api.rs, which has no generated binding. */

@@ -17,6 +17,7 @@ use crate::desired::remote::{
     Connection, Programs, RemoteClient, RemoteError, parse_posix_probe, parse_windows_probe, probe_script,
 };
 use crate::model::{TailnetPeer, tailnet_machine_key};
+use crate::ssh_reuse::{ControlDir, is_control_failure};
 
 const POSIX_HEALTH: &str = include_str!("../scripts/machine-health.sh");
 const WINDOWS_HEALTH: &str = include_str!("../scripts/machine-health.ps1");
@@ -189,6 +190,13 @@ impl MachineTarget {
 pub trait MachineSource: Send + Sync {
     /// Blocks until the SSH read completes or times out. Call off the async runtime.
     fn inspect(&self, target: &MachineTarget) -> Result<MachineReport, RemoteError>;
+
+    /// Like `inspect`, sharing an OpenSSH control connection kept in `control` across
+    /// read-only checks. Sources without SSH ignore it.
+    fn inspect_shared(&self, target: &MachineTarget, control: &ControlDir) -> Result<MachineReport, RemoteError> {
+        let _ = control;
+        self.inspect(target)
+    }
 }
 
 /// Locate the same SSH programs used by the app's runner operations.
@@ -199,6 +207,19 @@ pub fn remote_client() -> RemoteClient {
 impl MachineSource for RemoteClient {
     fn inspect(&self, target: &MachineTarget) -> Result<MachineReport, RemoteError> {
         let output = self.run_script(target.connection(), &inspection_script(target), None)?;
+        parse_inspection(target, &output)
+    }
+
+    fn inspect_shared(&self, target: &MachineTarget, control: &ControlDir) -> Result<MachineReport, RemoteError> {
+        let script = inspection_script(target);
+        let output = match self.run_script_with_options(target.connection(), &script, &control.options()) {
+            // A broken socket or master isn't the machine's fault: read once more on a fresh connection.
+            Err(e) if is_control_failure(&e.0) => {
+                tracing::warn!("shared SSH connection failed, reading without it: {e}");
+                self.run_script(target.connection(), &script, None)?
+            }
+            result => result?,
+        };
         parse_inspection(target, &output)
     }
 }
