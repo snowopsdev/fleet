@@ -330,7 +330,11 @@ impl FleetRemote for FakeFleet {
             };
             let path = target.path.clone().unwrap_or_default();
             if busy || running {
-                let why = if busy { JOB_RUNNING } else { "a service is still running" };
+                let why = if busy {
+                    JOB_RUNNING
+                } else {
+                    "a service is still running"
+                };
                 outcomes.push(CleanupOutcome {
                     kind: target.kind,
                     runner: target.runner.clone(),

@@ -448,7 +448,11 @@ impl MonitorStore {
         self.journal.outbound.retain(|d| match excess.get_mut(&d.destination) {
             Some(left) if *left > 0 => {
                 *left -= 1;
-                let key = (d.destination.clone(), d.event.machine_key.clone(), d.event.machine_name.clone());
+                let key = (
+                    d.destination.clone(),
+                    d.event.machine_key.clone(),
+                    d.event.machine_name.clone(),
+                );
                 *dropped.entry(key).or_default() += 1;
                 false
             }

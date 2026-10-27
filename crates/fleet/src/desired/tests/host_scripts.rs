@@ -18,7 +18,11 @@ const UPGRADE_PS1: &str = include_str!("../../../scripts/worker-upgrade.ps1");
 /// Runs `script` with bash, extra environment and PATH entries; returns (exit code, stdout, stderr).
 fn bash(script: &str, env: &[(&str, &Path)], path_first: Option<&Path>) -> (i32, String, String) {
     let mut command = Command::new("bash");
-    command.arg("-s").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command
+        .arg("-s")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     for (key, value) in env {
         command.env(key, value);
     }
@@ -100,16 +104,25 @@ fn cleanup_refuses_while_a_job_the_service_or_a_self_update_runs() {
     {
         let _job = Running::start(&root.join("bin/Runner.Worker"));
         let outcomes = clean_temp(&host);
-        assert!(!outcomes[0].ok && outcomes[0].message.contains("a job is running"), "{outcomes:?}");
+        assert!(
+            !outcomes[0].ok && outcomes[0].message.contains("a job is running"),
+            "{outcomes:?}"
+        );
     }
     {
         let _service = Running::start(&root.join("bin/Runner.Listener"));
         let outcomes = clean_temp(&host);
-        assert!(!outcomes[0].ok && outcomes[0].message.contains("still running"), "{outcomes:?}");
+        assert!(
+            !outcomes[0].ok && outcomes[0].message.contains("still running"),
+            "{outcomes:?}"
+        );
     }
     std::fs::create_dir_all(root.join("_work/_update")).unwrap();
     let outcomes = clean_temp(&host);
-    assert!(!outcomes[0].ok && outcomes[0].message.contains("self-update"), "{outcomes:?}");
+    assert!(
+        !outcomes[0].ok && outcomes[0].message.contains("self-update"),
+        "{outcomes:?}"
+    );
     assert!(root.join("_work/_temp/job/file").exists(), "nothing was removed");
     std::fs::remove_dir(root.join("_work/_update")).unwrap();
     assert!(clean_temp(&host)[0].ok);
@@ -222,7 +235,14 @@ fn upgrade_replaces_binaries_in_place_and_keeps_the_previous_ones() {
     assert_eq!((u.version(), u.externals()), ("2.330.0".to_string(), "new".to_string()));
     assert_eq!(
         u.entries(),
-        [".credentials", ".runner", "bin", "bin.fleet-previous", "externals", "externals.fleet-previous"]
+        [
+            ".credentials",
+            ".runner",
+            "bin",
+            "bin.fleet-previous",
+            "externals",
+            "externals.fleet-previous"
+        ]
     );
     assert_eq!(std::fs::read_to_string(u.root.join(".credentials")).unwrap(), "secret");
     // Already current: nothing changes.
@@ -256,7 +276,9 @@ fn an_interrupted_swap_is_repaired_or_refused_and_previous_files_are_never_lost(
     assert_eq!(code, 0, "{out}{err}");
     assert!(out.contains("restored"), "{out}");
     assert_eq!(u.version(), "2.330.0");
-    let kept = Command::new(u.root.join("bin.fleet-previous/Runner.Listener")).output().unwrap();
+    let kept = Command::new(u.root.join("bin.fleet-previous/Runner.Listener"))
+        .output()
+        .unwrap();
     assert_eq!(String::from_utf8_lossy(&kept.stdout).trim(), "2.320.0");
 
     // Interrupted after externals/ moved aside: ambiguous, so it refuses and removes nothing.
@@ -296,9 +318,18 @@ fn upgrade_refuses_symlinks_a_running_service_and_a_self_update() {
 fn windows_scripts_never_use_cmd_and_fail_closed_on_unreadable_processes() {
     for script in [CLEANUP_PS1, UPGRADE_PS1] {
         let code: String = script.lines().filter(|l| !l.trim_start().starts_with('#')).collect();
-        assert!(!code.contains("cmd.exe") && !code.contains("rmdir"), "names never pass through cmd.exe");
-        assert!(code.contains("-not $_.Path -or"), "a process with an unreadable path counts as running");
-        assert!(!code.contains("$_.Path -and"), "no check skips unreadable process paths");
+        assert!(
+            !code.contains("cmd.exe") && !code.contains("rmdir"),
+            "names never pass through cmd.exe"
+        );
+        assert!(
+            code.contains("-not $_.Path -or"),
+            "a process with an unreadable path counts as running"
+        );
+        assert!(
+            !code.contains("$_.Path -and"),
+            "no check skips unreadable process paths"
+        );
     }
     let inventory = example_inventory();
     let host = inventory.find_host("windows").unwrap();

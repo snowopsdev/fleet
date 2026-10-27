@@ -114,14 +114,26 @@ fn cleanup_skips_a_runner_that_became_busy_and_runs_the_rest() {
     ];
     fleet.world().github.get_mut("linux-01").unwrap().busy = true;
     let error = ops(&inventory, &fleet, Secrets::default())
-        .cleanup_host("linux", &CleanupOptions::default(), &targets, &BTreeSet::new(), &mut Vec::new())
+        .cleanup_host(
+            "linux",
+            &CleanupOptions::default(),
+            &targets,
+            &BTreeSet::new(),
+            &mut Vec::new(),
+        )
         .unwrap_err();
     assert!(error.0.contains("linux-01 is busy"), "{error}");
     assert!(fleet.world().calls.is_empty(), "nothing is removed while a job runs");
 
     fleet.world().github.get_mut("linux-01").unwrap().busy = false;
     let messages = ops(&inventory, &fleet, Secrets::default())
-        .cleanup_host("linux", &CleanupOptions::default(), &targets, &BTreeSet::new(), &mut Vec::new())
+        .cleanup_host(
+            "linux",
+            &CleanupOptions::default(),
+            &targets,
+            &BTreeSet::new(),
+            &mut Vec::new(),
+        )
         .unwrap();
     assert_eq!(messages.len(), 2);
     // The runner is stopped around the removal, so it can't take a job meanwhile, then started again.
@@ -148,7 +160,10 @@ fn cleanup_restores_each_runner_as_it_was_and_leaves_drained_ones_alone() {
     let error = ops(&inventory, &fleet, Secrets::default())
         .cleanup_host("linux", &options, &[temp.clone(), docker], &held, &mut Vec::new())
         .unwrap_err();
-    assert!(error.0.contains("is draining") && error.0.contains("machine-wide"), "{error}");
+    assert!(
+        error.0.contains("is draining") && error.0.contains("machine-wide"),
+        "{error}"
+    );
     assert!(fleet.world().calls.is_empty());
 
     // Stopped by its drain: cleaned without being started.
@@ -177,10 +192,19 @@ fn cleanup_reports_targets_the_host_refused() {
     fleet.world().jobs_on_host.push("linux-01".into());
     let targets = [target(CleanupKind::WorkTemp, Some("linux-01"), "/x/_work/_temp")];
     let error = ops(&inventory, &fleet, Secrets::default())
-        .cleanup_host("linux", &CleanupOptions::default(), &targets, &BTreeSet::new(), &mut Vec::new())
+        .cleanup_host(
+            "linux",
+            &CleanupOptions::default(),
+            &targets,
+            &BTreeSet::new(),
+            &mut Vec::new(),
+        )
         .unwrap_err();
     assert!(error.0.contains("a job started"), "{error}");
-    assert!(fleet.world().calls.is_empty(), "a runner with a job is neither stopped nor cleaned");
+    assert!(
+        fleet.world().calls.is_empty(),
+        "a runner with a job is neither stopped nor cleaned"
+    );
 }
 
 #[test]
@@ -258,7 +282,11 @@ fn a_failed_upgrade_leaves_the_runner_stopped_with_recovery_steps() {
     let error = ops(&inventory, &fleet, Secrets::default())
         .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"), &mut left)
         .unwrap_err();
-    assert_eq!(left, ["linux-01"], "the failure is reported so the watchdog can leave it alone");
+    assert_eq!(
+        left,
+        ["linux-01"],
+        "the failure is reported so the watchdog can leave it alone"
+    );
     assert!(
         error.0.starts_with("upgrade failed for linux-01: SHA-256 mismatch"),
         "{error}"

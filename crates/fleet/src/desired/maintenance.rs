@@ -342,9 +342,9 @@ impl Ops<'_> {
         let mut runnable = Vec::new();
         for target in targets {
             let refusal = cleanup_refusal(host, target, &github).or_else(|| match &target.runner {
-                Some(name) if held.contains(name) && running(name) => {
-                    Some(format!("{name} is draining; its directories wait until the drain stops it"))
-                }
+                Some(name) if held.contains(name) && running(name) => Some(format!(
+                    "{name} is draining; its directories wait until the drain stops it"
+                )),
                 _ => None,
             });
             match refusal {
@@ -381,7 +381,10 @@ impl Ops<'_> {
             match self.remote.stop(host, runner, sudo) {
                 Ok(_) => stopped.push(runner),
                 Err(e) if e.0.contains(JOB_RUNNING) => {
-                    messages.push(format!("skipped {}'s directories and machine-wide caches: a job started", runner.name));
+                    messages.push(format!(
+                        "skipped {}'s directories and machine-wide caches: a job started",
+                        runner.name
+                    ));
                     runnable.retain(|t| t.runner.as_deref().is_some_and(|n| n != runner.name));
                 }
                 Err(e) => {

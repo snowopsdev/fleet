@@ -142,7 +142,9 @@ pub fn check_url(text: &str) -> Result<url::Url, String> {
 pub fn check_ntfy_server(text: &str) -> Result<url::Url, String> {
     let url = check_url(text)?;
     if !url.username().is_empty() || url.password().is_some() || url.query().is_some() || url.fragment().is_some() {
-        return Err("Enter only the ntfy server, such as https://ntfy.sh, and put an access token in the token field.".into());
+        return Err(
+            "Enter only the ntfy server, such as https://ntfy.sh, and put an access token in the token field.".into(),
+        );
     }
     Ok(url)
 }

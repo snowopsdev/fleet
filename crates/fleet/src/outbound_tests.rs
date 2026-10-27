@@ -138,7 +138,11 @@ fn only_https_or_this_machine_is_accepted() {
 #[test]
 fn ntfy_servers_carry_no_credentials_or_queries() {
     assert!(check_ntfy_server("https://ntfy.sh").is_ok());
-    for bad in ["https://user:pass@ntfy.example.com", "https://ntfy.sh/?auth=x", "https://ntfy.sh/#x"] {
+    for bad in [
+        "https://user:pass@ntfy.example.com",
+        "https://ntfy.sh/?auth=x",
+        "https://ntfy.sh/#x",
+    ] {
         assert!(check_ntfy_server(bad).is_err(), "{bad}");
     }
 }
@@ -165,7 +169,16 @@ fn a_full_queue_drops_its_oldest_alerts_visibly_per_destination() {
     }
     // Another destination's queue is unaffected.
     store
-        .record_external("inv:studio", "studio", FleetEventKind::OfflineAlert, "Last.".into(), true, false, &ids(&["ntfy"]), now)
+        .record_external(
+            "inv:studio",
+            "studio",
+            FleetEventKind::OfflineAlert,
+            "Last.".into(),
+            true,
+            false,
+            &ids(&["ntfy"]),
+            now,
+        )
         .unwrap();
     let d = |id: &str| AlertDestination {
         id: id.into(),

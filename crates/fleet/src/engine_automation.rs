@@ -10,18 +10,18 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 
+use super::desired::ReviewView;
 use super::{Engine, EngineError};
 use crate::automation::watchdog::{self, Decision, MAX_ATTEMPTS};
 use crate::automation::{
-    AutomationSettings, DrainMark, DrainState, Hold, FleetAutomation, FleetPublishStatus, FleetWatchdog, PublishSettings,
-    publish,
+    AutomationSettings, DrainMark, DrainState, FleetAutomation, FleetPublishStatus, FleetWatchdog, Hold,
+    PublishSettings, publish,
 };
-use super::desired::ReviewView;
 use crate::desired::maintenance::StopOutcome;
 use crate::desired::model::FleetPlanAction;
-use crate::fleet_plan::ChangeRequest;
 use crate::desired::model::{Inventory, is_active};
 use crate::desired::operations::{Ops, Secrets};
+use crate::fleet_plan::ChangeRequest;
 use crate::model::{AppConfig, FleetView, MachineView, RunnerView};
 use crate::monitoring::{FleetAlertKind, FleetEventKind, FleetMachineAlert};
 use crate::outbound::{self, AlertDestination, AlertDestinationInput, AlertDestinationKind, DestinationSecret};
@@ -248,7 +248,13 @@ impl Engine {
     /// After an upgrade or cleanup: runners it left stopped on purpose are
     /// held, so the watchdog doesn't restart them, and runners an upgrade
     /// finished are released.
-    pub(super) fn record_holds(&self, host: &str, request: &ChangeRequest, left_stopped: &[String], upgraded: &[String]) {
+    pub(super) fn record_holds(
+        &self,
+        host: &str,
+        request: &ChangeRequest,
+        left_stopped: &[String],
+        upgraded: &[String],
+    ) {
         let reason = match request {
             ChangeRequest::Upgrade { .. } => {
                 "A failed upgrade left it stopped. Check its diagnostic log, then resume it or upgrade it again."
@@ -998,7 +1004,8 @@ impl Engine {
                 let result = match destinations.get(&delivery.destination) {
                     None => Err("The destination is turned off.".to_string()),
                     Some(destination) => match self.read_secret(&destination.id).await {
-                        Ok(secret) => match outbound::request(destination, &secret, &outbound::notice(&delivery.event)) {
+                        Ok(secret) => match outbound::request(destination, &secret, &outbound::notice(&delivery.event))
+                        {
                             Ok(request) => outbound::send(client, request).await,
                             Err(e) => Err(e),
                         },

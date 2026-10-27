@@ -508,10 +508,9 @@ impl Engine {
                         ops.decommission_runner(host, runner).map(|m| done(vec![m]))
                     }
                     ChangeRequest::Restart { runner } => ops.restart_runner(runner).map(|m| done(vec![m])),
-                    ChangeRequest::Cleanup { host, options } => {
-                        ops.cleanup_host(host, options, &reviewed.cleanup, &held, &mut left_stopped)
-                            .map(done)
-                    }
+                    ChangeRequest::Cleanup { host, options } => ops
+                        .cleanup_host(host, options, &reviewed.cleanup, &held, &mut left_stopped)
+                        .map(done),
                     ChangeRequest::Upgrade { host, .. } => match &reviewed.asset {
                         Some(asset) => ops
                             .upgrade_runners(host, &reviewed.upgrade, asset, &mut left_stopped)

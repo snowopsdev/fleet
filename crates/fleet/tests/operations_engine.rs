@@ -612,7 +612,11 @@ async fn a_drained_runner_is_not_upgraded_restarted_or_drained_again() {
         .await
         .unwrap();
     assert!(!one.ready);
-    assert!(one.blockers.iter().any(|b| b.contains("held by a drain")), "{:?}", one.blockers);
+    assert!(
+        one.blockers.iter().any(|b| b.contains("held by a drain")),
+        "{:?}",
+        one.blockers
+    );
     let all = f
         .engine
         .desired_review(ChangeRequest::Upgrade {
@@ -626,7 +630,9 @@ async fn a_drained_runner_is_not_upgraded_restarted_or_drained_again() {
     assert_eq!(items, [("mini-01", true), ("mini-02", false)]);
     let restart = f
         .engine
-        .desired_review(ChangeRequest::Restart { runner: "mini-01".into() })
+        .desired_review(ChangeRequest::Restart {
+            runner: "mini-01".into(),
+        })
         .await
         .unwrap();
     assert!(!restart.ready);
@@ -651,16 +657,23 @@ async fn a_second_drain_reviewed_before_the_first_ran_is_refused() {
     f.fleet.world().github.get_mut("mini-01").unwrap().busy = true;
     let first = f
         .engine
-        .desired_review(ChangeRequest::Drain { runner: "mini-01".into() })
+        .desired_review(ChangeRequest::Drain {
+            runner: "mini-01".into(),
+        })
         .await
         .unwrap();
     let second = f
         .engine
-        .desired_review(ChangeRequest::Drain { runner: "mini-01".into() })
+        .desired_review(ChangeRequest::Drain {
+            runner: "mini-01".into(),
+        })
         .await
         .unwrap();
     assert!(first.ready && second.ready);
-    f.engine.desired_execute(&first.id, ChangeSecrets::default(), None).await.unwrap();
+    f.engine
+        .desired_execute(&first.id, ChangeSecrets::default(), None)
+        .await
+        .unwrap();
     wait_done(&f.engine).await;
     let e = f
         .engine
@@ -683,21 +696,33 @@ async fn a_failed_upgrade_holds_the_runner_until_a_reviewed_resume() {
         })
         .await
         .unwrap();
-    f.engine.desired_execute(&review.id, ChangeSecrets::default(), None).await.unwrap();
+    f.engine
+        .desired_execute(&review.id, ChangeSecrets::default(), None)
+        .await
+        .unwrap();
     let op = wait_done(&f.engine).await;
     assert_eq!(op.status, OperationStatus::Failed);
     let holds = f.engine.view().automation.holds;
     assert_eq!(holds.len(), 1);
     assert_eq!(holds[0].runner, "mini-01");
-    assert!(history(&f.engine).iter().any(|(k, _)| *k == FleetEventKind::HeldStopped));
+    assert!(
+        history(&f.engine)
+            .iter()
+            .any(|(k, _)| *k == FleetEventKind::HeldStopped)
+    );
 
     let resume = f
         .engine
-        .desired_review(ChangeRequest::Resume { runner: "mini-01".into() })
+        .desired_review(ChangeRequest::Resume {
+            runner: "mini-01".into(),
+        })
         .await
         .unwrap();
     assert!(resume.ready, "{:?}", resume.blockers);
-    f.engine.desired_execute(&resume.id, ChangeSecrets::default(), None).await.unwrap();
+    f.engine
+        .desired_execute(&resume.id, ChangeSecrets::default(), None)
+        .await
+        .unwrap();
     wait_done(&f.engine).await;
     assert!(f.engine.view().automation.holds.is_empty());
 }
