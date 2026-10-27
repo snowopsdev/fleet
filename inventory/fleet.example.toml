@@ -83,3 +83,23 @@ root = "~/gh-runners/acme"
 service_mode = "systemd"
 labels = ["fleet", "linux-experimental", "arch", "host-linux-canary"]
 runners = [{ name = "linux-canary-01", directory = "runner-01" }]
+
+# Platforms beyond Runner Fleet's four: an Intel Mac and a Raspberry Pi.
+[[hosts]]
+id = "intel-mac"
+platform = "darwin-x64"
+ssh = "intel-mac"
+root = "~/gh-runners/acme"
+service_mode = "launchagent"
+labels = ["fleet", "macos-build", "host-intel-mac"]
+runners = [{ name = "intel-mac-01", directory = "runner-01" }]
+
+[[hosts]]
+id = "pi"
+platform = "linux-arm64"
+ssh = "builder@pi.example.ts.net"
+ssh_transport = "tailscale"
+root = "~/gh-runners/acme"
+service_mode = "systemd"
+labels = ["fleet", "linux-experimental", "raspberry-pi", "host-pi"]
+runners = [{ name = "pi-01", directory = "runner-01" }]

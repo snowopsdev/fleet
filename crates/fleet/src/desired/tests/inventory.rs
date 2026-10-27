@@ -105,10 +105,43 @@ fn service_mode_must_match_platform() {
 
 #[test]
 fn unknown_platforms_and_service_modes_are_inventory_errors() {
-    let e = load_err(&base().replace("platform = \"darwin-arm64\"", "platform = \"darwin-x64\""));
-    assert_eq!(e, "test: unsupported platform 'darwin-x64'");
+    let e = load_err(&base().replace("platform = \"darwin-arm64\"", "platform = \"freebsd-x64\""));
+    assert_eq!(e, "test: unsupported platform 'freebsd-x64'");
     let e = load_err(&base().replace("service_mode = \"launchagent\"", "service_mode = \"cron\""));
     assert_eq!(e, "test: darwin-arm64 requires service_mode='launchagent'");
+}
+
+#[test]
+fn intel_macs_and_arm64_linux_are_supported_beyond_runner_fleet() {
+    let intel = load(&base().replace("platform = \"darwin-arm64\"", "platform = \"darwin-x64\"")).unwrap();
+    let host = intel.find_host("test").unwrap();
+    assert_eq!(
+        (host.platform, host.platform.runner_asset(), host.service_mode),
+        (Platform::DarwinX64, "osx-x64", ServiceMode::Launchagent)
+    );
+    let e = load_err(
+        &base()
+            .replace("platform = \"darwin-arm64\"", "platform = \"darwin-x64\"")
+            .replace("service_mode = \"launchagent\"", "service_mode = \"systemd\""),
+    );
+    assert_eq!(e, "test: darwin-x64 requires service_mode='launchagent'");
+    let arm = base()
+        .replace("platform = \"darwin-arm64\"", "platform = \"linux-arm64\"")
+        .replace("service_mode = \"launchagent\"", "service_mode = \"systemd\"");
+    let e = load_err(&arm);
+    assert_eq!(
+        e,
+        "test: include exactly one platform capability label: linux-build, linux-experimental"
+    );
+    let arm = load(&arm.replace("\"macos-build\"", "\"linux-build\"")).unwrap();
+    let host = arm.find_host("test").unwrap();
+    assert_eq!(
+        (host.platform, host.platform.runner_asset(), host.service_mode),
+        (Platform::LinuxArm64, "linux-arm64", ServiceMode::Systemd)
+    );
+    let example = example_inventory();
+    assert_eq!(example.find_host("pi").unwrap().platform, Platform::LinuxArm64);
+    assert_eq!(example.find_host("intel-mac").unwrap().platform, Platform::DarwinX64);
 }
 
 #[test]

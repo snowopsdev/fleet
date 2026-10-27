@@ -64,14 +64,14 @@ impl OsFamily {
 impl From<Platform> for OsFamily {
     fn from(platform: Platform) -> Self {
         match platform {
-            Platform::DarwinArm64 => Self::Macos,
+            Platform::DarwinArm64 | Platform::DarwinX64 => Self::Macos,
             Platform::WindowsArm64 | Platform::WindowsX64 => Self::Windows,
-            Platform::LinuxX64 => Self::Linux,
+            Platform::LinuxX64 | Platform::LinuxArm64 => Self::Linux,
         }
     }
 }
 
-/// Capacity of an OS or home filesystem (all fixed drives on Windows).
+/// Capacity of an OS, home or runner-root filesystem (all fixed drives on Windows).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]

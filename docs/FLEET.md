@@ -78,7 +78,7 @@ group every runner registers into. Each `[[hosts]]` entry is one machine:
 | Key | Meaning |
 |---|---|
 | `id` | Unique host ID. The local API accepts `inv:<id>` for the host's machine. |
-| `platform` | `darwin-arm64`, `windows-arm64`, `windows-x64` or `linux-x64`. |
+| `platform` | `darwin-arm64`, `darwin-x64` (Intel Macs), `windows-arm64`, `windows-x64`, `linux-x64` or `linux-arm64` (Raspberry Pi, Ampere, Asahi). See [Platforms](#platforms). |
 | `ssh` | SSH target, or `${NAME}` to read it from the environment variable `NAME`. |
 | `ssh_transport` | `openssh` (default) or `tailscale`. |
 | `root` | The dedicated directory that holds this host's runners. |
@@ -95,11 +95,31 @@ supersedes (add `repository = "org/repo"` for a repository-level one), and
 `decommission = true`. Validation rejects duplicate names or paths, traversal, the wrong service
 mode for the platform, and roots outside the runner area.
 
+## Platforms
+
+| `platform` | Runner release asset | `service_mode` | Capability label |
+|---|---|---|---|
+| `darwin-arm64` | `actions-runner-osx-arm64-*.tar.gz` | `launchagent` | `macos-build` |
+| `darwin-x64` | `actions-runner-osx-x64-*.tar.gz` | `launchagent` | `macos-build` |
+| `linux-x64` | `actions-runner-linux-x64-*.tar.gz` | `systemd` | `linux-build` or `linux-experimental` |
+| `linux-arm64` | `actions-runner-linux-arm64-*.tar.gz` | `systemd` | `linux-build` or `linux-experimental` |
+| `windows-x64` | `actions-runner-win-x64-*.zip` | `windows-service` or `windows-logon` | `windows-build` |
+| `windows-arm64` | `actions-runner-win-arm64-*.zip` | `windows-service` or `windows-logon` | `windows-build` |
+
+The architecture only selects the runner download. Install scripts, LaunchAgent and systemd
+paths, NixOS modules and runner checks are the same for both architectures of an operating
+system, and every download is verified against the SHA-256 digest GitHub publishes for that
+asset. Machine diagnostics warn when a machine reports a different architecture than its
+`platform`. `darwin-x64` and `linux-arm64` are not in Runner Fleet: an inventory that uses
+them doesn't load there, so leave them out of inventories you compare with
+[the parity script](#parity-with-runner-fleet).
+
 ## The example fleet
 
 [`inventory/fleet.example.toml`](../inventory/fleet.example.toml) demonstrates macOS LaunchAgents,
 Linux systemd, Windows services and Windows logon tasks. It includes a legacy migration, a
-decommissioned runner, a GUI lane separated from build work and a Linux canary.
+decommissioned runner, a GUI lane separated from build work, a Linux canary, an Intel Mac and
+a Raspberry Pi.
 
 Keep actual hardware, capacity and unattended-setup notes in your private inventory's comments.
 Runners live in one dedicated root per host, for example:
@@ -156,7 +176,10 @@ and `health HOST`).
 through Runner Fleet's `bin/fleet` and through this port, and compares the JSON. It needs a
 Runner Fleet checkout (`RUNNER_FLEET_DIR`, default `~/Code/soloterm/runner-fleet`) and python3.
 It reads `RUNNER_DASHBOARD_INVENTORY` like the app. Free-disk numbers and runners outside the
-inventory are ignored, since they move between the two runs.
+inventory are ignored, since they move between the two runs. The `darwin-x64` and
+`linux-arm64` platforms and the optional host keys `xcode`, `simulator_runtimes`,
+`mac_address` and `wake_via` are additions of this app; Runner Fleet rejects them, so compare
+inventories without them.
 
 ```sh
 scripts/fleet-parity.sh              # all four commands

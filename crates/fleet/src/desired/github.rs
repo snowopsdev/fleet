@@ -429,6 +429,35 @@ mod tests {
     }
 
     #[test]
+    fn new_platforms_select_their_own_release_asset_and_digest() {
+        use crate::desired::model::Platform;
+        let release = json!({"tag_name": "v2.999.0", "assets": [
+            {"name": "actions-runner-osx-arm64-2.999.0.tar.gz", "browser_download_url": "https://example.invalid/osx-arm64",
+             "digest": format!("sha256:{}", "a".repeat(64))},
+            {"name": "actions-runner-osx-x64-2.999.0.tar.gz", "browser_download_url": "https://example.invalid/osx-x64",
+             "digest": format!("sha256:{}", "b".repeat(64))},
+            {"name": "actions-runner-linux-x64-2.999.0.tar.gz", "browser_download_url": "https://example.invalid/linux-x64",
+             "digest": format!("sha256:{}", "c".repeat(64))},
+            {"name": "actions-runner-linux-arm64-2.999.0.tar.gz", "browser_download_url": "https://example.invalid/linux-arm64",
+             "digest": format!("sha256:{}", "d".repeat(64))},
+        ]})
+        .to_string();
+        let c = client(RecordingRunner::new(move |_| release.clone()));
+        for (platform, digest) in [(Platform::DarwinX64, "b"), (Platform::LinuxArm64, "d")] {
+            let asset = c.latest_asset(platform.runner_asset()).unwrap();
+            assert_eq!(
+                asset,
+                ReleaseAsset {
+                    version: "2.999.0".into(),
+                    name: format!("actions-runner-{}-2.999.0.tar.gz", platform.runner_asset()),
+                    url: format!("https://example.invalid/{}", platform.runner_asset()),
+                    sha256: Some(digest.repeat(64)),
+                }
+            );
+        }
+    }
+
+    #[test]
     fn runner_group_security_policy_is_enforced() {
         assert_eq!(
             client(fake_gh(false)).validate_runner_group_policy("trusted").unwrap(),

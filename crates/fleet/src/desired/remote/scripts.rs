@@ -1,7 +1,7 @@
 //! The scripts sent to worker hosts: guarded worker scripts with their RF_*
 //! values, service start/restart, logs, and the read-only probe and doctor.
 
-use super::super::model::{Host, Platform, Runner, RunnerRole, ServiceMode};
+use super::super::model::{Host, Runner, RunnerRole, ServiceMode};
 use super::super::py::{ps_quote, sh_quote, sh_remote_path};
 use super::super::windows_logon::{self, ServiceAction};
 use super::Transient;
@@ -258,7 +258,7 @@ $rows += [pscustomobject]@{{ name = {name}; path = $path; configured = $configur
 
 /// Read-only host checks: SSH identity, prerequisites, disk and power policy.
 pub(crate) fn posix_doctor(host: &Host) -> String {
-    let darwin = host.platform == Platform::DarwinArm64;
+    let darwin = host.platform.is_macos();
     let required = if darwin {
         "curl tar git shasum"
     } else {

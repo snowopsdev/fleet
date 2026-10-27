@@ -112,7 +112,9 @@ Tests replace GitHub, SSH and service boundaries; they never contact real hosts 
 `remote`, `state`, `plan`, `operations`), with its tests in `desired/tests.rs`. It keeps the
 file format, rules and messages, including `exclude_labels` and the `windows-logon` service mode
 (`desired/windows_logon.rs`), where the runner runs in an auto-logged-on desktop session for GUI
-tests. It differs only in the hardening listed below. The machine scripts
+tests. It differs in the hardening listed below, and in additions Runner Fleet doesn't have:
+the `darwin-x64` and `linux-arm64` platforms and optional host keys for toolchain drift and
+Wake-on-LAN ([FLEET.md](FLEET.md#platforms)). The machine scripts
 (`crates/fleet/scripts/`) are embedded with `include_str!`, and their RF_* values travel in the
 script on SSH stdin.
 

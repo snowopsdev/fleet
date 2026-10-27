@@ -39,24 +39,39 @@ pub struct Runner {
 pub enum Platform {
     #[serde(rename = "darwin-arm64")]
     DarwinArm64,
+    /// Intel Macs. Not in Runner Fleet.
+    #[serde(rename = "darwin-x64")]
+    DarwinX64,
     #[serde(rename = "windows-arm64")]
     WindowsArm64,
     #[serde(rename = "windows-x64")]
     WindowsX64,
     #[serde(rename = "linux-x64")]
     LinuxX64,
+    /// Raspberry Pi, Ampere and Asahi Linux machines. Not in Runner Fleet.
+    #[serde(rename = "linux-arm64")]
+    LinuxArm64,
 }
 
 impl Platform {
-    const ALL: [Self; 4] = [Self::DarwinArm64, Self::WindowsArm64, Self::WindowsX64, Self::LinuxX64];
+    const ALL: [Self; 6] = [
+        Self::DarwinArm64,
+        Self::DarwinX64,
+        Self::WindowsArm64,
+        Self::WindowsX64,
+        Self::LinuxX64,
+        Self::LinuxArm64,
+    ];
 
     /// The inventory spelling.
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::DarwinArm64 => "darwin-arm64",
+            Self::DarwinX64 => "darwin-x64",
             Self::WindowsArm64 => "windows-arm64",
             Self::WindowsX64 => "windows-x64",
             Self::LinuxX64 => "linux-x64",
+            Self::LinuxArm64 => "linux-arm64",
         }
     }
 
@@ -67,25 +82,41 @@ impl Platform {
     pub const fn is_windows(self) -> bool {
         match self {
             Self::WindowsArm64 | Self::WindowsX64 => true,
-            Self::DarwinArm64 | Self::LinuxX64 => false,
+            Self::DarwinArm64 | Self::DarwinX64 | Self::LinuxX64 | Self::LinuxArm64 => false,
+        }
+    }
+
+    pub const fn is_macos(self) -> bool {
+        match self {
+            Self::DarwinArm64 | Self::DarwinX64 => true,
+            Self::WindowsArm64 | Self::WindowsX64 | Self::LinuxX64 | Self::LinuxArm64 => false,
+        }
+    }
+
+    /// The CPU architecture, as `uname -m` reports it on macOS (`arm64`, `x86_64`).
+    /// Linux reports `aarch64` for arm64; Windows reports `ARM64` or `AMD64`.
+    pub const fn is_arm64(self) -> bool {
+        match self {
+            Self::DarwinArm64 | Self::WindowsArm64 | Self::LinuxArm64 => true,
+            Self::DarwinX64 | Self::WindowsX64 | Self::LinuxX64 => false,
         }
     }
 
     /// Service modes this platform allows.
     pub(crate) const fn service_modes(self) -> &'static [ServiceMode] {
         match self {
-            Self::DarwinArm64 => &[ServiceMode::Launchagent],
+            Self::DarwinArm64 | Self::DarwinX64 => &[ServiceMode::Launchagent],
             Self::WindowsArm64 | Self::WindowsX64 => &[ServiceMode::WindowsService, ServiceMode::WindowsLogon],
-            Self::LinuxX64 => &[ServiceMode::Systemd],
+            Self::LinuxX64 | Self::LinuxArm64 => &[ServiceMode::Systemd],
         }
     }
 
     /// A host carries exactly one of these labels.
     pub(crate) const fn capability_labels(self) -> &'static [&'static str] {
         match self {
-            Self::DarwinArm64 => &["macos-build"],
+            Self::DarwinArm64 | Self::DarwinX64 => &["macos-build"],
             Self::WindowsArm64 | Self::WindowsX64 => &["windows-build"],
-            Self::LinuxX64 => &["linux-build", "linux-experimental"],
+            Self::LinuxX64 | Self::LinuxArm64 => &["linux-build", "linux-experimental"],
         }
     }
 
@@ -93,9 +124,11 @@ impl Platform {
     pub const fn runner_asset(self) -> &'static str {
         match self {
             Self::DarwinArm64 => "osx-arm64",
+            Self::DarwinX64 => "osx-x64",
             Self::WindowsArm64 => "win-arm64",
             Self::WindowsX64 => "win-x64",
             Self::LinuxX64 => "linux-x64",
+            Self::LinuxArm64 => "linux-arm64",
         }
     }
 }
