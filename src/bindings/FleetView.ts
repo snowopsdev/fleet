@@ -8,6 +8,7 @@ import type { FleetSummary } from "./FleetSummary";
 import type { MachineView } from "./MachineView";
 import type { OrgStatusView } from "./OrgStatusView";
 import type { QueueView } from "./QueueView";
+import type { RunnerReleaseView } from "./RunnerReleaseView";
 import type { RunnerView } from "./RunnerView";
 import type { TailnetStatusView } from "./TailnetStatusView";
 
@@ -31,4 +32,8 @@ unmatchedRunners: Array<RunnerView>, ignored: Array<DiscoveredPeerView>, queue: 
 /**
  * Desired state from `inventory/fleet.toml`: errors, last check, the current change.
  */
-plan: FleetPlanStatus, orgs: Array<OrgStatusView>, tailnet: TailnetStatusView, monitoring: FleetMonitoring, };
+plan: FleetPlanStatus, orgs: Array<OrgStatusView>, tailnet: TailnetStatusView, monitoring: FleetMonitoring, 
+/**
+ * The latest `actions/runner` release, when it has been read.
+ */
+runnerRelease: RunnerReleaseView | null, };

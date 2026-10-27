@@ -8,6 +8,11 @@ export type QueueView = { jobs: Array<QueuedJobView>,
  */
 otherQueued: number, 
 /**
+ * Self-hosted jobs GitHub holds before queueing them for a runner (`waiting` for an
+ * approval, or `pending`/`requested` behind a concurrency group). Counted, not listed.
+ */
+held: number, 
+/**
  * False when job data is missing or stale for some org.
  */
 complete: boolean, asOf: string | null, };

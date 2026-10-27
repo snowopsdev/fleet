@@ -83,7 +83,7 @@ pub(crate) fn tailnet_machine_key(node_id: &str) -> String {
 #[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct OrgConfig {
-    /// GitHub organization login, e.g. `acme`.
+    /// GitHub organization or personal account login, e.g. `acme`.
     pub login: String,
     /// API base, `https://api.github.com` unless GitHub Enterprise Server.
     #[serde(default = "default_api_base")]
@@ -93,6 +93,25 @@ pub struct OrgConfig {
     /// Where the API token comes from.
     #[serde(default)]
     pub auth: OrgAuth,
+    /// An organization, or a personal account (which can only have repository runners).
+    #[serde(default)]
+    pub kind: AccountKind,
+    /// Repositories (names without the owner) whose repository-level runners are shown too.
+    /// Monitoring only: inventory changes apply to organization runners.
+    #[serde(default)]
+    pub runner_repos: Vec<String>,
+}
+
+/// The kind of GitHub account an added "organization" entry is.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub enum AccountKind {
+    /// Organization runners, plus any listed repository runners.
+    #[default]
+    Organization,
+    /// A personal account: only the listed repositories' runners.
+    User,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]
@@ -151,6 +170,10 @@ pub struct Observations {
     pub tailscale_error: Option<Timed<String>>,
     /// Keyed by org login (lowercase).
     pub github: BTreeMap<String, OrgObservation>,
+    /// The latest `actions/runner` release, read at most hourly.
+    pub runner_release: Option<Timed<RunnerRelease>>,
+    /// When the runner release was last requested, successfully or not.
+    pub runner_release_checked_at: Option<DateTime<Utc>>,
     /// Keyed by [`inventory_machine_key`] or [`tailnet_machine_key`].
     pub machines: BTreeMap<String, MachineObservation>,
 }
@@ -209,6 +232,8 @@ pub struct OrgObservation {
     pub jobs_error: Option<Timed<String>>,
     pub rate_limit: Option<RateLimit>,
     pub missing_token: bool,
+    /// GitHub rate-limited this account; polls skip it until then.
+    pub rate_limited_until: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -223,6 +248,16 @@ pub struct GhRunner {
     pub ephemeral: Option<bool>,
     pub version: Option<String>,
     pub runner_group_id: Option<u64>,
+    /// `owner/name` for a repository-level runner; None for an organization runner.
+    pub repo: Option<String>,
+}
+
+/// An `actions/runner` release.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunnerRelease {
+    /// Without the tag's leading `v`, e.g. `2.329.0`.
+    pub version: String,
+    pub published_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -300,6 +335,18 @@ pub struct FleetView {
     pub orgs: Vec<OrgStatusView>,
     pub tailnet: TailnetStatusView,
     pub monitoring: crate::monitoring::FleetMonitoring,
+    /// The latest `actions/runner` release, when it has been read.
+    pub runner_release: Option<RunnerReleaseView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct RunnerReleaseView {
+    /// The latest runner version, e.g. `2.329.0`.
+    pub version: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub checked_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
@@ -438,6 +485,8 @@ pub struct RunnerView {
     pub warnings: Vec<String>,
     /// What the inventory says about this runner, if its machine is a fleet host.
     pub desired: Option<crate::fleet_plan::RunnerDesired>,
+    /// The runner's version compared with the latest release, when both are known.
+    pub version_status: Option<crate::runner_version::RunnerVersionStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
@@ -452,6 +501,8 @@ pub struct GithubRunnerFacts {
     pub os: String,
     pub version: Option<String>,
     pub ephemeral: Option<bool>,
+    /// `owner/name` when registered to a repository rather than the organization.
+    pub repo: Option<String>,
     pub as_of: DateTime<Utc>,
     pub stale: bool,
 }
@@ -499,6 +550,9 @@ pub struct QueueView {
     /// Queued jobs whose labels no self-hosted runner in the org could ever match
     /// (typically GitHub-hosted `ubuntu-latest`). Counted, not listed.
     pub other_queued: u32,
+    /// Self-hosted jobs GitHub holds before queueing them for a runner (`waiting` for an
+    /// approval, or `pending`/`requested` behind a concurrency group). Counted, not listed.
+    pub held: u32,
     /// False when job data is missing or stale for some org.
     pub complete: bool,
     pub as_of: Option<DateTime<Utc>>,
@@ -529,8 +583,12 @@ pub struct OrgStatusView {
     pub jobs_truncated: bool,
     pub error: Option<String>,
     pub rate_limit: Option<RateLimit>,
+    /// Polling is paused until then because GitHub rate-limited the account.
+    pub rate_limited_until: Option<DateTime<Utc>>,
     pub repo_scope: RepoScope,
     pub auth: OrgAuth,
+    pub kind: AccountKind,
+    pub runner_repos: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
