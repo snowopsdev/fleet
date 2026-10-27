@@ -56,10 +56,11 @@ impl Engine {
         let key = org.login.to_lowercase();
         let cached = self.github.locked().get(&key).cloned();
         if let Some(client) = &cached
-            && !client.is_token_expired()
+            && client.token_request().is_none()
         {
             return Ok(client.clone());
         }
+        let request = cached.as_ref().and_then(|c| c.token_request());
         let token = match org.auth {
             OrgAuth::Token => {
                 let account = key.clone();
@@ -71,12 +72,12 @@ impl Engine {
             OrgAuth::GhCli => gh::token(&gh::host_for_api_base(&org.api_base)).await?,
         };
         if let Some(client) = cached {
-            client.set_token(&token);
+            client.set_token(&token, request.unwrap_or_default());
             return Ok(client);
         }
-        // Keep a client that a sign-in installed while the token was being read.
         let client = Arc::new(GithubClient::new(&org.api_base, &token));
-        Ok(self.github.locked().entry(key).or_insert(client).clone())
+        self.github.locked().insert(key, client.clone());
+        Ok(client)
     }
 
     /// GitHub errors, reworded for how this org signs in.

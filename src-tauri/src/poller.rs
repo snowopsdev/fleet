@@ -3,10 +3,11 @@
 //! re-derives the view and pushes it only when its content changed.
 
 use std::future::Future;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use fleet::engine::Engine;
 use fleet::model::FleetView;
 use fleet::monitoring::FleetMachineEvent;
@@ -19,6 +20,8 @@ pub const FLEET_UPDATED: &str = "fleet-updated";
 pub struct Poller {
     /// A generation counter, so a request made while a loop is polling isn't lost.
     refresh: watch::Sender<u64>,
+    /// Numbers views in the order their derivation starts, independent of the wall clock.
+    derivations: AtomicU64,
     last_push: Mutex<LastPush>,
 }
 
@@ -39,34 +42,40 @@ enum Push {
 /// The last view pushed to the UI.
 #[derive(Debug, Default)]
 struct LastPush {
-    generated_at: Option<DateTime<Utc>>,
+    derivation: u64,
     revision: Option<String>,
 }
 
 impl LastPush {
-    /// Whether to push `view`: never one derived before the last push (a tick's view can be
-    /// overtaken by a poll's), and for `IfChanged` only when its content differs.
-    fn accept(&mut self, view: &FleetView, when: Push) -> bool {
+    /// Whether to push `view`, numbered by `derivation`: never one whose derivation started
+    /// before the last push's (a tick's view can be overtaken by a poll's), and for `IfChanged`
+    /// only when its content differs.
+    fn accept(&mut self, derivation: u64, view: &FleetView, when: Push) -> bool {
         let revision = fleet::local_api::revision(view).ok();
-        let older = self.generated_at.is_some_and(|at| view.generated_at < at);
         let unchanged = when == Push::IfChanged && revision.is_some() && revision == self.revision;
-        if older || unchanged {
+        if derivation < self.derivation || unchanged {
             return false;
         }
-        self.generated_at = Some(view.generated_at);
+        self.derivation = derivation;
         self.revision = revision;
         true
     }
 }
 
-pub fn emit_view(app: &AppHandle, engine: &Engine) {
-    push(app, engine.view(), Push::Always);
+/// Number the view about to be derived.
+fn next_derivation(app: &AppHandle) -> u64 {
+    app.state::<Poller>().derivations.fetch_add(1, Ordering::Relaxed)
 }
 
-fn push(app: &AppHandle, view: FleetView, when: Push) {
+pub fn emit_view(app: &AppHandle, engine: &Engine) {
+    let derivation = next_derivation(app);
+    push(app, derivation, engine.view(), Push::Always);
+}
+
+fn push(app: &AppHandle, derivation: u64, view: FleetView, when: Push) {
     // Emit under the lock so pushes reach the UI in the order they were accepted.
     let mut last = app.state::<Poller>().inner().last_push.locked();
-    if last.accept(&view, when)
+    if last.accept(derivation, &view, when)
         && let Err(e) = app.emit(FLEET_UPDATED, view)
     {
         tracing::warn!("emit failed: {e}");
@@ -78,6 +87,7 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) {
     // Managed before any loop can push.
     app.manage(Poller {
         refresh: watch::Sender::new(0),
+        derivations: AtomicU64::new(0),
         last_push: Mutex::default(),
     });
     let refresh = &app.state::<Poller>().inner().refresh;
@@ -108,14 +118,15 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) {
             loop {
                 tick.tick().await;
                 let monitor = engine.clone();
+                let derivation = next_derivation(&app);
                 match tauri::async_runtime::spawn_blocking(move || monitor.record_monitoring(Utc::now())).await {
                     Ok((events, view)) => {
-                        push(&app, view, Push::IfChanged);
+                        push(&app, derivation, view, Push::IfChanged);
                         deliver_notifications(&app, &engine, events).await;
                     }
                     Err(error) => {
                         tracing::warn!("recording machine history failed: {error}");
-                        push(&app, engine.view(), Push::IfChanged);
+                        push(&app, next_derivation(&app), engine.view(), Push::IfChanged);
                     }
                 }
             }
@@ -207,30 +218,47 @@ mod tests {
     }
 
     #[test]
-    fn ticks_push_changed_views_only_and_never_an_older_one() {
+    fn ticks_push_changed_views_only() {
         let mut last = LastPush::default();
         let first = view();
-        assert!(last.accept(&first, Push::IfChanged));
+        assert!(last.accept(0, &first, Push::IfChanged));
         let mut same = first.clone();
         same.generated_at += TimeDelta::seconds(5);
-        assert!(!last.accept(&same, Push::IfChanged), "only the time changed");
-        assert!(last.accept(&same, Push::Always));
-        let mut changed = same.clone();
+        assert!(!last.accept(1, &same, Push::IfChanged), "only the time changed");
+        assert!(last.accept(2, &same, Push::Always));
+        let mut changed = same;
         changed.machines.pop().expect("demo machines");
-        let mut overtaken = changed.clone();
-        overtaken.generated_at = first.generated_at;
-        assert!(
-            !last.accept(&overtaken, Push::IfChanged),
-            "derived before the last push"
-        );
-        changed.generated_at += TimeDelta::seconds(5);
-        assert!(last.accept(&changed, Push::IfChanged));
+        assert!(last.accept(3, &changed, Push::IfChanged));
+    }
+
+    #[test]
+    fn a_view_derived_before_the_last_push_is_dropped() {
+        let mut last = LastPush::default();
+        let first = view();
+        let mut newer = first.clone();
+        newer.machines.pop().expect("demo machines");
+        assert!(last.accept(2, &newer, Push::Always));
+        assert!(!last.accept(1, &first, Push::IfChanged), "a tick overtaken by a poll");
+        assert!(!last.accept(1, &first, Push::Always));
+    }
+
+    #[test]
+    fn a_backward_clock_step_does_not_freeze_pushes() {
+        let mut last = LastPush::default();
+        let first = view();
+        assert!(last.accept(0, &first, Push::Always));
+        let mut after_step = first.clone();
+        after_step.generated_at -= TimeDelta::hours(2);
+        after_step.machines.pop().expect("demo machines");
+        assert!(last.accept(1, &after_step, Push::IfChanged));
+        assert!(last.accept(2, &after_step, Push::Always));
     }
 
     #[tokio::test]
     async fn refresh_requested_during_a_poll_wakes_the_next_wait() {
         let poller = Poller {
             refresh: watch::Sender::new(0),
+            derivations: AtomicU64::new(0),
             last_push: Mutex::default(),
         };
         let mut refresh = poller.refresh.subscribe();
