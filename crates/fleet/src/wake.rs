@@ -10,9 +10,19 @@ use crate::desired::model::Host;
 use crate::desired::py::{ps_quote, sh_quote};
 use crate::desired::remote::{RemoteClient, RemoteError};
 
-/// The limited broadcast address and the discard port Wake-on-LAN conventionally uses.
-pub const BROADCAST: &str = "255.255.255.255";
+/// The discard port Wake-on-LAN conventionally uses.
 pub const PORT: u16 = 9;
+
+/// A wake packet's destination: a broadcast-capable IPv4 address, never loopback,
+/// multicast or unspecified.
+pub fn parse_broadcast(value: &str) -> Result<std::net::Ipv4Addr, String> {
+    let invalid = || format!("invalid wake_broadcast: '{value}' (use an IPv4 broadcast address, like '192.168.1.255')");
+    let address: std::net::Ipv4Addr = value.parse().map_err(|_| invalid())?;
+    if address.is_loopback() || address.is_multicast() || address.is_unspecified() {
+        return Err(invalid());
+    }
+    Ok(address)
+}
 
 /// A MAC address in `aa:bb:cc:dd:ee:ff` or `aa-bb-cc-dd-ee-ff` form, one separator style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,32 +116,40 @@ try {
 Write-Output 'sent with UdpClient'
 "#;
 
-/// The script `via` runs to wake `mac`, for its shell.
-pub fn wake_script(via: &Host, mac: &MacAddress) -> String {
+/// The script `via` runs to wake `mac` through `broadcast`, for its shell.
+pub fn wake_script(via: &Host, mac: &MacAddress, broadcast: std::net::Ipv4Addr) -> String {
+    let broadcast = broadcast.to_string();
     if via.is_windows() {
         format!(
             "$mac = {}\n$broadcast = {}\n$port = {PORT}\n{WINDOWS_WAKE}",
             ps_quote(&mac.hex()),
-            ps_quote(BROADCAST)
+            ps_quote(&broadcast)
         )
     } else {
         format!(
             "mac={}\nbroadcast={}\nport={PORT}\n{POSIX_WAKE}",
             sh_quote(&mac.hex()),
-            sh_quote(BROADCAST)
+            sh_quote(&broadcast)
         )
     }
+}
+
+/// The host's `wake_broadcast`, or the limited broadcast address.
+pub fn broadcast_for(host: &Host) -> Result<std::net::Ipv4Addr, String> {
+    host.wake_broadcast
+        .as_deref()
+        .map_or(Ok(std::net::Ipv4Addr::BROADCAST), parse_broadcast)
 }
 
 /// Sends magic packets; tests replace it so no packet is ever sent.
 pub trait WakeSender: Send + Sync {
     /// Blocks until `via` reports the packet sent. Call off the async runtime.
-    fn send(&self, via: &Host, mac: &MacAddress) -> Result<String, RemoteError>;
+    fn send(&self, via: &Host, mac: &MacAddress, broadcast: std::net::Ipv4Addr) -> Result<String, RemoteError>;
 }
 
 impl WakeSender for RemoteClient {
-    fn send(&self, via: &Host, mac: &MacAddress) -> Result<String, RemoteError> {
-        self.run_script(via, &wake_script(via, mac), Some(Duration::from_secs(20)))
+    fn send(&self, via: &Host, mac: &MacAddress, broadcast: std::net::Ipv4Addr) -> Result<String, RemoteError> {
+        self.run_script(via, &wake_script(via, mac, broadcast), Some(Duration::from_secs(20)))
             .map(|out| out.trim().to_string())
     }
 }
@@ -166,6 +184,21 @@ mod tests {
             "01:00:5e:00:00:01",
         ] {
             assert!(bad.parse::<MacAddress>().is_err(), "accepted {bad:?}");
+        }
+    }
+
+    #[test]
+    fn broadcast_addresses_are_ipv4_and_can_reach_a_network() {
+        assert_eq!(parse_broadcast("192.168.1.255").unwrap().to_string(), "192.168.1.255");
+        for bad in [
+            "127.0.0.1",
+            "224.0.0.1",
+            "0.0.0.0",
+            "fe80::1",
+            "192.168.1",
+            "10.0.0.255; reboot",
+        ] {
+            assert!(parse_broadcast(bad).is_err(), "accepted {bad:?}");
         }
     }
 
@@ -220,7 +253,11 @@ mod tests {
         let recorder = Arc::new(Recorder::default());
         let remote = RemoteClient::new(recorder.clone(), Duration::from_secs(30), Programs::default());
         let mac: MacAddress = "AA-BB-CC-01-02-03".parse().unwrap();
-        assert_eq!(remote.send(&host("linux-arm64"), &mac).unwrap(), "sent with python3");
+        let all = std::net::Ipv4Addr::BROADCAST;
+        assert_eq!(
+            remote.send(&host("linux-arm64"), &mac, all).unwrap(),
+            "sent with python3"
+        );
         let calls = recorder.0.lock().unwrap();
         let (argv, script) = &calls[0];
         assert_eq!(&argv[argv.len() - 3..], ["--", "relay", "bash -s"]);
@@ -231,8 +268,8 @@ mod tests {
             "{script}"
         );
         assert!(script.contains("SO_BROADCAST"));
-        let windows = wake_script(&host("windows-x64"), &mac);
-        assert!(windows.starts_with("$mac = 'aabbcc010203'\n$broadcast = '255.255.255.255'\n$port = 9\n"));
+        let windows = wake_script(&host("windows-x64"), &mac, "192.168.7.255".parse().unwrap());
+        assert!(windows.starts_with("$mac = 'aabbcc010203'\n$broadcast = '192.168.7.255'\n$port = 9\n"));
         assert!(windows.contains("EnableBroadcast = $true"));
     }
 
@@ -243,7 +280,7 @@ mod tests {
     fn posix_script_prefers_python_then_perl_and_fails_without_either() {
         use std::os::unix::fs::PermissionsExt;
         let mac: MacAddress = "02:00:5e:10:00:01".parse().unwrap();
-        let script = wake_script(&host("linux-x64"), &mac);
+        let script = wake_script(&host("linux-x64"), &mac, std::net::Ipv4Addr::BROADCAST);
         let run = |tools: &[&str]| {
             let dir = tempfile::tempdir().unwrap();
             for tool in tools {

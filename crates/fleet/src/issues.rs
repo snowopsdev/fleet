@@ -431,11 +431,26 @@ fn public_repository_issues(view: &FleetView) -> Vec<FleetIssue> {
     for org in &view.orgs {
         for group in &org.public_runner_groups {
             seen.insert((org.login.to_lowercase(), group.name.clone()));
+            let (title, detail) = if group.confirmed {
+                (
+                    format!("Runner group {} allows public repositories", group.name),
+                    public_repository_detail(&group.name, &group.runners),
+                )
+            } else {
+                (
+                    format!("Runner group {}: public repository access unknown", group.name),
+                    format!(
+                        "GitHub didn't say whether public repositories can use the runner group {}. Check its repository access in the organization's runner group settings. {}",
+                        group.name,
+                        public_repository_detail(&group.name, &group.runners)
+                    ),
+                )
+            };
             issues.push(FleetIssue::new(
                 format!("public-group:{}:{}", org.login.to_lowercase(), group.name),
                 Github,
-                format!("Runner group {} allows public repositories", group.name),
-                public_repository_detail(&group.name, &group.runners),
+                title,
+                detail,
             ));
         }
     }
@@ -595,13 +610,19 @@ mod tests {
         let now = Utc::now();
         let (config, mut observations) = crate::demo::dataset(now);
         let org = observations.github.get_mut("acme-demo").unwrap();
+        // The demo's pi-01-a is in group 2 and the other organization runners in group 1.
+        let group = |id, name: &str, public| GhRunnerGroup {
+            id,
+            name: name.into(),
+            allows_public_repositories: public,
+        };
         org.runner_groups = Some(Timed::new(
             now,
-            vec![GhRunnerGroup {
-                id: 9,
-                name: "Empty".into(),
-                allows_public_repositories: true,
-            }],
+            vec![
+                group(9, "Empty", Some(true)),
+                group(1, "Default", None),
+                group(2, "Community builds", Some(false)),
+            ],
         ));
         let view = crate::derive::derive(
             &config,
@@ -610,8 +631,22 @@ mod tests {
             now,
             DataSource::Demo,
         );
-        assert!(view.orgs[0].public_runner_groups.is_empty());
-        assert!(public_groups(&view).is_empty());
+        let groups = &view.orgs[0].public_runner_groups;
+        assert_eq!(
+            groups
+                .iter()
+                .map(|g| (g.name.as_str(), g.confirmed))
+                .collect::<Vec<_>>(),
+            [("Default", false)],
+            "a group GitHub says nothing about isn't assumed private"
+        );
+        assert_eq!(
+            public_groups(&view),
+            [(
+                "public-group:acme-demo:Default".to_string(),
+                "Runner group Default: public repository access unknown".to_string()
+            )]
+        );
     }
     use crate::machine_diagnostics::{DiagnosticGroup, MachineDiagnostic, MachineDiagnostics};
     use crate::monitoring::{FleetMachineAlert, FleetMonitoring};

@@ -293,7 +293,8 @@ pub struct RunnerRelease {
 pub struct GhRunnerGroup {
     pub id: u64,
     pub name: String,
-    pub allows_public_repositories: bool,
+    /// `None` when GitHub didn't say, which isn't taken to mean the group is private.
+    pub allows_public_repositories: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -653,6 +654,8 @@ pub struct PublicRunnerGroup {
     pub name: String,
     /// Self-hosted runners GitHub lists in the group.
     pub runners: Vec<String>,
+    /// False when GitHub didn't report the group's public repository access at all.
+    pub confirmed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]

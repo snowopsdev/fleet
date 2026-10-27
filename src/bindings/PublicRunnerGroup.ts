@@ -8,4 +8,8 @@ export type PublicRunnerGroup = { name: string,
 /**
  * Self-hosted runners GitHub lists in the group.
  */
-runners: Array<string>, };
+runners: Array<string>, 
+/**
+ * False when GitHub didn't report the group's public repository access at all.
+ */
+confirmed: boolean, };

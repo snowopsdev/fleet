@@ -85,12 +85,12 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         GhRunnerGroup {
             id: 1,
             name: "Default".into(),
-            allows_public_repositories: false,
+            allows_public_repositories: Some(false),
         },
         GhRunnerGroup {
             id: 2,
             name: "Community builds".into(),
-            allows_public_repositories: true,
+            allows_public_repositories: Some(true),
         },
     ];
     // Registered to the acme-demo/ml repository rather than the organization.

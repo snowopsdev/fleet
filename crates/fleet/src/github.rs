@@ -326,8 +326,7 @@ impl GithubClient {
         struct RawGroup {
             id: u64,
             name: String,
-            #[serde(default)]
-            allows_public_repositories: bool,
+            allows_public_repositories: Option<bool>,
         }
         let groups = self
             .collection::<RawGroup>(

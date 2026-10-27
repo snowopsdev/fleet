@@ -1,11 +1,12 @@
 #![expect(clippy::unwrap_used, reason = "tests fail at the assertion site")]
 //! Reviewed Wake-on-LAN with a fake tailnet and a fake sender; no packet is ever sent.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use fleet::desired::model::Host;
 use fleet::desired::remote::RemoteError;
-use fleet::engine::desired::DesiredIo;
+use fleet::engine::desired::{DesiredIo, SshTransportIdentity};
 use fleet::engine::{Engine, MemorySecrets};
 use fleet::model::{TailnetPeer, TailnetSnapshot};
 use fleet::monitoring::FleetEventKind;
@@ -42,8 +43,11 @@ runners = [{ name = "relay-01", directory = "runner-01" }]
 struct FakeSender(Mutex<Vec<(String, String)>>);
 
 impl WakeSender for FakeSender {
-    fn send(&self, via: &Host, mac: &MacAddress) -> Result<String, RemoteError> {
-        self.0.lock().unwrap().push((via.id.clone(), mac.to_string()));
+    fn send(&self, via: &Host, mac: &MacAddress, broadcast: std::net::Ipv4Addr) -> Result<String, RemoteError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((via.id.clone(), format!("{mac} {broadcast}")));
         Ok("sent with python3".into())
     }
 }
@@ -67,6 +71,10 @@ struct Fixture {
     inventory: std::path::PathBuf,
     engine: Engine,
     sender: Arc<FakeSender>,
+    /// Whether the relay is online on the fake tailnet.
+    relay_online: Arc<AtomicBool>,
+    /// What `ssh -G` reports for the relay's target.
+    relay_config: Arc<Mutex<String>>,
 }
 
 async fn fixture(mini_online: bool, relay_online: bool) -> Fixture {
@@ -74,19 +82,31 @@ async fn fixture(mini_online: bool, relay_online: bool) -> Fixture {
     let inventory = dir.path().join("fleet.toml");
     std::fs::write(&inventory, INVENTORY).unwrap();
     let sender = Arc::new(FakeSender::default());
+    let relay = Arc::new(AtomicBool::new(relay_online));
+    let config = Arc::new(Mutex::new(
+        "hostname relay.demo.ts.net\nport 22\nuser builder\n".to_string(),
+    ));
+    let (online, resolved) = (relay.clone(), config.clone());
     let engine = Engine::load(dir.path().join("config.json"), Arc::new(MemorySecrets::default()))
         .unwrap()
         .with_wake_sender(sender.clone())
         .with_desired_io(DesiredIo {
             boundaries: Arc::new(|_| panic!("waking must not call runner operations or GitHub")),
             sleep: |_| panic!("no operation waits"),
-            resolve_ssh_transport: Arc::new(|_| None),
+            resolve_ssh_transport: Arc::new(move |target| {
+                (target == "builder@relay.demo.ts.net")
+                    .then(|| SshTransportIdentity::from_config(&resolved.lock().unwrap()))
+                    .flatten()
+            }),
         })
-        .with_tailscale_source(move || async move {
-            Ok(TailnetSnapshot {
-                peers: vec![peer("mini", mini_online), peer("relay", relay_online)],
-                ..Default::default()
-            })
+        .with_tailscale_source(move || {
+            let relay_online = online.load(Ordering::SeqCst);
+            async move {
+                Ok(TailnetSnapshot {
+                    peers: vec![peer("mini", mini_online), peer("relay", relay_online)],
+                    ..Default::default()
+                })
+            }
         });
     engine
         .set_inventory_path(Some(inventory.display().to_string()))
@@ -97,6 +117,8 @@ async fn fixture(mini_online: bool, relay_online: bool) -> Fixture {
         inventory,
         engine,
         sender,
+        relay_online: relay,
+        relay_config: config,
     }
 }
 
@@ -121,7 +143,7 @@ async fn an_offline_machine_is_woken_once_through_its_relay_and_recorded() {
     assert!(message.contains("from relay"), "{message}");
     assert_eq!(
         *f.sender.0.lock().unwrap(),
-        [("relay".to_string(), "02:00:5e:10:00:01".to_string())]
+        [("relay".to_string(), "02:00:5e:10:00:01 255.255.255.255".to_string())]
     );
     let events = f.engine.monitoring_events(Some("inv:mini"), None);
     assert_eq!(events[0].kind, FleetEventKind::WakeRequested);
@@ -177,4 +199,53 @@ async fn demo_data_never_wakes_anything() {
     f.engine.set_demo_mode(true).unwrap();
     assert!(f.engine.wake_review("ts:n-mini").await.is_err());
     assert!(f.sender.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_relay_that_goes_offline_or_changes_ssh_configuration_after_review_is_refused() {
+    let f = fixture(false, true).await;
+    let review = f.engine.wake_review("ts:n-mini").await.unwrap();
+    assert!(review.ready, "{:?}", review.blockers);
+    f.relay_online.store(false, Ordering::SeqCst);
+    f.engine.poll_tailscale().await;
+    let error = f.engine.wake_execute(&review.id).await.unwrap_err();
+    assert!(error.to_string().contains("changed since you reviewed"), "{error}");
+
+    f.relay_online.store(true, Ordering::SeqCst);
+    f.engine.poll_tailscale().await;
+    let review = f.engine.wake_review("ts:n-mini").await.unwrap();
+    *f.relay_config.lock().unwrap() = "hostname other-relay.demo.ts.net\nport 22\nuser builder\n".into();
+    let error = f.engine.wake_execute(&review.id).await.unwrap_err();
+    assert!(error.to_string().contains("changed since you reviewed"), "{error}");
+    assert!(f.sender.0.lock().unwrap().is_empty());
+
+    // Without an effective SSH configuration for the relay, the review is blocked.
+    *f.relay_config.lock().unwrap() = String::new();
+    let review = f.engine.wake_review("ts:n-mini").await.unwrap();
+    assert!(!review.ready);
+    assert!(
+        review.blockers[0].contains("effective SSH configuration"),
+        "{:?}",
+        review.blockers
+    );
+}
+
+#[tokio::test]
+async fn a_declared_broadcast_address_is_reviewed_and_used() {
+    let f = fixture(false, true).await;
+    std::fs::write(
+        &f.inventory,
+        INVENTORY.replace(
+            "wake_via = \"relay\"",
+            "wake_via = \"relay\"\nwake_broadcast = \"192.168.7.255\"",
+        ),
+    )
+    .unwrap();
+    let review = f.engine.wake_review("ts:n-mini").await.unwrap();
+    assert_eq!(review.broadcast, "192.168.7.255:9");
+    f.engine.wake_execute(&review.id).await.unwrap();
+    assert_eq!(
+        *f.sender.0.lock().unwrap(),
+        [("relay".to_string(), "02:00:5e:10:00:01 192.168.7.255".to_string())]
+    );
 }

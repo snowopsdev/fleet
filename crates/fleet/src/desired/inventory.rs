@@ -199,11 +199,20 @@ fn parse_host(raw: &Value, environ: &HashMap<String, String>) -> Result<Host> {
         None => None,
     };
     let wake_via = optional_string(data, "wake_via")?;
+    let wake_broadcast = match optional_string(data, "wake_broadcast")? {
+        Some(address) => Some(
+            crate::wake::parse_broadcast(&address)
+                .map_err(|e| InventoryError(format!("{id}: {e}")))?
+                .to_string(),
+        ),
+        None => None,
+    };
     Ok(Host {
         xcode,
         simulator_runtimes,
         mac_address,
         wake_via,
+        wake_broadcast,
         id,
         platform,
         ssh_target,
@@ -316,12 +325,15 @@ fn validate_host<'a>(host: &'a Host, declared: &mut Declared<'a>) -> Result<()> 
 /// Wake-on-LAN needs both the address and another inventory host to send from.
 fn validate_wake(inventory: &Inventory, host: &Host) -> Result<()> {
     match (&host.mac_address, &host.wake_via) {
-        (None, None) => Ok(()),
+        (None, None) if host.wake_broadcast.is_none() => Ok(()),
         (Some(_), Some(via)) if via == &host.id => err(format!("{}: wake_via must name another host", host.id)),
         (Some(_), Some(via)) if !inventory.hosts.iter().any(|h| &h.id == via) => {
             err(format!("{}: wake_via names an unknown host: {}", host.id, repr(via)))
         }
         (Some(_), Some(_)) => Ok(()),
+        _ if host.wake_broadcast.is_some() => {
+            err(format!("{}: wake_broadcast needs mac_address and wake_via", host.id))
+        }
         _ => err(format!("{}: mac_address and wake_via go together", host.id)),
     }
 }

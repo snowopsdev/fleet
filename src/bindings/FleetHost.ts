@@ -29,4 +29,9 @@ macAddress: string | null,
 /**
  * The inventory host on the same network that sends the magic packet. Not in Runner Fleet.
  */
-wakeVia: string | null, };
+wakeVia: string | null, 
+/**
+ * The IPv4 broadcast address for the wake packet; `255.255.255.255` when unset. Set it
+ * to the subnet's broadcast when the sending host has several networks.
+ */
+wakeBroadcast: string | null, };

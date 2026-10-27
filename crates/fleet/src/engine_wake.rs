@@ -10,12 +10,13 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use super::desired::SshTransportIdentity;
 use super::{Engine, EngineError};
-use crate::desired::model::{Host, Inventory};
+use crate::desired::model::{Host, Inventory, SshTransport};
 use crate::model::{FleetView, MachineView, inventory_machine_key};
 use crate::monitoring::FleetEventKind;
 use crate::sync::MutexExt;
-use crate::wake::{BROADCAST, MacAddress, PORT, WakeSender};
+use crate::wake::{MacAddress, PORT, WakeSender, broadcast_for};
 
 /// Reviews expire like change reviews.
 const REVIEW_LIFETIME: Duration = Duration::minutes(15);
@@ -40,9 +41,37 @@ pub struct WakeReview {
     pub checked_at: DateTime<Utc>,
 }
 
-/// Pending reviews, used at most once.
+/// A review, with how the sending host was reached when it was made.
+#[derive(Debug, Clone, PartialEq)]
+struct Pending {
+    review: WakeReview,
+    via: ViaConnection,
+}
+
+/// The sending host's SSH target, transport and effective OpenSSH configuration (`ssh -G`).
+#[derive(Debug, Clone, PartialEq)]
+struct ViaConnection {
+    target: Option<String>,
+    transport: SshTransport,
+    resolved: Option<SshTransportIdentity>,
+}
+
+/// Pending reviews, used at most once and only within [`REVIEW_LIFETIME`].
 #[derive(Debug, Default)]
-pub struct WakeReviews(Vec<WakeReview>);
+pub struct WakeReviews(Vec<Pending>);
+
+impl WakeReviews {
+    fn add(&mut self, pending: Pending, now: DateTime<Utc>) {
+        self.0.retain(|p| now - p.review.checked_at < REVIEW_LIFETIME);
+        self.0.push(pending);
+    }
+
+    /// Removes the review; `None` if it's unknown, used or expired.
+    fn take(&mut self, id: &str, now: DateTime<Utc>) -> Option<Pending> {
+        let index = self.0.iter().position(|p| p.review.id == id)?;
+        Some(self.0.remove(index)).filter(|p| now - p.review.checked_at < REVIEW_LIFETIME)
+    }
+}
 
 fn machine_for<'a>(view: &'a FleetView, host: &str) -> Option<&'a MachineView> {
     let key = inventory_machine_key(host);
@@ -77,6 +106,7 @@ pub(crate) fn build_wake_review(
         )));
     };
     let mac: MacAddress = mac.parse().map_err(EngineError::Invalid)?;
+    let broadcast = broadcast_for(host).map_err(EngineError::Invalid)?;
     let mut blockers = Vec::new();
     if !host.enabled {
         blockers.push(format!("{host_id} is disabled in the inventory."));
@@ -110,7 +140,7 @@ pub(crate) fn build_wake_review(
         host: host_id,
         via: via_id.clone(),
         mac_address: mac.to_string(),
-        broadcast: format!("{BROADCAST}:{PORT}"),
+        broadcast: format!("{broadcast}:{PORT}"),
         ready: blockers.is_empty(),
         blockers,
         checked_at: now,
@@ -131,15 +161,36 @@ impl Engine {
         Ok(())
     }
 
+    /// The review for `machine_id` and how its sending host is reached right now.
+    async fn current_wake(&self, machine_id: &str) -> Result<(Inventory, FleetView, Pending), EngineError> {
+        let inventory = self.read_inventory().await?;
+        let resolved = self.resolve_ssh_hosts(&inventory).await;
+        let view = self.view();
+        let mut review = build_wake_review(&view, &inventory, machine_id, Utc::now())?;
+        let via_host = inventory
+            .find_host(&review.via)
+            .map_err(|e| EngineError::NotFound(e.0))?;
+        let via = ViaConnection {
+            target: via_host.ssh_target.clone(),
+            transport: via_host.ssh_transport,
+            resolved: via_host.ssh_target.as_ref().and_then(|t| resolved.get(t)).cloned(),
+        };
+        if via.transport == SshTransport::Openssh && via.target.is_some() && via.resolved.is_none() {
+            review.blockers.push(format!(
+                "Couldn't resolve {}'s effective SSH configuration. Check SSH settings and review the wake again.",
+                review.via
+            ));
+            review.ready = false;
+        }
+        Ok((inventory, view, Pending { review, via }))
+    }
+
     /// Read-only: what waking this machine would do.
     pub async fn wake_review(&self, machine_id: &str) -> Result<WakeReview, EngineError> {
         self.ensure_live_wake()?;
-        let inventory = self.read_inventory().await?;
-        let now = Utc::now();
-        let review = build_wake_review(&self.view(), &inventory, machine_id, now)?;
-        let mut reviews = self.wake_reviews.locked();
-        reviews.0.retain(|r| now - r.checked_at < REVIEW_LIFETIME);
-        reviews.0.push(review.clone());
+        let (_, _, pending) = self.current_wake(machine_id).await?;
+        let review = pending.review.clone();
+        self.wake_reviews.locked().add(pending, Utc::now());
         Ok(review)
     }
 
@@ -147,37 +198,38 @@ impl Engine {
     /// and records it in the machine's history.
     pub async fn wake_execute(&self, review_id: &str) -> Result<String, EngineError> {
         self.ensure_live_wake()?;
-        let reviewed = {
-            let mut reviews = self.wake_reviews.locked();
-            let index = reviews.0.iter().position(|r| r.id == review_id);
-            index
-                .map(|i| reviews.0.remove(i))
-                .filter(|r| Utc::now() - r.checked_at < REVIEW_LIFETIME)
-                .ok_or_else(|| {
-                    EngineError::NotFound("That review expired or was already used; review the wake again.".into())
-                })?
-        };
-        if !reviewed.ready {
+        let reviewed = self.wake_reviews.locked().take(review_id, Utc::now()).ok_or_else(|| {
+            EngineError::NotFound("That review expired or was already used; review the wake again.".into())
+        })?;
+        if !reviewed.review.ready {
             return Err(EngineError::Invalid("This wake has blockers and can't be sent.".into()));
         }
-        let inventory = self.read_inventory().await?;
-        let view = self.view();
-        let now = build_wake_review(&view, &inventory, &reviewed.machine_id, Utc::now())?;
-        if !now.ready
-            || (&now.host, &now.via, &now.mac_address) != (&reviewed.host, &reviewed.via, &reviewed.mac_address)
-        {
+        let (inventory, view, current) = self.current_wake(&reviewed.review.machine_id).await?;
+        let (now, was) = (&current.review, &reviewed.review);
+        let key = |r: &WakeReview| {
+            (
+                r.host.clone(),
+                r.via.clone(),
+                r.mac_address.clone(),
+                r.broadcast.clone(),
+            )
+        };
+        if !now.ready || key(now) != key(was) || current.via != reviewed.via {
             return Err(EngineError::Invalid(format!(
-                "{} changed since you reviewed the wake. Review it again.",
-                reviewed.host
+                "{} or {} changed since you reviewed the wake. Review it again.",
+                was.host, was.via
             )));
         }
+        let now = current.review;
         let via = inventory
             .find_host(&now.via)
             .map_err(|e| EngineError::NotFound(e.0))?
             .clone();
         let mac: MacAddress = now.mac_address.parse().map_err(EngineError::Invalid)?;
+        let target = inventory.find_host(&now.host).map_err(|e| EngineError::NotFound(e.0))?;
+        let broadcast = broadcast_for(target).map_err(EngineError::Invalid)?;
         let sender = self.wake_sender.clone();
-        let sent = tokio::task::spawn_blocking(move || sender.send(&via, &mac))
+        let sent = tokio::task::spawn_blocking(move || sender.send(&via, &mac, broadcast))
             .await
             .map_err(|e| EngineError::Invalid(format!("Couldn't send the wake packet: {e}")))?
             .map_err(|e| EngineError::Invalid(format!("{} couldn't send the wake packet: {e}", now.via)))?;
@@ -200,5 +252,49 @@ impl Engine {
         }
         self.view_changed();
         Ok(message)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pending(id: &str, checked_at: DateTime<Utc>) -> Pending {
+        Pending {
+            review: WakeReview {
+                id: id.into(),
+                machine_id: "ts:n".into(),
+                host: "mini".into(),
+                via: "relay".into(),
+                mac_address: "02:00:5e:10:00:01".into(),
+                broadcast: "255.255.255.255:9".into(),
+                blockers: Vec::new(),
+                ready: true,
+                checked_at,
+            },
+            via: ViaConnection {
+                target: Some("relay".into()),
+                transport: SshTransport::Tailscale,
+                resolved: None,
+            },
+        }
+    }
+
+    #[test]
+    fn reviews_are_single_use_and_expire_after_fifteen_minutes() {
+        let now = Utc::now();
+        let mut reviews = WakeReviews::default();
+        reviews.add(pending("fresh", now), now);
+        reviews.add(pending("old", now - Duration::minutes(14)), now);
+        assert!(reviews.take("old", now + Duration::minutes(2)).is_none(), "expired");
+        assert!(reviews.take("fresh", now + Duration::minutes(14)).is_some());
+        assert!(reviews.take("fresh", now + Duration::minutes(14)).is_none(), "used");
+        // Adding a review drops expired ones.
+        reviews.add(pending("a", now - Duration::minutes(20)), now);
+        reviews.add(pending("b", now), now);
+        assert_eq!(
+            reviews.0.iter().map(|p| p.review.id.as_str()).collect::<Vec<_>>(),
+            ["b"]
+        );
     }
 }

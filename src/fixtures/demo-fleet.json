@@ -512,7 +512,8 @@
           "xcode": [],
           "simulatorRuntimes": [],
           "macAddress": null,
-          "wakeVia": null
+          "wakeVia": null,
+          "wakeBroadcast": null
         },
         "plan": [
           {
@@ -938,7 +939,8 @@
             "iOS 26.0"
           ],
           "macAddress": null,
-          "wakeVia": null
+          "wakeVia": null,
+          "wakeBroadcast": null
         },
         "plan": [
           {
@@ -1084,7 +1086,8 @@
           "xcode": [],
           "simulatorRuntimes": [],
           "macAddress": null,
-          "wakeVia": null
+          "wakeVia": null,
+          "wakeBroadcast": null
         },
         "plan": [
           {
@@ -1383,7 +1386,8 @@
           "xcode": [],
           "simulatorRuntimes": [],
           "macAddress": null,
-          "wakeVia": null
+          "wakeVia": null,
+          "wakeBroadcast": null
         },
         "plan": [
           {
@@ -1980,7 +1984,8 @@
           ],
           "simulatorRuntimes": [],
           "macAddress": null,
-          "wakeVia": null
+          "wakeVia": null,
+          "wakeBroadcast": null
         },
         "plan": [
           {
@@ -2315,7 +2320,8 @@
           "xcode": [],
           "simulatorRuntimes": [],
           "macAddress": "02:00:5e:10:00:42",
-          "wakeVia": "build-linux-01"
+          "wakeVia": "build-linux-01",
+          "wakeBroadcast": null
         },
         "plan": [
           {
@@ -2593,7 +2599,8 @@
           "name": "Community builds",
           "runners": [
             "pi-01-a"
-          ]
+          ],
+          "confirmed": true
         }
       ]
     }

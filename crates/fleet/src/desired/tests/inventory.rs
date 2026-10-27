@@ -218,6 +218,13 @@ fn wake_on_lan_needs_a_valid_address_and_another_host_to_send_from() {
         (host.mac_address.as_deref(), host.wake_via.as_deref()),
         (Some("aa:bb:cc:00:11:22"), Some("relay"))
     );
+    let host = load(&with(
+        "mac_address = \"aa:bb:cc:00:11:22\"\nwake_via = \"relay\"\nwake_broadcast = \"192.168.1.255\"",
+    ))
+    .unwrap()
+    .hosts
+    .remove(0);
+    assert_eq!(host.wake_broadcast.as_deref(), Some("192.168.1.255"));
     for (fields, message) in [
         (
             "mac_address = \"aa:bb:cc:00:11\"\nwake_via = \"relay\"",
@@ -231,6 +238,14 @@ fn wake_on_lan_needs_a_valid_address_and_another_host_to_send_from() {
         (
             "mac_address = \"aa:bb:cc:00:11:22\"\nwake_via = \"test\"",
             "test: wake_via must name another host",
+        ),
+        (
+            "mac_address = \"aa:bb:cc:00:11:22\"\nwake_via = \"relay\"\nwake_broadcast = \"127.0.0.1\"",
+            "test: invalid wake_broadcast: '127.0.0.1' (use an IPv4 broadcast address, like '192.168.1.255')",
+        ),
+        (
+            "wake_broadcast = \"192.168.1.255\"",
+            "test: wake_broadcast needs mac_address and wake_via",
         ),
         (
             "mac_address = \"aa:bb:cc:00:11:22\"\nwake_via = \"nowhere\"",

@@ -55,9 +55,10 @@ async fn reads_runner_group_repository_policy() {
         "/orgs/{org}/actions/runner-groups",
         get(|Path(org): Path<String>| async move {
             assert_eq!(org, "acme");
-            Json(json!({"total_count": 2, "runner_groups": [
+            Json(json!({"total_count": 3, "runner_groups": [
                 {"id": 1, "name": "Default", "visibility": "all", "allows_public_repositories": false},
                 {"id": 4, "name": "Open source", "visibility": "all", "allows_public_repositories": true},
+                {"id": 5, "name": "Enterprise", "visibility": "all"},
             ]}))
         }),
     );
@@ -69,12 +70,17 @@ async fn reads_runner_group_repository_policy() {
             GhRunnerGroup {
                 id: 1,
                 name: "Default".into(),
-                allows_public_repositories: false
+                allows_public_repositories: Some(false)
             },
             GhRunnerGroup {
                 id: 4,
                 name: "Open source".into(),
-                allows_public_repositories: true
+                allows_public_repositories: Some(true)
+            },
+            GhRunnerGroup {
+                id: 5,
+                name: "Enterprise".into(),
+                allows_public_repositories: None
             },
         ]
     );
