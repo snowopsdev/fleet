@@ -207,6 +207,10 @@ pub struct OrgObservation {
     pub error: Option<Timed<String>>,
     /// Latest job-poll or job authentication error, independent of runner polls.
     pub jobs_error: Option<Timed<String>>,
+    /// The organization's runner groups and their repository access policy.
+    pub runner_groups: Option<Timed<Vec<GhRunnerGroup>>>,
+    /// Kept apart from `error`: credentials that can list runners may not list groups.
+    pub runner_groups_error: Option<Timed<String>>,
     pub rate_limit: Option<RateLimit>,
     pub missing_token: bool,
 }
@@ -223,6 +227,14 @@ pub struct GhRunner {
     pub ephemeral: Option<bool>,
     pub version: Option<String>,
     pub runner_group_id: Option<u64>,
+}
+
+/// An organization runner group, as far as repository access goes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GhRunnerGroup {
+    pub id: u64,
+    pub name: String,
+    pub allows_public_repositories: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -531,6 +543,20 @@ pub struct OrgStatusView {
     pub rate_limit: Option<RateLimit>,
     pub repo_scope: RepoScope,
     pub auth: OrgAuth,
+    /// Runner groups with self-hosted runners that public repositories can use.
+    #[serde(default)]
+    pub public_runner_groups: Vec<PublicRunnerGroup>,
+}
+
+/// A runner group open to public repositories, whose fork pull requests can run code on
+/// its persistent runners.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicRunnerGroup {
+    pub name: String,
+    /// Self-hosted runners GitHub lists in the group.
+    pub runners: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]

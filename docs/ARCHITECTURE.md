@@ -100,7 +100,9 @@ history is fictional, generated separately, and never touches the journal or sen
 Monitoring uses the GitHub CLI login by default, held in memory, or a pasted token kept in the
 macOS Keychain. Changes always use the `gh` login ([FLEET.md](FLEET.md#setup)). Org runner lists
 and per-repository workflow jobs are fetched separately; repository scope is configurable in
-Settings.
+Settings. Runner groups are read with the runner list, only to warn about groups with
+self-hosted runners that public repositories can use; a failure to read them isn't shown as
+an organization error.
 
 The local HTTP API ([HTTP_API.md](HTTP_API.md)) captures one fleet snapshot per request off
 the async runtime and adds provenance and a content-based revision to the response. The shared

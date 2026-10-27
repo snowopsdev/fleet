@@ -168,6 +168,10 @@ fn runner_records(
     Ok(runners)
 }
 
+/// The runner group policy problem reported when public repositories can use the group.
+/// Monitoring recognizes it in `policy_errors` to explain the fork pull request risk.
+pub const PUBLIC_REPOSITORIES_ISSUE: &str = "public repositories must be disabled";
+
 /// GitHub represents "all repositories, public disabled" as
 /// `visibility = all` plus `allows_public_repositories = false`.
 fn group_policy_issues(group: &Map<String, Value>) -> Vec<&'static str> {
@@ -176,7 +180,7 @@ fn group_policy_issues(group: &Map<String, Value>) -> Vec<&'static str> {
         issues.push("repository access must include all organization repositories");
     }
     if group.get("allows_public_repositories") != Some(&Value::Bool(false)) {
-        issues.push("public repositories must be disabled");
+        issues.push(PUBLIC_REPOSITORIES_ISSUE);
     }
     if group.get("restricted_to_workflows") != Some(&Value::Bool(false)) {
         issues.push("workflow access must include all workflows in private repositories");

@@ -54,7 +54,22 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         gh(301, "linux-01-a", false, &["self-hosted", "Linux", "X64", "docker"]),
         gh(302, "linux-01-b", false, &["self-hosted", "Linux", "X64", "docker"]),
         offline(gh(401, "win-builder", false, &["self-hosted", "Windows", "X64"])),
-        gh(501, "cloud-gpu-1", false, &["self-hosted", "Linux", "X64", "gpu"]),
+        in_group(
+            2,
+            gh(501, "cloud-gpu-1", false, &["self-hosted", "Linux", "X64", "gpu"]),
+        ),
+    ];
+    let runner_groups = vec![
+        GhRunnerGroup {
+            id: 1,
+            name: "Default".into(),
+            allows_public_repositories: false,
+        },
+        GhRunnerGroup {
+            id: 2,
+            name: "Community builds".into(),
+            allows_public_repositories: true,
+        },
     ];
 
     let jobs = vec![
@@ -141,6 +156,8 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
             )),
             error: None,
             jobs_error: None,
+            runner_groups: Some(Timed::new(ago(9), runner_groups)),
+            runner_groups_error: None,
             rate_limit: Some(RateLimit {
                 limit: 5000,
                 remaining: 4712,
@@ -263,6 +280,11 @@ fn gh(id: u64, name: &str, busy: bool, labels: &[&str]) -> GhRunner {
         version: Some("2.329.0".into()),
         runner_group_id: Some(1),
     }
+}
+
+fn in_group(group: u64, mut r: GhRunner) -> GhRunner {
+    r.runner_group_id = Some(group);
+    r
 }
 
 fn offline(mut r: GhRunner) -> GhRunner {

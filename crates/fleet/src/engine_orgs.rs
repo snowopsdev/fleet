@@ -141,6 +141,14 @@ impl Engine {
             |org| (&mut org.runners, &mut org.error),
         )
         .await;
+        // Group policies only feed the public-repository warning; a failure stays out of the
+        // organization's status.
+        self.poll_github(
+            async |client, org| client.runner_groups(&org.login).await,
+            |_| false,
+            |org| (&mut org.runner_groups, &mut org.runner_groups_error),
+        )
+        .await;
     }
 
     pub async fn poll_github_jobs(&self) {

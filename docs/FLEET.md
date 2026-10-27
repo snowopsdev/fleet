@@ -53,6 +53,12 @@ These are persistent machines: anyone who can change a workflow in an eligible p
 repository can run code on them. Keep the runner group restricted to private repositories and
 limit write access.
 
+A runner group open to public repositories is worse: anyone can open a pull request from a
+fork, and its workflow runs on your machines and can leave changes behind for later jobs. The
+app warns (a GitHub finding) when the inventory's group allows public repositories, and, for
+organizations added in Settings, when any runner group with self-hosted runners does. See
+GitHub's [hardening for self-hosted runners](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#hardening-for-self-hosted-runners).
+
 ## Inventory format
 
 ```toml

@@ -10,7 +10,7 @@
     "runnersOffline": 1,
     "runnersUnknown": 2,
     "queuedJobs": 2,
-    "attention": 9
+    "attention": 10
   },
   "issues": [
     {
@@ -106,6 +106,17 @@
       "category": "queue",
       "title": "train-small: no compatible online runner observed",
       "detail": "No observed runner has labels self-hosted, gpu, a100",
+      "machineId": null,
+      "runnerKey": null,
+      "stale": false,
+      "muted": false,
+      "fix": null
+    },
+    {
+      "id": "public-group:acme-demo:Community builds",
+      "category": "github",
+      "title": "Runner group Community builds allows public repositories",
+      "detail": "Public repositories can use the runner group Community builds. Anyone can open a pull request from a fork of a public repository, and its workflow can run on cloud-gpu-1. These runners are persistent, so that code can read what earlier jobs left behind and tamper with later ones. Turn off public repositories for this group in the organization's runner group settings (docs/FLEET.md, Setup; https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#hardening-for-self-hosted-runners).",
       "machineId": null,
       "runnerKey": null,
       "stale": false,
@@ -2157,7 +2168,15 @@
         "kind": "recent",
         "maxRepos": 20
       },
-      "auth": "ghCli"
+      "auth": "ghCli",
+      "publicRunnerGroups": [
+        {
+          "name": "Community builds",
+          "runners": [
+            "cloud-gpu-1"
+          ]
+        }
+      ]
     }
   ],
   "tailnet": {

@@ -512,9 +512,35 @@ fn org_statuses(config: &AppConfig, obs: &Observations) -> Vec<OrgStatusView> {
                 rate_limit: o.and_then(|o| o.rate_limit.clone()),
                 repo_scope: cfg.repo_scope.clone(),
                 auth: cfg.auth,
+                public_runner_groups: o.map(public_runner_groups).unwrap_or_default(),
             }
         })
         .collect();
     orgs.sort_by_key(|o| o.login.to_lowercase());
     orgs
+}
+
+/// Groups that allow public repositories and hold at least one of the org's runners.
+fn public_runner_groups(org: &OrgObservation) -> Vec<PublicRunnerGroup> {
+    let (Some(groups), Some(runners)) = (&org.runner_groups, &org.runners) else {
+        return Vec::new();
+    };
+    groups
+        .value
+        .iter()
+        .filter(|g| g.allows_public_repositories)
+        .filter_map(|group| {
+            let mut members: Vec<String> = runners
+                .value
+                .iter()
+                .filter(|r| r.runner_group_id == Some(group.id))
+                .map(|r| r.name.clone())
+                .collect();
+            members.sort_by_key(|n| n.to_lowercase());
+            (!members.is_empty()).then(|| PublicRunnerGroup {
+                name: group.name.clone(),
+                runners: members,
+            })
+        })
+        .collect()
 }

@@ -18,7 +18,7 @@ use reqwest::header::{ACCEPT, ETAG, HeaderMap, IF_NONE_MATCH, LINK, USER_AGENT};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::model::{GhJob, GhRunner, JobScan, RateLimit, RepoScope};
+use crate::model::{GhJob, GhRunner, GhRunnerGroup, JobScan, RateLimit, RepoScope};
 use crate::sync::MutexExt;
 
 pub const API_VERSION: &str = "2026-03-10";
@@ -274,6 +274,39 @@ impl GithubClient {
             )));
         }
         Ok(runners.items.into_iter().map(RawRunner::into_model).collect())
+    }
+
+    /// Runner groups and whether public repositories may use them (read-only, ETag cached).
+    pub async fn runner_groups(&self, org: &str) -> Result<Vec<GhRunnerGroup>, GithubError> {
+        #[derive(Deserialize)]
+        struct RawGroup {
+            id: u64,
+            name: String,
+            #[serde(default)]
+            allows_public_repositories: bool,
+        }
+        let groups = self
+            .collection::<RawGroup>(
+                &format!("/orgs/{org}/actions/runner-groups"),
+                "runner_groups",
+                100,
+                MAX_RUNNER_PAGES,
+            )
+            .await?;
+        if groups.truncated {
+            return Err(GithubError::Incomplete(format!(
+                "Couldn't read all of {org}'s runner groups within {MAX_RUNNER_PAGES} pages."
+            )));
+        }
+        Ok(groups
+            .items
+            .into_iter()
+            .map(|g| GhRunnerGroup {
+                id: g.id,
+                name: g.name,
+                allows_public_repositories: g.allows_public_repositories,
+            })
+            .collect())
     }
 
     pub async fn recent_repos(&self, org: &str, max: usize) -> Result<Vec<String>, GithubError> {
@@ -535,6 +568,37 @@ mod tests {
         assert!(runners[100].busy);
         assert_eq!(runners[0].labels, vec!["self-hosted", "macOS"]);
         assert_eq!(client.rate_limit().unwrap().remaining, 4990);
+    }
+
+    #[tokio::test]
+    async fn reads_runner_group_repository_policy() {
+        let router = Router::new().route(
+            "/orgs/{org}/actions/runner-groups",
+            get(|Path(org): Path<String>| async move {
+                assert_eq!(org, "acme");
+                Json(json!({"total_count": 2, "runner_groups": [
+                    {"id": 1, "name": "Default", "visibility": "all", "allows_public_repositories": false},
+                    {"id": 4, "name": "Open source", "visibility": "all", "allows_public_repositories": true},
+                ]}))
+            }),
+        );
+        let base = serve(router).await;
+        let groups = GithubClient::new(&base, "t0k").runner_groups("acme").await.unwrap();
+        assert_eq!(
+            groups,
+            [
+                GhRunnerGroup {
+                    id: 1,
+                    name: "Default".into(),
+                    allows_public_repositories: false
+                },
+                GhRunnerGroup {
+                    id: 4,
+                    name: "Open source".into(),
+                    allows_public_repositories: true
+                },
+            ]
+        );
     }
 
     #[test]
