@@ -4,125 +4,177 @@
       "buckets": [
         {
           "busySecs": 4310,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 3,
           "start": "2026-10-02T12:00:00Z"
         },
         {
           "busySecs": 2372,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 5,
           "start": "2026-10-02T13:00:00Z"
         },
         {
           "busySecs": 7184,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 6,
           "start": "2026-10-02T14:00:00Z"
         },
         {
           "busySecs": 4375,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 7,
           "start": "2026-10-02T15:00:00Z"
         },
         {
           "busySecs": 7126,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 5,
           "start": "2026-10-02T16:00:00Z"
         },
         {
           "busySecs": 3010,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 5,
           "start": "2026-10-02T17:00:00Z"
         },
         {
           "busySecs": 4958,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 3,
           "start": "2026-10-02T18:00:00Z"
         },
         {
           "busySecs": 4283,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 8,
           "start": "2026-10-02T19:00:00Z"
         },
         {
           "busySecs": 6566,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 5,
           "start": "2026-10-02T20:00:00Z"
         },
         {
           "busySecs": 4559,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 6,
           "start": "2026-10-02T21:00:00Z"
         },
         {
           "busySecs": 2462,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 4,
           "start": "2026-10-02T22:00:00Z"
         },
         {
           "busySecs": 4665,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 6,
           "start": "2026-10-02T23:00:00Z"
         },
         {
           "busySecs": 4789,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 6,
           "start": "2026-10-03T00:00:00Z"
         },
         {
           "busySecs": 5244,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 6,
           "start": "2026-10-03T01:00:00Z"
         },
         {
           "busySecs": 7058,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 5,
           "start": "2026-10-03T02:00:00Z"
         },
         {
           "busySecs": 1396,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 4,
           "start": "2026-10-03T03:00:00Z"
         },
         {
           "busySecs": 6787,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 6,
           "start": "2026-10-03T04:00:00Z"
         },
         {
           "busySecs": 5567,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 8,
           "start": "2026-10-03T05:00:00Z"
         },
         {
           "busySecs": 6244,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 5,
           "start": "2026-10-03T06:00:00Z"
         },
         {
           "busySecs": 4006,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 4,
           "start": "2026-10-03T07:00:00Z"
         },
         {
           "busySecs": 7142,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 7,
           "start": "2026-10-03T08:00:00Z"
         },
         {
           "busySecs": 5486,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 6,
           "start": "2026-10-03T09:00:00Z"
         },
         {
           "busySecs": 2808,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 4,
           "start": "2026-10-03T10:00:00Z"
         },
         {
           "busySecs": 3457,
+          "capacitySecs": 28800,
+          "coveredSecs": 3600,
           "jobs": 5,
           "start": "2026-10-03T11:00:00Z"
         }
       ],
+      "busyPercent": 16.76128472222222,
+      "busySecs": 115854,
+      "capacitySecs": 691200,
+      "coveredSecs": 86400,
       "from": "2026-10-02T12:00:00Z",
       "hostedCost": {
         "lines": [
@@ -340,9 +392,11 @@
         {
           "busyPercent": 6.083333333333334,
           "busySecs": 5256,
+          "listed": true,
           "machineKey": null,
           "machineName": null,
           "name": "cloud-gpu-1",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:501",
           "totals": {
             "cancelled": 1,
@@ -359,9 +413,11 @@
         {
           "busyPercent": 10.280092592592592,
           "busySecs": 8882,
+          "listed": true,
           "machineKey": "inv:build-linux-01",
           "machineName": "build-linux-01",
           "name": "linux-01-a",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:301",
           "totals": {
             "cancelled": 1,
@@ -378,9 +434,11 @@
         {
           "busyPercent": 16.98263888888889,
           "busySecs": 14673,
+          "listed": true,
           "machineKey": "inv:build-linux-01",
           "machineName": "build-linux-01",
           "name": "linux-01-b",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:302",
           "totals": {
             "cancelled": 0,
@@ -397,9 +455,11 @@
         {
           "busyPercent": 19.80902777777778,
           "busySecs": 17115,
+          "listed": true,
           "machineKey": "inv:mac-mini-02",
           "machineName": "mac-mini-02",
           "name": "mini-02",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:201",
           "totals": {
             "cancelled": 0,
@@ -416,9 +476,11 @@
         {
           "busyPercent": 34.07986111111111,
           "busySecs": 29445,
+          "listed": true,
           "machineKey": "inv:studio",
           "machineName": "studio",
           "name": "studio-1",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:101",
           "totals": {
             "cancelled": 0,
@@ -435,9 +497,11 @@
         {
           "busyPercent": 20.70138888888889,
           "busySecs": 17886,
+          "listed": true,
           "machineKey": "inv:studio",
           "machineName": "studio",
           "name": "studio-2",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:102",
           "totals": {
             "cancelled": 1,
@@ -454,9 +518,11 @@
         {
           "busyPercent": 20.020833333333332,
           "busySecs": 17298,
+          "listed": true,
           "machineKey": "inv:studio",
           "machineName": "studio",
           "name": "Studio-Old-2",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:90",
           "totals": {
             "cancelled": 2,
@@ -473,9 +539,11 @@
         {
           "busyPercent": 6.133101851851852,
           "busySecs": 5299,
+          "listed": true,
           "machineKey": "inv:win-builder",
           "machineName": "win-builder",
           "name": "win-builder",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:401",
           "totals": {
             "cancelled": 0,
@@ -564,155 +632,219 @@
       "buckets": [
         {
           "busySecs": 106969,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 124,
           "start": "2026-09-03T12:00:00Z"
         },
         {
           "busySecs": 117358,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 126,
           "start": "2026-09-04T12:00:00Z"
         },
         {
           "busySecs": 99216,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 116,
           "start": "2026-09-05T12:00:00Z"
         },
         {
           "busySecs": 134575,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 136,
           "start": "2026-09-06T12:00:00Z"
         },
         {
           "busySecs": 120025,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 139,
           "start": "2026-09-07T12:00:00Z"
         },
         {
           "busySecs": 99504,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 114,
           "start": "2026-09-08T12:00:00Z"
         },
         {
           "busySecs": 109447,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 126,
           "start": "2026-09-09T12:00:00Z"
         },
         {
           "busySecs": 96719,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 120,
           "start": "2026-09-10T12:00:00Z"
         },
         {
           "busySecs": 111066,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 127,
           "start": "2026-09-11T12:00:00Z"
         },
         {
           "busySecs": 111441,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 127,
           "start": "2026-09-12T12:00:00Z"
         },
         {
           "busySecs": 109324,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 125,
           "start": "2026-09-13T12:00:00Z"
         },
         {
           "busySecs": 112613,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 126,
           "start": "2026-09-14T12:00:00Z"
         },
         {
           "busySecs": 100863,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 121,
           "start": "2026-09-15T12:00:00Z"
         },
         {
           "busySecs": 113916,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 127,
           "start": "2026-09-16T12:00:00Z"
         },
         {
           "busySecs": 118584,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 136,
           "start": "2026-09-17T12:00:00Z"
         },
         {
           "busySecs": 108941,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 125,
           "start": "2026-09-18T12:00:00Z"
         },
         {
           "busySecs": 108251,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 129,
           "start": "2026-09-19T12:00:00Z"
         },
         {
           "busySecs": 110391,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 127,
           "start": "2026-09-20T12:00:00Z"
         },
         {
           "busySecs": 112654,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 129,
           "start": "2026-09-21T12:00:00Z"
         },
         {
           "busySecs": 114087,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 125,
           "start": "2026-09-22T12:00:00Z"
         },
         {
           "busySecs": 104866,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 114,
           "start": "2026-09-23T12:00:00Z"
         },
         {
           "busySecs": 110153,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 127,
           "start": "2026-09-24T12:00:00Z"
         },
         {
           "busySecs": 119032,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 129,
           "start": "2026-09-25T12:00:00Z"
         },
         {
           "busySecs": 114863,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 122,
           "start": "2026-09-26T12:00:00Z"
         },
         {
           "busySecs": 122634,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 130,
           "start": "2026-09-27T12:00:00Z"
         },
         {
           "busySecs": 109098,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 117,
           "start": "2026-09-28T12:00:00Z"
         },
         {
           "busySecs": 104712,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 123,
           "start": "2026-09-29T12:00:00Z"
         },
         {
           "busySecs": 120891,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 136,
           "start": "2026-09-30T12:00:00Z"
         },
         {
           "busySecs": 124331,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 139,
           "start": "2026-10-01T12:00:00Z"
         },
         {
           "busySecs": 115854,
+          "capacitySecs": 691200,
+          "coveredSecs": 86400,
           "jobs": 129,
           "start": "2026-10-02T12:00:00Z"
         }
       ],
+      "busyPercent": 16.215171682098767,
+      "busySecs": 3362378,
+      "capacitySecs": 20736000,
+      "coveredSecs": 2592000,
       "from": "2026-09-03T12:00:00Z",
       "hostedCost": {
         "lines": [
@@ -930,9 +1062,11 @@
         {
           "busyPercent": 5.9937499999999995,
           "busySecs": 155358,
+          "listed": true,
           "machineKey": null,
           "machineName": null,
           "name": "cloud-gpu-1",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:501",
           "totals": {
             "cancelled": 6,
@@ -949,9 +1083,11 @@
         {
           "busyPercent": 14.523765432098765,
           "busySecs": 376456,
+          "listed": true,
           "machineKey": "inv:build-linux-01",
           "machineName": "build-linux-01",
           "name": "linux-01-a",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:301",
           "totals": {
             "cancelled": 24,
@@ -968,9 +1104,11 @@
         {
           "busyPercent": 13.497569444444443,
           "busySecs": 349857,
+          "listed": true,
           "machineKey": "inv:build-linux-01",
           "machineName": "build-linux-01",
           "name": "linux-01-b",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:302",
           "totals": {
             "cancelled": 19,
@@ -987,9 +1125,11 @@
         {
           "busyPercent": 21.890663580246912,
           "busySecs": 567406,
+          "listed": true,
           "machineKey": "inv:mac-mini-02",
           "machineName": "mac-mini-02",
           "name": "mini-02",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:201",
           "totals": {
             "cancelled": 29,
@@ -1006,9 +1146,11 @@
         {
           "busyPercent": 22.24344135802469,
           "busySecs": 576550,
+          "listed": true,
           "machineKey": "inv:studio",
           "machineName": "studio",
           "name": "studio-1",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:101",
           "totals": {
             "cancelled": 31,
@@ -1025,9 +1167,11 @@
         {
           "busyPercent": 23.43190586419753,
           "busySecs": 607355,
+          "listed": true,
           "machineKey": "inv:studio",
           "machineName": "studio",
           "name": "studio-2",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:102",
           "totals": {
             "cancelled": 33,
@@ -1044,9 +1188,11 @@
         {
           "busyPercent": 23.234992283950618,
           "busySecs": 602251,
+          "listed": true,
           "machineKey": "inv:studio",
           "machineName": "studio",
           "name": "Studio-Old-2",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:90",
           "totals": {
             "cancelled": 36,
@@ -1063,9 +1209,11 @@
         {
           "busyPercent": 4.905285493827161,
           "busySecs": 127145,
+          "listed": true,
           "machineKey": "inv:win-builder",
           "machineName": "win-builder",
           "name": "win-builder",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:401",
           "totals": {
             "cancelled": 2,
@@ -1154,145 +1302,205 @@
       "buckets": [
         {
           "busySecs": 21594,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 26,
           "start": "2026-09-26T12:00:00Z"
         },
         {
           "busySecs": 28132,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 27,
           "start": "2026-09-26T18:00:00Z"
         },
         {
           "busySecs": 33215,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 34,
           "start": "2026-09-27T00:00:00Z"
         },
         {
           "busySecs": 31922,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 35,
           "start": "2026-09-27T06:00:00Z"
         },
         {
           "busySecs": 28122,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 35,
           "start": "2026-09-27T12:00:00Z"
         },
         {
           "busySecs": 32019,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 34,
           "start": "2026-09-27T18:00:00Z"
         },
         {
           "busySecs": 34843,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 34,
           "start": "2026-09-28T00:00:00Z"
         },
         {
           "busySecs": 27650,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 27,
           "start": "2026-09-28T06:00:00Z"
         },
         {
           "busySecs": 26095,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 30,
           "start": "2026-09-28T12:00:00Z"
         },
         {
           "busySecs": 30803,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 33,
           "start": "2026-09-28T18:00:00Z"
         },
         {
           "busySecs": 27147,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 26,
           "start": "2026-09-29T00:00:00Z"
         },
         {
           "busySecs": 25053,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 28,
           "start": "2026-09-29T06:00:00Z"
         },
         {
           "busySecs": 22601,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 27,
           "start": "2026-09-29T12:00:00Z"
         },
         {
           "busySecs": 23267,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 31,
           "start": "2026-09-29T18:00:00Z"
         },
         {
           "busySecs": 28296,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 29,
           "start": "2026-09-30T00:00:00Z"
         },
         {
           "busySecs": 30548,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 36,
           "start": "2026-09-30T06:00:00Z"
         },
         {
           "busySecs": 22737,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 30,
           "start": "2026-09-30T12:00:00Z"
         },
         {
           "busySecs": 29546,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 31,
           "start": "2026-09-30T18:00:00Z"
         },
         {
           "busySecs": 36830,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 39,
           "start": "2026-10-01T00:00:00Z"
         },
         {
           "busySecs": 31778,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 36,
           "start": "2026-10-01T06:00:00Z"
         },
         {
           "busySecs": 40834,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 43,
           "start": "2026-10-01T12:00:00Z"
         },
         {
           "busySecs": 31613,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 34,
           "start": "2026-10-01T18:00:00Z"
         },
         {
           "busySecs": 25560,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 28,
           "start": "2026-10-02T00:00:00Z"
         },
         {
           "busySecs": 26324,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 34,
           "start": "2026-10-02T06:00:00Z"
         },
         {
           "busySecs": 28377,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 31,
           "start": "2026-10-02T12:00:00Z"
         },
         {
           "busySecs": 27493,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 32,
           "start": "2026-10-02T18:00:00Z"
         },
         {
           "busySecs": 30841,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 35,
           "start": "2026-10-03T00:00:00Z"
         },
         {
           "busySecs": 29143,
+          "capacitySecs": 172800,
+          "coveredSecs": 21600,
           "jobs": 31,
           "start": "2026-10-03T06:00:00Z"
         }
       ],
+      "busyPercent": 16.790323247354497,
+      "busySecs": 812383,
+      "capacitySecs": 4838400,
+      "coveredSecs": 604800,
       "from": "2026-09-26T12:00:00Z",
       "hostedCost": {
         "lines": [
@@ -1510,9 +1718,11 @@
         {
           "busyPercent": 6.400958994708995,
           "busySecs": 38713,
+          "listed": true,
           "machineKey": null,
           "machineName": null,
           "name": "cloud-gpu-1",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:501",
           "totals": {
             "cancelled": 2,
@@ -1529,9 +1739,11 @@
         {
           "busyPercent": 15.497850529100528,
           "busySecs": 93731,
+          "listed": true,
           "machineKey": "inv:build-linux-01",
           "machineName": "build-linux-01",
           "name": "linux-01-a",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:301",
           "totals": {
             "cancelled": 6,
@@ -1548,9 +1760,11 @@
         {
           "busyPercent": 14.976025132275133,
           "busySecs": 90575,
+          "listed": true,
           "machineKey": "inv:build-linux-01",
           "machineName": "build-linux-01",
           "name": "linux-01-b",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:302",
           "totals": {
             "cancelled": 3,
@@ -1567,9 +1781,11 @@
         {
           "busyPercent": 23.61987433862434,
           "busySecs": 142853,
+          "listed": true,
           "machineKey": "inv:mac-mini-02",
           "machineName": "mac-mini-02",
           "name": "mini-02",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:201",
           "totals": {
             "cancelled": 4,
@@ -1586,9 +1802,11 @@
         {
           "busyPercent": 23.14649470899471,
           "busySecs": 139990,
+          "listed": true,
           "machineKey": "inv:studio",
           "machineName": "studio",
           "name": "studio-1",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:101",
           "totals": {
             "cancelled": 4,
@@ -1605,9 +1823,11 @@
         {
           "busyPercent": 23.125992063492063,
           "busySecs": 139866,
+          "listed": true,
           "machineKey": "inv:studio",
           "machineName": "studio",
           "name": "studio-2",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:102",
           "totals": {
             "cancelled": 8,
@@ -1624,9 +1844,11 @@
         {
           "busyPercent": 22.50760582010582,
           "busySecs": 136126,
+          "listed": true,
           "machineKey": "inv:studio",
           "machineName": "studio",
           "name": "Studio-Old-2",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:90",
           "totals": {
             "cancelled": 9,
@@ -1643,9 +1865,11 @@
         {
           "busyPercent": 5.047784391534392,
           "busySecs": 30529,
+          "listed": true,
           "machineKey": "inv:win-builder",
           "machineName": "win-builder",
           "name": "win-builder",
+          "org": "acme-demo",
           "runnerKey": "gh:acme-demo:401",
           "totals": {
             "cancelled": 0,

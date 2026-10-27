@@ -1,8 +1,9 @@
 //! Utilization and job summaries for one time window, computed without I/O.
 //!
 //! Busy time is the overlap of each job's run (start to completion) with the window. Busy
-//! percentages divide by the time this Mac was recording within the window, never by time
-//! before history started.
+//! percentages divide by recorded time ([`Coverage`]): time the app ran with fresh job data
+//! for the runner's organization. Unrecorded time is no data, never idle. Only runners GitHub
+//! lists now count as capacity, so a re-registered runner doesn't halve its machine's share.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -73,11 +74,12 @@ pub struct FleetJobTotals {
 pub struct FleetMachineActivity {
     pub machine_key: String,
     pub name: String,
-    /// Runners counted as this machine's capacity.
+    /// Runners counted as this machine's capacity: those GitHub lists now, or, for a machine
+    /// that's gone, those in its history.
     pub runners: u32,
-    /// Runner-seconds busy within the window.
+    /// Runner-seconds busy within the window, including runners that are gone.
     pub busy_secs: u32,
-    /// Busy runner time / (runners × recorded time in the window), 0–100.
+    /// Busy runner time / the capacity runners' recorded time, 0–100.
     pub busy_percent: Option<f64>,
     pub totals: FleetJobTotals,
 }
@@ -88,10 +90,14 @@ pub struct FleetMachineActivity {
 pub struct FleetRunnerActivity {
     pub runner_key: Option<String>,
     pub name: String,
+    /// Organization login, lowercase.
+    pub org: Option<String>,
     pub machine_key: Option<String>,
     pub machine_name: Option<String>,
+    /// GitHub lists this runner now; only listed runners count as capacity.
+    pub listed: bool,
     pub busy_secs: u32,
-    /// Busy time / recorded time in the window, 0–100.
+    /// Busy time / the organization's recorded time in the window, 0–100.
     pub busy_percent: Option<f64>,
     pub totals: FleetJobTotals,
 }
@@ -128,6 +134,10 @@ pub struct FleetActivityBucket {
     pub jobs: u32,
     /// Runner-seconds busy in this bucket, across all runners.
     pub busy_secs: u32,
+    /// Seconds of this bucket recorded for any organization; 0 means no data, not idle.
+    pub covered_secs: u32,
+    /// Runner-seconds of recorded capacity in this bucket.
+    pub capacity_secs: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
@@ -164,8 +174,16 @@ pub struct FleetAnalytics {
     pub window: FleetAnalyticsWindow,
     pub from: DateTime<Utc>,
     pub to: DateTime<Utc>,
-    /// Start of recorded time within the window; null when history began after `to`.
+    /// Start of the first recorded time within the window; null without any.
     pub observed_from: Option<DateTime<Utc>>,
+    /// Seconds of the window recorded for any organization.
+    pub covered_secs: u32,
+    /// Runner-seconds busy, across all runners.
+    pub busy_secs: u32,
+    /// Runner-seconds of recorded capacity: listed runners times their organization's recorded time.
+    pub capacity_secs: u32,
+    /// `busy_secs / capacity_secs`, 0–100; null with less than a minute of capacity.
+    pub busy_percent: Option<f64>,
     pub totals: FleetJobTotals,
     pub machines: Vec<FleetMachineActivity>,
     pub runners: Vec<FleetRunnerActivity>,
@@ -177,18 +195,82 @@ pub struct FleetAnalytics {
     pub hosted_cost: FleetHostedCost,
 }
 
+/// A stretch of recorded time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Span {
+    pub from: DateTime<Utc>,
+    pub to: DateTime<Utc>,
+}
+
+/// Recorded time per organization (lowercase login): the app was running and the
+/// organization's job data was fresh. Time outside it is unknown, never idle.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Coverage {
+    spans: BTreeMap<String, Vec<Span>>,
+}
+
+impl Coverage {
+    pub fn new(spans: BTreeMap<String, Vec<Span>>) -> Self {
+        Self { spans }
+    }
+
+    /// Every organization recorded throughout `from..to` (demo data).
+    pub fn full(orgs: impl IntoIterator<Item = String>, from: DateTime<Utc>, to: DateTime<Utc>) -> Self {
+        Self::new(
+            orgs.into_iter()
+                .map(|o| (o.to_lowercase(), vec![Span { from, to }]))
+                .collect(),
+        )
+    }
+
+    fn clipped(spans: &[Span], from: DateTime<Utc>, to: DateTime<Utc>) -> impl Iterator<Item = Span> + '_ {
+        spans.iter().filter_map(move |s| {
+            let span = Span {
+                from: s.from.max(from),
+                to: s.to.min(to),
+            };
+            (span.to > span.from).then_some(span)
+        })
+    }
+
+    /// Seconds of `org`'s recorded time within `from..to`.
+    pub fn seconds(&self, org: &str, from: DateTime<Utc>, to: DateTime<Utc>) -> i64 {
+        self.spans.get(&org.to_lowercase()).map_or(0, |spans| {
+            Self::clipped(spans, from, to)
+                .map(|s| (s.to - s.from).num_seconds())
+                .sum()
+        })
+    }
+
+    fn union(&self, from: DateTime<Utc>, to: DateTime<Utc>) -> Vec<Span> {
+        let mut spans: Vec<Span> = self.spans.values().flat_map(|s| Self::clipped(s, from, to)).collect();
+        spans.sort_by_key(|s| s.from);
+        let mut merged: Vec<Span> = Vec::new();
+        for span in spans {
+            match merged.last_mut() {
+                Some(last) if span.from <= last.to => last.to = last.to.max(span.to),
+                _ => merged.push(span),
+            }
+        }
+        merged
+    }
+
+    /// Seconds within `from..to` recorded for any organization.
+    pub fn any_seconds(&self, from: DateTime<Utc>, to: DateTime<Utc>) -> i64 {
+        self.union(from, to).iter().map(|s| (s.to - s.from).num_seconds()).sum()
+    }
+}
+
 /// Summarizes `jobs` (any order) for the window ending at `now`.
 pub fn summarize(
     jobs: &[FleetCompletedJob],
-    history_since: Option<DateTime<Utc>>,
+    coverage: &Coverage,
     view: &FleetView,
     rates: &FleetHostedRates,
     window: FleetAnalyticsWindow,
     now: DateTime<Utc>,
 ) -> FleetAnalytics {
     let from = now - window.duration();
-    let observed_from = history_since.map_or(Some(from), |since| (since < now).then(|| since.max(from)));
-    let observed_secs = observed_from.map_or(0, |at| (now - at).num_seconds());
     // Busy time counts every job overlapping the window; totals count jobs completed in it.
     let overlapping: Vec<&FleetCompletedJob> = jobs.iter().filter(|j| j.completed_at > from).collect();
     let completed: Vec<&FleetCompletedJob> = overlapping.iter().copied().filter(|j| j.completed_at <= now).collect();
@@ -196,19 +278,46 @@ pub fn summarize(
         let Some(started) = job.started_at else { return 0 };
         (job.completed_at.min(end) - started.max(start)).num_seconds().max(0)
     };
-    let window_busy = |job: &FleetCompletedJob| busy(job, observed_from.unwrap_or(now), now);
 
-    let mut runners = runner_rows(view, &overlapping, &completed, window_busy, observed_secs);
+    let mut runners = runner_rows(
+        view,
+        &overlapping,
+        &completed,
+        |j| busy(j, from, now),
+        |org| coverage.seconds(org, from, now),
+    );
     runners.sort_by_key(|r| (r.name.to_lowercase(), r.runner_key.clone()));
-    let mut machines = machine_rows(view, &runners, &completed, observed_secs);
+    let mut machines = machine_rows(view, &runners, &completed, |org| coverage.seconds(org, from, now));
     machines.sort_by_key(|m| (m.name.to_lowercase(), m.machine_key.clone()));
 
-    let buckets = buckets(window, from, now, &overlapping, &completed, busy);
+    // Fleet capacity: listed runners, or every runner in history when none is listed.
+    let any_listed = runners.iter().any(|r| r.listed);
+    let capacity_orgs: Vec<&str> = runners
+        .iter()
+        .filter(|r| r.listed || !any_listed)
+        .filter_map(|r| r.org.as_deref())
+        .collect();
+    let capacity: i64 = capacity_orgs.iter().map(|org| coverage.seconds(org, from, now)).sum();
+    let busy_total: i64 = runners.iter().map(|r| i64::from(r.busy_secs)).sum();
+    let buckets = buckets(
+        window,
+        from,
+        now,
+        &overlapping,
+        &completed,
+        busy,
+        coverage,
+        &capacity_orgs,
+    );
     FleetAnalytics {
         window,
         from,
         to: now,
-        observed_from,
+        observed_from: coverage.union(from, now).first().map(|s| s.from),
+        covered_secs: secs(coverage.any_seconds(from, now)),
+        busy_secs: secs(busy_total),
+        capacity_secs: secs(capacity),
+        busy_percent: percent(busy_total, capacity),
         totals: totals(completed.iter().copied()),
         machines,
         runners,
@@ -276,42 +385,33 @@ pub(crate) fn totals<'a>(jobs: impl Iterator<Item = &'a FleetCompletedJob>) -> F
     t
 }
 
-/// Every runner GitHub lists on a machine, plus runners that only appear in history.
+/// Every runner GitHub lists, plus runners that only appear in history.
 fn runner_rows(
     view: &FleetView,
     overlapping: &[&FleetCompletedJob],
     completed: &[&FleetCompletedJob],
     window_busy: impl Fn(&FleetCompletedJob) -> i64,
-    observed_secs: i64,
+    covered: impl Fn(&str) -> i64,
 ) -> Vec<FleetRunnerActivity> {
     let mut rows: BTreeMap<String, FleetRunnerActivity> = BTreeMap::new();
-    let row = |key: Option<String>, name: String, machine_key, machine_name| FleetRunnerActivity {
-        runner_key: key,
-        name,
-        machine_key,
-        machine_name,
+    let listed = |runner: &crate::model::RunnerView, machine: Option<&crate::model::MachineView>| FleetRunnerActivity {
+        runner_key: Some(runner.key.clone()),
+        name: runner.name.clone(),
+        org: runner.org.as_ref().map(|o| o.to_lowercase()),
+        machine_key: machine.map(crate::model::MachineView::preferences_key),
+        machine_name: machine.map(|m| m.display_name.clone()),
+        listed: true,
         busy_secs: 0,
         busy_percent: None,
         totals: FleetJobTotals::default(),
     };
     for machine in view.machines.iter().chain(&view.other_machines) {
         for runner in machine.runners.iter().filter(|r| r.github.is_some()) {
-            rows.insert(
-                runner.key.clone(),
-                row(
-                    Some(runner.key.clone()),
-                    runner.name.clone(),
-                    Some(machine.preferences_key()),
-                    Some(machine.display_name.clone()),
-                ),
-            );
+            rows.insert(runner.key.clone(), listed(runner, Some(machine)));
         }
     }
     for runner in view.unmatched_runners.iter().filter(|r| r.github.is_some()) {
-        rows.insert(
-            runner.key.clone(),
-            row(Some(runner.key.clone()), runner.name.clone(), None, None),
-        );
+        rows.insert(runner.key.clone(), listed(runner, None));
     }
     let identity = |job: &FleetCompletedJob| {
         job.runner_key.clone().or_else(|| {
@@ -323,13 +423,16 @@ fn runner_rows(
     let mut busy: HashMap<String, i64> = HashMap::new();
     for job in overlapping {
         let Some(id) = identity(job) else { continue };
-        rows.entry(id.clone()).or_insert_with(|| {
-            row(
-                job.runner_key.clone(),
-                job.runner_name.clone().unwrap_or_else(|| "Unknown runner".into()),
-                job.machine_key.clone(),
-                job.machine_name.clone(),
-            )
+        rows.entry(id.clone()).or_insert_with(|| FleetRunnerActivity {
+            runner_key: job.runner_key.clone(),
+            name: job.runner_name.clone().unwrap_or_else(|| "Unknown runner".into()),
+            org: Some(job.org.clone()),
+            machine_key: job.machine_key.clone(),
+            machine_name: job.machine_name.clone(),
+            listed: false,
+            busy_secs: 0,
+            busy_percent: None,
+            totals: FleetJobTotals::default(),
         });
         *busy.entry(id).or_default() += window_busy(job);
     }
@@ -343,7 +446,7 @@ fn runner_rows(
         .map(|(id, mut row)| {
             let seconds = busy.get(&id).copied().unwrap_or(0);
             row.busy_secs = secs(seconds);
-            row.busy_percent = percent(seconds, observed_secs);
+            row.busy_percent = percent(seconds, row.org.as_deref().map_or(0, &covered));
             row.totals = totals(by_runner.get(&id).into_iter().flatten().copied());
             row
         })
@@ -354,7 +457,7 @@ fn machine_rows(
     view: &FleetView,
     runners: &[FleetRunnerActivity],
     completed: &[&FleetCompletedJob],
-    observed_secs: i64,
+    covered: impl Fn(&str) -> i64,
 ) -> Vec<FleetMachineActivity> {
     let names: HashMap<String, String> = view
         .machines
@@ -362,34 +465,38 @@ fn machine_rows(
         .chain(&view.other_machines)
         .map(|m| (m.preferences_key(), m.display_name.clone()))
         .collect();
-    let mut grouped: BTreeMap<&str, (String, u32, i64)> = BTreeMap::new();
+    let mut grouped: BTreeMap<&str, Vec<&FleetRunnerActivity>> = BTreeMap::new();
     for runner in runners {
-        let Some(key) = runner.machine_key.as_deref() else {
-            continue;
-        };
-        let name = names
-            .get(key)
-            .cloned()
-            .or_else(|| runner.machine_name.clone())
-            .unwrap_or_else(|| key.to_string());
-        let entry = grouped.entry(key).or_insert((name, 0, 0));
-        entry.1 += 1;
-        entry.2 += i64::from(runner.busy_secs);
+        if let Some(key) = runner.machine_key.as_deref() {
+            grouped.entry(key).or_default().push(runner);
+        }
     }
     grouped
         .into_iter()
-        .map(|(key, (name, count, busy))| FleetMachineActivity {
-            machine_key: key.to_string(),
-            name,
-            runners: count,
-            busy_secs: secs(busy),
-            busy_percent: percent(busy, observed_secs.saturating_mul(i64::from(count))),
-            totals: totals(
-                completed
-                    .iter()
-                    .copied()
-                    .filter(|j| j.machine_key.as_deref() == Some(key)),
-            ),
+        .map(|(key, rows)| {
+            let name = names
+                .get(key)
+                .cloned()
+                .or_else(|| rows.iter().find_map(|r| r.machine_name.clone()))
+                .unwrap_or_else(|| key.to_string());
+            // Re-registered runners keep their busy time but not their capacity.
+            let any_listed = rows.iter().any(|r| r.listed);
+            let capacity: Vec<_> = rows.iter().filter(|r| r.listed || !any_listed).collect();
+            let capacity_secs: i64 = capacity.iter().map(|r| r.org.as_deref().map_or(0, &covered)).sum();
+            let busy: i64 = rows.iter().map(|r| i64::from(r.busy_secs)).sum();
+            FleetMachineActivity {
+                machine_key: key.to_string(),
+                name,
+                runners: count_u32(capacity.len()),
+                busy_secs: secs(busy),
+                busy_percent: percent(busy, capacity_secs),
+                totals: totals(
+                    completed
+                        .iter()
+                        .copied()
+                        .filter(|j| j.machine_key.as_deref() == Some(key)),
+                ),
+            }
         })
         .collect()
 }
@@ -446,6 +553,10 @@ fn shares(
     rows
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one call site; each input is a different view of the window"
+)]
 fn buckets(
     window: FleetAnalyticsWindow,
     from: DateTime<Utc>,
@@ -453,6 +564,8 @@ fn buckets(
     overlapping: &[&FleetCompletedJob],
     completed: &[&FleetCompletedJob],
     busy: impl Fn(&FleetCompletedJob, DateTime<Utc>, DateTime<Utc>) -> i64,
+    coverage: &Coverage,
+    capacity_orgs: &[&str],
 ) -> Vec<FleetActivityBucket> {
     let size = window.bucket();
     let count = (window.duration().num_seconds() / size.num_seconds()).max(1);
@@ -469,6 +582,8 @@ fn buckets(
                         .count(),
                 ),
                 busy_secs: secs(overlapping.iter().map(|j| busy(j, start, end)).sum()),
+                covered_secs: secs(coverage.any_seconds(start, end)),
+                capacity_secs: secs(capacity_orgs.iter().map(|org| coverage.seconds(org, start, end)).sum()),
             }
         })
         .collect()

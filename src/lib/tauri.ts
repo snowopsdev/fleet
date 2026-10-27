@@ -102,7 +102,8 @@ function previewHistory(filter: FleetJobHistoryFilter): FleetJobHistoryPage {
   const page = previewActivity().history;
   if (filter.before || filter.after) return { ...page, jobs: [], hasMore: false, nextCursor: null };
   const jobs = page.jobs.filter((j) =>
-    (!filter.runnerKey || j.runnerKey === filter.runnerKey)
+    (!filter.org || j.org === filter.org.toLowerCase())
+    && (!filter.runnerKey || j.runnerKey === filter.runnerKey)
     && (!filter.machineKey || j.machineKey === filter.machineKey)
     && (!filter.conclusion || j.conclusion === filter.conclusion));
   return { ...page, jobs: jobs.slice(0, filter.limit ?? 50), hasMore: false, nextCursor: null };

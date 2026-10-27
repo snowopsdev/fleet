@@ -208,6 +208,7 @@ pub fn run() {
                 && let Some(engine) = app.try_state::<Arc<Engine>>()
             {
                 engine.stop_job_feeds();
+                engine.flush_job_history();
             }
         });
 }

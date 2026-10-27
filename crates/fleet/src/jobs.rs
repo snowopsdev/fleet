@@ -23,7 +23,7 @@ pub mod history;
 mod store;
 pub mod webhook;
 
-pub(crate) use store::{JOB_RETENTION, JobStore, MAX_JOBS};
+pub(crate) use store::{JOB_RETENTION, JobStore, MAX_JOBS, RunCheck};
 
 /// How a finished job ended, as GitHub reports it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS, schemars::JsonSchema)]
@@ -218,16 +218,31 @@ pub struct FinishedJob {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-/// Self-hosted jobs ask for the `self-hosted` label or ran on one of the org's runners.
-/// Jobs that never reached a runner (cancelled while queued, skipped) are not runner work.
+/// A finished job that ran on a self-hosted runner. Jobs that never reached a runner
+/// (cancelled while queued, skipped) are not runner work.
 pub(crate) fn ran_self_hosted(job: &GhJob, runners: &[GhRunner]) -> bool {
     let assigned = job.runner_id.is_some() || job.runner_name.is_some();
-    assigned && (wants_self_hosted(job) || job.runner_id.is_some_and(|id| runners.iter().any(|r| r.id == id)))
+    assigned && self_hosted(job, runners)
 }
 
-/// Whether a queued or running job could be on one of this dashboard's runners.
-pub(crate) fn wants_self_hosted(job: &GhJob) -> bool {
-    job.labels.iter().any(|l| l.eq_ignore_ascii_case("self-hosted"))
+/// Whether a job is, or could be, on one of the account's self-hosted runners: it asks for
+/// `self-hosted`, runs on a listed runner, or its labels match one (`runs-on: [macOS, xcode-16]`),
+/// the same rule the queue uses. A repository runner only takes its own repository's jobs.
+pub(crate) fn self_hosted(job: &GhJob, runners: &[GhRunner]) -> bool {
+    crate::labels::targets_self_hosted(&job.labels)
+        || job.runner_id.is_some_and(|id| runners.iter().any(|r| r.id == id))
+        || runners.iter().any(|r| {
+            r.repo.as_ref().is_none_or(|repo| repo.eq_ignore_ascii_case(&job.repo))
+                && crate::labels::is_compatible(&job.labels, &r.labels)
+        })
+}
+
+/// Every runner the account lists: organization runners, then each repository's.
+pub(crate) fn account_runners(observed: &crate::model::OrgObservation) -> Vec<GhRunner> {
+    observed
+        .runner_lists()
+        .flat_map(|list| list.value.iter().cloned())
+        .collect()
 }
 
 /// Per-minute USD rates for GitHub-hosted standard runners, for the cost estimate.

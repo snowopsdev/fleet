@@ -187,16 +187,20 @@ impl Backoff {
 }
 
 /// Current feed states and the process groups to stop when the app quits.
+///
+/// Each supervisor has a generation, so after a quick off-and-on the old supervisor's cleanup
+/// can't remove the new one's status or process group.
 #[derive(Debug, Default)]
 pub struct FeedRegistry {
-    statuses: Mutex<BTreeMap<String, FleetJobFeedStatus>>,
-    groups: Mutex<BTreeMap<String, u32>>,
+    statuses: Mutex<BTreeMap<String, (u64, FleetJobFeedStatus)>>,
+    groups: Mutex<BTreeMap<(String, u64), u32>>,
+    generations: std::sync::atomic::AtomicU64,
     stopped: std::sync::atomic::AtomicBool,
 }
 
 impl FeedRegistry {
     pub fn statuses(&self) -> Vec<FleetJobFeedStatus> {
-        self.statuses.locked().values().cloned().collect()
+        self.statuses.locked().values().map(|(_, s)| s.clone()).collect()
     }
 
     /// Whether `org`'s forwarder is connected, so polling can slow down.
@@ -204,11 +208,11 @@ impl FeedRegistry {
         self.statuses
             .locked()
             .get(&org.to_lowercase())
-            .is_some_and(|s| s.state == FleetJobFeedState::Forwarding)
+            .is_some_and(|(_, s)| s.state == FleetJobFeedState::Forwarding)
     }
 
     pub fn delivered(&self, org: &str, at: DateTime<Utc>) {
-        if let Some(status) = self.statuses.locked().get_mut(&org.to_lowercase()) {
+        if let Some((_, status)) = self.statuses.locked().get_mut(&org.to_lowercase()) {
             status.last_delivery_at = Some(at);
         }
     }
@@ -220,15 +224,20 @@ impl FeedRegistry {
     /// Terminates every forwarder's process group now, without the async runtime.
     pub fn stop_all(&self) {
         self.stopped.store(true, std::sync::atomic::Ordering::SeqCst);
-        for (org, group) in std::mem::take(&mut *self.groups.locked()) {
+        for ((org, _), group) in std::mem::take(&mut *self.groups.locked()) {
             tracing::info!(%org, "stopping job feed forwarder");
             terminate_group(group);
         }
     }
 
-    fn set(&self, org: &str, update: impl FnOnce(&mut FleetJobFeedStatus)) {
+    fn next_generation(&self) -> u64 {
+        self.generations.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1
+    }
+
+    /// Updates `org`'s status for supervisor `generation`; an older generation's update is ignored.
+    fn set(&self, org: &str, generation: u64, update: impl FnOnce(&mut FleetJobFeedStatus)) {
         let mut statuses = self.statuses.locked();
-        let status = statuses.entry(org.to_string()).or_insert_with(|| FleetJobFeedStatus {
+        let fresh = || FleetJobFeedStatus {
             org: org.to_string(),
             state: FleetJobFeedState::Starting,
             detail: None,
@@ -236,7 +245,15 @@ impl FeedRegistry {
             since: Utc::now(),
             last_delivery_at: None,
             restarts: 0,
-        });
+        };
+        let entry = statuses.entry(org.to_string()).or_insert_with(|| (generation, fresh()));
+        if entry.0 > generation {
+            return;
+        }
+        if entry.0 < generation {
+            *entry = (generation, fresh());
+        }
+        let status = &mut entry.1;
         let before = status.state;
         update(status);
         if status.state != before {
@@ -244,9 +261,12 @@ impl FeedRegistry {
         }
     }
 
-    fn remove(&self, org: &str) {
-        self.statuses.locked().remove(org);
-        self.groups.locked().remove(org);
+    fn remove(&self, org: &str, generation: u64) {
+        let mut statuses = self.statuses.locked();
+        if statuses.get(org).is_some_and(|(g, _)| *g == generation) {
+            statuses.remove(org);
+        }
+        self.groups.locked().remove(&(org.to_string(), generation));
     }
 }
 
@@ -269,24 +289,26 @@ pub async fn supervise<L: Launch>(
     backoff: Backoff,
 ) {
     let org = spec.org.to_lowercase();
+    let generation = registry.next_generation();
     let mut failures = 0u32;
     while !*stop.borrow() && !registry.is_stopped() {
-        registry.set(&org, |s| {
+        registry.set(&org, generation, |s| {
             s.state = FleetJobFeedState::Starting;
             s.fix = None;
         });
         let (unavailable, healthy) = match launcher.launch(&spec) {
             Ok(mut process) => {
                 if let Some(group) = process.group() {
-                    registry.groups.locked().insert(org.clone(), group);
+                    registry.groups.locked().insert((org.clone(), generation), group);
                 }
-                let outcome = watch_process(&mut process, &spec, &org, registry, &mut stop, backoff).await;
-                registry.groups.locked().remove(&org);
+                let outcome =
+                    watch_process(&mut process, &spec, (&org, generation), registry, &mut stop, backoff).await;
+                registry.groups.locked().remove(&(org.clone(), generation));
                 match outcome {
                     Some(outcome) => outcome,
                     None => {
                         process.terminate();
-                        registry.remove(&org);
+                        registry.remove(&org, generation);
                         return;
                     }
                 }
@@ -306,7 +328,7 @@ pub async fn supervise<L: Launch>(
             None if healthy => backoff.after_healthy,
             None => backoff.delay(failures),
         };
-        registry.set(&org, |s| {
+        registry.set(&org, generation, |s| {
             s.restarts = s.restarts.saturating_add(1);
             match unavailable {
                 Some((detail, fix)) => {
@@ -322,7 +344,7 @@ pub async fn supervise<L: Launch>(
             _ = stop.changed() => {}
         }
     }
-    registry.remove(&org);
+    registry.remove(&org, generation);
 }
 
 type Unavailable = Option<(String, Option<String>)>;
@@ -331,7 +353,7 @@ type Unavailable = Option<(String, Option<String>)>;
 async fn watch_process<P: ForwardProcess>(
     process: &mut P,
     spec: &ForwardSpec,
-    org: &str,
+    (org, generation): (&str, u64),
     registry: &FeedRegistry,
     stop: &mut watch::Receiver<bool>,
     backoff: Backoff,
@@ -352,7 +374,7 @@ async fn watch_process<P: ForwardProcess>(
                 match classify(&line, &spec.host) {
                     Some(Signal::Forwarding) => {
                         forwarding_since = Some(tokio::time::Instant::now());
-                        registry.set(org, |s| {
+                        registry.set(org, generation, |s| {
                             s.state = FleetJobFeedState::Forwarding;
                             s.detail = None;
                             s.fix = None;
@@ -362,7 +384,7 @@ async fn watch_process<P: ForwardProcess>(
                     None => {
                         // Keep the forwarder's own words for the status, minus the secret.
                         let line = line.replace(&spec.secret, "…");
-                        registry.set(org, |s| s.detail = Some(line));
+                        registry.set(org, generation, |s| s.detail = Some(line));
                     }
                 }
             }

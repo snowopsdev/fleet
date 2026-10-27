@@ -137,7 +137,8 @@ has its `conclusion` (`success`, `failure`, `cancelled`, `skipped`, `timedOut`, 
 
 - `machine` resolves like other routes; an ID that matches no current machine is used as a
   retained history identity, so removed machines keep their jobs. `runner` takes a runner key
-  or name (`org` disambiguates); a name GitHub no longer lists matches recorded runner names.
+  or name; a name GitHub no longer lists matches recorded runner names. `org` filters by
+  organization and also disambiguates runner names.
   `repo` is `owner/name` or the bare name, case-insensitive.
 - Cursors are 40 digits (completion time in milliseconds, then job ID). Without `after`, jobs
   are newest first and `nextCursor` goes in exclusive `before`. With only `after`, jobs are
@@ -145,10 +146,13 @@ has its `conclusion` (`success`, `failure`, `cancelled`, `skipped`, `timedOut`, 
   completions. The default limit is 50; the maximum is 200.
 
 `/v1/analytics` returns `analytics` for the window ending at `generatedAt`: `from`, `to`,
-`observedFrom` (start of recorded time in the window), `totals`, per-`machines` and
-per-`runners` busy seconds and `busyPercent`, `labelSets` (queue-wait median, p95 and maximum
+`observedFrom` (start of the first recorded time in the window), `coveredSecs` (recorded
+seconds), fleet `busySecs`, `capacitySecs` and `busyPercent`, `totals`, per-`machines` and
+per-`runners` busy seconds and `busyPercent` (recorded time only; `listed` runners are
+capacity), `labelSets` (queue-wait median, p95 and maximum
 per label set, slowest first), the top 10 `repos` and `workflows` by runner time, `buckets` for
-a chart (hourly, six-hourly or daily), and `hostedCost`, an estimate at the rates in Settings.
+a chart (hourly, six-hourly or daily, each with `coveredSecs` and `capacitySecs`; zero
+`coveredSecs` means no data), and `hostedCost`, an estimate at the rates in Settings.
 `busyPercent` is null with less than a minute of recorded time. Both routes read only local
 data; they never call GitHub. Jobs that started and finished between two scans can be missing
 unless the real-time job feed is on. In demo mode both return fictional data.

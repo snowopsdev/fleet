@@ -22,7 +22,7 @@ pub(super) struct JobHistoryQuery {
     pub machine: Option<String>,
     /// Runner key or name; names also match runners GitHub no longer lists.
     pub runner: Option<String>,
-    /// Disambiguates runner names.
+    /// Organization login; also disambiguates runner names.
     pub org: Option<String>,
     /// `owner/name` or the repository name.
     pub repo: Option<String>,
@@ -82,6 +82,7 @@ pub(super) async fn history(
         },
     };
     let filter = FleetJobHistoryFilter {
+        org: q.org,
         machine_key,
         runner_key,
         runner_name,

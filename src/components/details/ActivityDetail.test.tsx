@@ -23,4 +23,13 @@ describe("activity page", () => {
     expect(html.match(/<rect /g)).toHaveLength(day.buckets.length);
     expect(html).toContain('role="img"');
   });
+
+  it("draws unrecorded buckets as no data, not idle", () => {
+    const day = activity.analytics["24h"];
+    const partial = { ...day, buckets: day.buckets.map((b, i) => (i < 6 ? { ...b, coveredSecs: 0, capacitySecs: 0, busySecs: 0 } : b)) };
+    const html = renderToStaticMarkup(<BusyChart a={partial} />);
+    expect(html.match(/data-no-data/g)).toHaveLength(6);
+    expect(html).toContain("No data recorded");
+    expect(renderToStaticMarkup(<BusyChart a={day} />)).not.toContain("No data recorded");
+  });
 });

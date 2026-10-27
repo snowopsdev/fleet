@@ -85,18 +85,29 @@ history is fictional, generated separately, and never touches the journal or sen
 
 `jobs/` keeps completed self-hosted jobs in `job-history.json` beside the app settings: at most
 30 days and 20,000 jobs, deduplicated by job ID. Writes are atomic and run off the async
-runtime; a change that only refreshes timestamps is checkpointed at most every 10 minutes.
-Corrupt or newer-format files are preserved with a visible storage error, and jobs are then
-kept in memory until the app quits. History starts when the file is first created
-(`historySince`); analytics never count earlier time as idle.
+runtime: the journal is serialized under its lock and written without it, so the fleet view
+never waits on disk I/O, and a sequence number keeps an older snapshot from landing after a
+newer one. New jobs are saved at most every 10 seconds (the next 45-second history round
+writes anything a burst of feed deliveries left unsaved, and quitting the app flushes it); a
+change that only refreshes timestamps is checkpointed at most every 10 minutes. A crash can
+lose up to one round of recent jobs. Corrupt or newer-format files are preserved with a
+visible storage error, and jobs are then kept in memory until the app quits.
+
+The journal also keeps recorded time per organization: spans while the app ran and that
+organization's job data was fresh (at most 5 minutes old). Analytics divide by recorded time
+only, so time the app was closed or GitHub was unreachable is "no data", never idle.
 
 After each job scan, `update_job_history` follows every run seen with a queued or running
-self-hosted job (persisted, so a restart doesn't lose them; dropped after six days). When a run
+self-hosted job (persisted, so a restart doesn't lose them; dropped after six days). A job is
+self-hosted when it asks for `self-hosted`, runs on one of the account's organization or
+repository runners, or its labels are compatible with one (the queue's rule; a repository
+runner only for its own repository), so `runs-on: [macOS, xcode-16]` counts. When a run
 leaves the scan, its latest attempt is read once with
 `GET /repos/{o}/{r}/actions/runs/{id}/jobs`, which also returns jobs too short to have been
 seen running; jobs seen running in an earlier attempt are read with
-`GET /repos/{o}/{r}/actions/jobs/{id}`. A run that's still going, or can't be read, is asked
-about again after two minutes. Only jobs assigned to a runner and asking for `self-hosted` (or
+`GET /repos/{o}/{r}/actions/jobs/{id}`, each until it's read back completed (recorded or not)
+or gone. A run that's still going, or can't be read, is asked about again after two minutes;
+one whose listing stays truncated is given up after 10 reads. Only jobs assigned to a runner and asking for `self-hosted` (or
 run by one of the account's runners) are recorded, with queue wait (created → started), run
 time (started → completed), conclusion, labels, repository, workflow, runner key and the
 machine's stable history identity. At most 20 runs per account are read per round. Reads use
@@ -104,8 +115,10 @@ the client the account's polls created, skip a rate-limited account, stop with f
 requests left, and a rate-limited read sets the account's `rateLimitedUntil` like any poll.
 
 `jobs/analytics.rs` summarizes a 24-hour, 7-day or 30-day window without I/O: busy time is
-each job's run overlapping the window, and busy percent divides it by the recorded part of the
-window (times the runner count for a machine). The hosted-cost estimate rounds each job up to
+each job's run overlapping the window, and busy percent divides it by recorded capacity, the
+runner's organization's recorded time. Only runners GitHub lists now count as a machine's (and
+the fleet's) capacity; a removed or re-registered runner keeps its busy time but adds no
+capacity. Chart buckets carry their recorded seconds, and unrecorded buckets show as no data. The hosted-cost estimate rounds each job up to
 whole minutes at the editable rates in Settings. Analytics are read on demand (Tauri command,
 `/v1/analytics`), not pushed with every fleet view; the view carries only the latest 10 jobs
 per runner and machine and the job feed's state.
@@ -116,9 +129,14 @@ that turned it on. The extension creates a temporary `cli` webhook on the organi
 (`admin:org_hook`) and relays deliveries over a websocket. The receiver is a separate loopback
 listener on an ephemeral port: it refuses non-loopback peers and requests with an `Origin`
 header, and checks `X-Hub-Signature-256` against a random per-launch secret that is never
-written down (it's visible in the child's argv, which the extension requires). Deliveries
-update the in-flight scan between polls and record completed jobs directly. Forwarders run in
-their own process group; they restart after an exit (quickly after a healthy run, since GitHub
+written down (it's visible in the child's argv, which the extension requires). Only
+organizations with the feed on are accepted. Deliveries update the in-flight scan between polls
+(only for repositories in the organization's job scope) and record completed jobs directly
+from any repository, since those ran on the organization's runners. A queued or running
+delivery for a job already seen completed is ignored, so out-of-order deliveries can't revive
+it. Removing an account clears its feed setting; adding it again starts with the feed off. Forwarders run in
+their own process group, and each supervisor's registry entry carries a generation so a quick
+off-and-on can't orphan the new forwarder; they restart after an exit (quickly after a healthy run, since GitHub
 closes the websocket every few minutes; otherwise 5 s doubling to 5 min), retry every 10 minutes
 when the extension, scope or login is missing, and are terminated when the setting is turned
 off, in demo mode, and on app exit. While every scanned organization's feed is forwarding, the

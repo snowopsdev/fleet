@@ -6,7 +6,7 @@ use chrono::{Duration, TimeZone};
 use serde_json::json;
 use tower::ServiceExt;
 
-use super::analytics::{FleetAnalyticsWindow, summarize};
+use super::analytics::{Coverage, FleetAnalyticsWindow, Span, summarize};
 use super::history::{FleetJobHistoryFilter, FleetJobOrder};
 use super::webhook::{FeedAction, parse_workflow_job, router, sign, verify_signature};
 use super::*;
@@ -189,7 +189,7 @@ fn runs_are_followed_until_they_leave_the_scan_and_finish() {
         truncated: false,
         jobs: vec![running.clone(), hosted],
     };
-    store.track("Acme", &scan.jobs, now());
+    store.track("Acme", &scan.jobs, &[], now());
     assert!(store.due("acme", &scan, now(), 10).is_empty(), "still in the scan");
     let empty = JobScan::default();
     let due = store.due("acme", &empty, now(), 10);
@@ -199,7 +199,7 @@ fn runs_are_followed_until_they_leave_the_scan_and_finish() {
         "hosted runs aren't followed"
     );
     assert_eq!(due[0].jobs.iter().copied().collect::<Vec<_>>(), [5]);
-    store.checked(50, now());
+    store.checked(50, RunCheck::Pending, now());
     assert!(store.due("acme", &empty, now() + Duration::minutes(1), 10).is_empty());
     assert_eq!(store.due("acme", &empty, now() + Duration::minutes(2), 10).len(), 1);
     store.finish(50);
@@ -296,7 +296,7 @@ fn analytics_count_busy_time_inside_the_recorded_part_of_the_window() {
     let rates = FleetHostedRates::default();
     let day = summarize(
         &jobs,
-        Some(now() - Duration::days(3)),
+        &Coverage::full(["acme-demo".to_string()], now() - Duration::days(3), now()),
         &view,
         &rates,
         FleetAnalyticsWindow::Day,
@@ -340,7 +340,7 @@ fn analytics_count_busy_time_inside_the_recorded_part_of_the_window() {
     // History started two hours ago: busy percentages divide by those hours only.
     let recent = summarize(
         &jobs[2..],
-        Some(now() - Duration::hours(2)),
+        &Coverage::full(["acme-demo".to_string()], now() - Duration::hours(2), now()),
         &view,
         &rates,
         FleetAnalyticsWindow::Week,
@@ -486,4 +486,188 @@ async fn the_receiver_accepts_only_signed_local_deliveries() {
     let received = received.lock().unwrap();
     assert_eq!(received.len(), 1);
     assert_eq!(received[0].job.conclusion.as_deref(), Some("failure"));
+}
+
+#[test]
+fn label_compatible_and_runner_matched_jobs_are_followed_but_other_repos_runners_are_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = JobStore::load(dir.path().join("job-history.json"), now());
+    let runner = |id: u64, labels: &[&str], repo: Option<&str>| GhRunner {
+        id,
+        name: format!("r{id}"),
+        os: "macOS".into(),
+        status: "online".into(),
+        busy: false,
+        labels: labels.iter().map(ToString::to_string).collect(),
+        ephemeral: None,
+        version: None,
+        runner_group_id: None,
+        repo: repo.map(Into::into),
+    };
+    let runners = [
+        runner(7, &["self-hosted", "macOS", "xcode-16"], None),
+        runner(8, &["self-hosted", "gpu"], Some("acme-demo/ml")),
+    ];
+    let queued = |id: u64, labels: &[&str], runner_id: Option<u64>| {
+        let mut job = gh_job(id, runner_id, labels);
+        job.status = "queued".into();
+        job
+    };
+    let jobs = [
+        // `runs-on: [macOS, xcode-16]`, no `self-hosted` label.
+        queued(1, &["macOS", "xcode-16"], None),
+        // `runs-on: {group: fleet}`: no labels, but GitHub assigned one of our runners.
+        queued(2, &[], Some(7)),
+        // A repository runner's labels only count for its own repository.
+        queued(3, &["gpu"], None),
+        queued(4, &["ubuntu-latest"], None),
+    ];
+    store.track("acme-demo", &jobs, &runners, now());
+    let due = store.due("acme-demo", &JobScan::default(), now(), 10);
+    assert_eq!(due.iter().map(|r| r.run_id).collect::<Vec<_>>(), [10, 20]);
+
+    // Jobs already seen completed are never followed again.
+    store.mark_completed(5);
+    store.track("acme-demo", &[queued(5, &["self-hosted"], None)], &runners, now());
+    assert_eq!(store.due("acme-demo", &JobScan::default(), now(), 10).len(), 2);
+}
+
+#[test]
+fn resolved_jobs_stop_being_read_and_truncated_runs_are_given_up() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = JobStore::load(dir.path().join("job-history.json"), now());
+    let jobs = [gh_job(5, None, &["self-hosted"]), {
+        let mut j = gh_job(6, None, &["self-hosted"]);
+        j.run_id = 50;
+        j
+    }];
+    store.track("acme", &jobs, &[], now());
+    store.resolve(50, 5);
+    let due = store.due("acme", &JobScan::default(), now(), 10);
+    assert_eq!(due[0].jobs.iter().copied().collect::<Vec<_>>(), [6]);
+    for round in 0..10 {
+        assert_eq!(
+            store
+                .due("acme", &JobScan::default(), now() + Duration::hours(round), 10)
+                .len(),
+            1
+        );
+        store.checked(50, RunCheck::Truncated, now() + Duration::hours(round));
+    }
+    assert!(
+        store
+            .due("acme", &JobScan::default(), now() + Duration::days(1), 10)
+            .is_empty()
+    );
+}
+
+#[test]
+fn saves_are_debounced_and_failed_writes_retry() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("job-history.json");
+    let mut store = JobStore::load(path.clone(), now());
+    store.record(completed(1, "r", "m", 10, 5));
+    let first = store.prepare_save(now(), false).unwrap();
+    store.record(completed(2, "r", "m", 9, 4));
+    assert!(
+        store.prepare_save(now() + Duration::seconds(3), false).is_none(),
+        "within the save interval"
+    );
+    let second = store.prepare_save(now() + Duration::seconds(3), true).unwrap();
+    assert!(second.seq > first.seq);
+    store.finish_save(second.seq, Err("disk full".into()));
+    assert!(store.activity().storage_error.unwrap().contains("disk full"));
+    let retry = store.prepare_save(now() + Duration::seconds(4), false).unwrap();
+    std::fs::write(&retry.path, &retry.bytes).unwrap();
+    store.finish_save(retry.seq, Ok(()));
+    assert_eq!(store.activity().storage_error, None);
+    assert!(
+        store.prepare_save(now() + Duration::seconds(30), false).is_none(),
+        "nothing new to save"
+    );
+    assert_eq!(JobStore::load(path, now()).jobs().len(), 2);
+}
+
+#[test]
+fn recorded_time_is_kept_per_organization_and_survives_a_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("job-history.json");
+    let mut store = JobStore::load(path.clone(), now());
+    let t = |m: i64| now() + Duration::minutes(m);
+    store.cover("Acme", t(0), t(1));
+    store.cover("acme", t(1), t(2));
+    // The app was closed for an hour.
+    store.cover("acme", t(61), t(62));
+    store.save(t(62));
+    let coverage = JobStore::load(path, t(62)).coverage();
+    assert_eq!(coverage.seconds("acme", t(0), t(62)), 3 * 60);
+    assert_eq!(coverage.seconds("other", t(0), t(62)), 0);
+    assert_eq!(coverage.any_seconds(t(1), t(61) + Duration::seconds(30)), 90);
+}
+
+#[test]
+fn unrecorded_time_is_no_data_and_old_runners_add_busy_time_but_not_capacity() {
+    let view = demo_view(now());
+    let mut gone = completed(1, "gh:acme-demo:999", "inv:studio", 120, 60);
+    gone.org = "acme-demo".into();
+    let jobs = vec![gone, completed(2, "gh:acme-demo:101", "inv:studio", 90, 30)];
+    // Recorded only during the last two hours.
+    let mut spans = std::collections::BTreeMap::new();
+    spans.insert(
+        "acme-demo".to_string(),
+        vec![Span {
+            from: now() - Duration::hours(2),
+            to: now(),
+        }],
+    );
+    let day = summarize(
+        &jobs,
+        &Coverage::new(spans),
+        &view,
+        &FleetHostedRates::default(),
+        FleetAnalyticsWindow::Day,
+        now(),
+    );
+    assert_eq!(day.covered_secs, 2 * 3600);
+    assert!(
+        day.buckets[..22]
+            .iter()
+            .all(|b| b.covered_secs == 0 && b.capacity_secs == 0)
+    );
+    assert!(day.buckets[22..].iter().all(|b| b.covered_secs == 3600));
+    let studio = day.machines.iter().find(|m| m.machine_key == "inv:studio").unwrap();
+    let listed = day
+        .runners
+        .iter()
+        .filter(|r| r.listed && r.machine_key.as_deref() == Some("inv:studio"))
+        .count();
+    assert_eq!(
+        usize::try_from(studio.runners).unwrap(),
+        listed,
+        "the re-registered runner isn't capacity"
+    );
+    assert_eq!(studio.busy_secs, 120 * 60);
+    let expected = 120.0 * 60.0 / (listed as f64 * 7200.0) * 100.0;
+    assert!((studio.busy_percent.unwrap() - expected).abs() < 1e-9);
+    let gone = day
+        .runners
+        .iter()
+        .find(|r| r.runner_key.as_deref() == Some("gh:acme-demo:999"))
+        .unwrap();
+    assert!(!gone.listed);
+    let fleet_listed = day.runners.iter().filter(|r| r.listed).count();
+    assert_eq!(day.capacity_secs, u32::try_from(fleet_listed * 7200).unwrap());
+    assert_eq!(day.busy_secs, 120 * 60);
+}
+
+#[test]
+fn history_filters_by_organization() {
+    let mut other = completed(9, "r", "m", 10, 5);
+    other.org = "other".into();
+    let jobs = vec![completed(1, "r", "m", 20, 15), other];
+    let filter = FleetJobHistoryFilter {
+        org: Some("OTHER".into()),
+        ..Default::default()
+    };
+    assert_eq!(filter.page(&jobs).0.iter().map(|j| j.id).collect::<Vec<_>>(), [9]);
 }

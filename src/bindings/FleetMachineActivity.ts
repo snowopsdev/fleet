@@ -3,14 +3,15 @@ import type { FleetJobTotals } from "./FleetJobTotals";
 
 export type FleetMachineActivity = { machineKey: string, name: string, 
 /**
- * Runners counted as this machine's capacity.
+ * Runners counted as this machine's capacity: those GitHub lists now, or, for a machine
+ * that's gone, those in its history.
  */
 runners: number, 
 /**
- * Runner-seconds busy within the window.
+ * Runner-seconds busy within the window, including runners that are gone.
  */
 busySecs: number, 
 /**
- * Busy runner time / (runners × recorded time in the window), 0–100.
+ * Busy runner time / the capacity runners' recorded time, 0–100.
  */
 busyPercent: number | null, totals: FleetJobTotals, };
