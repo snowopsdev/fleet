@@ -317,15 +317,19 @@ fn runner_issues(view: &FleetView) -> Vec<FleetIssue> {
         .collect()
 }
 
-/// Runners behind the latest `actions/runner` release: one low-priority finding once runners
-/// that update themselves should have, and a stronger one when GitHub may stop sending jobs.
+/// Runners behind the latest `actions/runner` release: one low-priority finding for runners
+/// missing a release for a week (those that update themselves should have by then), and a
+/// stronger one when GitHub may stop sending jobs.
 fn runner_version_issues(view: &FleetView) -> Vec<FleetIssue> {
     let Some(release) = &view.runner_release else {
         return Vec::new();
     };
-    let settled = release
-        .published_at
-        .is_none_or(|at| view.generated_at - at >= crate::runner_version::UPDATE_GRACE);
+    let settled = |r: &RunnerView| {
+        r.version_status.as_ref().is_some_and(|v| {
+            v.missing_since
+                .is_none_or(|at| view.generated_at - at >= crate::runner_version::UPDATE_GRACE)
+        })
+    };
     let behind: Vec<&RunnerView> = view
         .machines
         .iter()
@@ -337,6 +341,7 @@ fn runner_version_issues(view: &FleetView) -> Vec<FleetIssue> {
     let (overdue, due): (Vec<&RunnerView>, Vec<&RunnerView>) = behind
         .into_iter()
         .partition(|r| r.version_status.as_ref().is_some_and(|v| v.overdue));
+    let due: Vec<&RunnerView> = due.into_iter().filter(|r| settled(r)).collect();
     let list = |runners: &[&RunnerView]| {
         runners
             .iter()
@@ -369,7 +374,7 @@ fn runner_version_issues(view: &FleetView) -> Vec<FleetIssue> {
             ),
         ),
     ] {
-        if runners.is_empty() || (id == "runner-version:available" && !settled) {
+        if runners.is_empty() {
             continue;
         }
         let mut issue = FleetIssue::new(id, Runner, title, detail);
@@ -482,6 +487,16 @@ fn github_issues(view: &FleetView) -> Vec<FleetIssue> {
             issue.fix = Some(FleetIssueFix::OrganizationSignIn);
             issues.push(issue);
         }
+        for failed in &org.runner_repo_errors {
+            let mut issue = FleetIssue::new(
+                format!("org:{}:repo:{}", org.login, failed.repo),
+                Github,
+                format!("GitHub: {}/{} runners", org.login, failed.repo),
+                &failed.error,
+            );
+            issue.fix = Some(FleetIssueFix::OrganizationSignIn);
+            issues.push(issue);
+        }
     }
     issues
 }
@@ -549,7 +564,7 @@ mod tests {
         );
         let issue = view.issues.iter().find(|i| i.id.starts_with("public-group:")).unwrap();
         assert_eq!(issue.category, FleetIssueCategory::Github);
-        assert!(issue.detail.contains("fork") && issue.detail.contains("cloud-gpu-1"));
+        assert!(issue.detail.contains("fork") && issue.detail.contains("pi-01-a"));
         assert!(issue.detail.contains(SELF_HOSTED_HARDENING_URL));
 
         // The inventory's group, from the policy check, is reported once even when

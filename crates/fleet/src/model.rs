@@ -179,9 +179,9 @@ pub struct Observations {
     pub tailscale_error: Option<Timed<String>>,
     /// Keyed by org login (lowercase).
     pub github: BTreeMap<String, OrgObservation>,
-    /// The latest `actions/runner` release, read at most hourly.
-    pub runner_release: Option<Timed<RunnerRelease>>,
-    /// When the runner release was last requested, successfully or not.
+    /// Recent `actions/runner` releases, newest first, read at most hourly.
+    pub runner_releases: Option<Timed<Vec<RunnerRelease>>>,
+    /// When the runner releases were last requested, successfully or not.
     pub runner_release_checked_at: Option<DateTime<Utc>>,
     /// Keyed by [`inventory_machine_key`] or [`tailnet_machine_key`].
     pub machines: BTreeMap<String, MachineObservation>,
@@ -233,7 +233,13 @@ impl TailnetPeer {
 
 #[derive(Debug, Clone, Default)]
 pub struct OrgObservation {
+    /// Organization runners (empty for a personal account).
     pub runners: Option<Timed<Vec<GhRunner>>>,
+    /// Repository runners by lowercase repository name, each with its own read time, so a
+    /// repository that can't be listed keeps its last runners, aging into stale.
+    pub repo_runners: BTreeMap<String, Timed<Vec<GhRunner>>>,
+    /// The latest error listing a runner repository, by lowercase repository name.
+    pub repo_runner_errors: BTreeMap<String, Timed<String>>,
     pub jobs: Option<Timed<JobScan>>,
     /// Latest runner-poll or runner authentication error.
     pub error: Option<Timed<String>>,
@@ -247,6 +253,15 @@ pub struct OrgObservation {
     pub missing_token: bool,
     /// GitHub rate-limited this account; polls skip it until then.
     pub rate_limited_until: Option<DateTime<Utc>>,
+    /// When the rate limit behind `rate_limited_until` was observed.
+    pub rate_limited_at: Option<DateTime<Utc>>,
+}
+
+impl OrgObservation {
+    /// Every runner listing: the organization's, then each repository's.
+    pub fn runner_lists(&self) -> impl Iterator<Item = &Timed<Vec<GhRunner>>> {
+        self.runners.iter().chain(self.repo_runners.values())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -358,7 +373,7 @@ pub struct FleetView {
     pub monitoring: crate::monitoring::FleetMonitoring,
     /// Recently completed jobs and the real-time job feed; analytics are a separate read.
     pub activity: crate::jobs::FleetActivity,
-    /// The latest `actions/runner` release, when it has been read.
+    /// The latest `actions/runner` release, when releases have been read.
     pub runner_release: Option<RunnerReleaseView>,
 }
 
@@ -612,9 +627,21 @@ pub struct OrgStatusView {
     pub auth: OrgAuth,
     pub kind: AccountKind,
     pub runner_repos: Vec<String>,
+    /// Runner repositories whose runners couldn't be listed; their last runners are kept.
+    pub runner_repo_errors: Vec<RunnerRepoError>,
     /// Runner groups with self-hosted runners that public repositories can use.
     #[serde(default)]
     pub public_runner_groups: Vec<PublicRunnerGroup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
+#[ts(export)]
+#[serde(rename_all = "camelCase")]
+pub struct RunnerRepoError {
+    /// The repository name, without the owner.
+    pub repo: String,
+    pub error: String,
+    pub at: DateTime<Utc>,
 }
 
 /// A runner group open to public repositories, whose fork pull requests can run code on

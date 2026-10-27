@@ -108,6 +108,9 @@ function OrgRow({ org, status }: { org: OrgConfig; status?: OrgStatusView }) {
         </div>
       )}
       {status?.error && <div className="mt-1 break-words text-[11.5px] text-bad selectable">{status.error}</div>}
+      {status?.runnerRepoErrors.map((e) => (
+        <div key={e.repo} className="mt-1 break-words text-[11.5px] text-warn selectable">{e.error}</div>
+      ))}
       {status?.jobsTruncated && (
         <div className="mt-1 text-[11.5px] text-warn">Some repositories couldn't be scanned for jobs (no access, or over the 50 repo cap).</div>
       )}
@@ -232,7 +235,7 @@ function RunnerReposField({ kind, value, onChange }: { kind: AccountKind; value:
       />
       <p className="text-[11.5px] text-ink-3">
         {kind === "user"
-          ? "A personal account's runners are registered to its repositories. List each repository whose runners to show."
+          ? "A personal account's runners are registered to its repositories. List each repository whose runners to show. Sign in as the account's owner (or a collaborator): its recently pushed repositories come from the signed-in user's repository list."
           : "Also show runners registered to these repositories rather than to the organization."}{" "}
         Listing a repository's runners needs admin access to it: the fine-grained repository permission{" "}
         <b>Administration: Read</b>, or the repo scope for gh and classic tokens. Monitoring only.

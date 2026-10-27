@@ -9,11 +9,16 @@ export type RunnerVersionStatus = {
  */
 current: string, latest: string, latestPublishedAt: string | null, updateAvailable: boolean, 
 /**
+ * When the oldest release this runner is missing was published (the earliest of those
+ * read, for a runner older than all of them).
+ */
+missingSince: string | null, 
+/**
  * Minor releases between `current` and `latest`; None when the major versions differ.
  */
 minorVersionsBehind: number | null, 
 /**
- * Behind a different major version, more than one minor release, or a release older
- * than 30 days: GitHub may stop queueing jobs on it.
+ * Behind a different major version or more than one minor release, or missing a release
+ * for over 30 days: GitHub may stop queueing jobs on it.
  */
 overdue: boolean, };
