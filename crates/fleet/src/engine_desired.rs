@@ -493,7 +493,17 @@ impl Engine {
             // Saved before anything is stopped, so a crash or quit mid-change
             // leaves these runners held (the watchdog skips them) rather than
             // silently stopped.
-            let begun = engine.begin_holds(&host_id, &ran, &inventory, &reviewed.upgrade, &held.drained);
+            let begun = match engine.begin_holds(&host_id, &ran, &inventory, &reviewed.upgrade, &held.drained) {
+                Ok(begun) => begun,
+                Err(e) => {
+                    // Fail closed: without saved holds a crash could leave runners
+                    // silently stopped, so nothing is changed.
+                    engine.finish_operation(Err(format!(
+                        "Couldn't save which runners this change may stop, so nothing was changed: {e}"
+                    )));
+                    return;
+                }
+            };
             let outcome = run_blocking("finish the change", move || {
                 let mut report = ChangeReport::default();
                 let ops = Ops {
@@ -556,27 +566,30 @@ impl Engine {
                 (ChangeRequest::Restart { runner }, Ok(_)) => engine.clear_hold(runner),
                 _ => {}
             }
-            let result = result.map(|done| done.messages);
-
-            if let Some(op) = engine.desired.locked().operation.as_mut() {
-                op.finished_at = Some(Utc::now());
-                match result {
-                    Ok(messages) => {
-                        op.messages = messages;
-                        op.status = OperationStatus::Succeeded;
-                    }
-                    Err(e) => {
-                        op.status = OperationStatus::Failed;
-                        op.error = Some(e);
-                    }
-                }
-            }
-            engine.view_changed();
+            engine.finish_operation(result.map(|done| done.messages));
             // Show the result against fresh facts, after any check already running.
             if let Err(e) = engine.desired_refresh_wait(Some(host_id)).await {
                 tracing::warn!("check after a change failed: {e}");
             }
         });
+    }
+
+    /// Records how the running change ended.
+    fn finish_operation(&self, result: Result<Vec<String>, String>) {
+        if let Some(op) = self.desired.locked().operation.as_mut() {
+            op.finished_at = Some(Utc::now());
+            match result {
+                Ok(messages) => {
+                    op.messages = messages;
+                    op.status = OperationStatus::Succeeded;
+                }
+                Err(e) => {
+                    op.status = OperationStatus::Failed;
+                    op.error = Some(e);
+                }
+            }
+        }
+        self.view_changed();
     }
 
     pub fn desired_dismiss_operation(&self) {

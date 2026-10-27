@@ -816,3 +816,52 @@ async fn a_cleanup_that_loses_the_machine_holds_its_runners_until_a_reviewed_res
     wait_done(&f.engine).await;
     assert!(f.engine.view().automation.holds.is_empty());
 }
+
+#[tokio::test]
+async fn a_change_that_cant_save_its_holds_changes_nothing() {
+    let f = fixture();
+    // The automation state can't be written: holds for the upgrade can't be saved.
+    std::fs::create_dir(f.tmp.path().join("automation.json")).unwrap();
+    let f = Fixture {
+        engine: Arc::new(
+            Engine::load(f.tmp.path().join("config.json"), f.secrets.clone())
+                .unwrap()
+                .with_desired_io({
+                    let boundaries = f.fleet.clone();
+                    DesiredIo {
+                        boundaries: Arc::new(move |_| {
+                            (Arc::new(boundaries.clone()) as _, Arc::new(boundaries.clone()) as _)
+                        }),
+                        sleep: no_sleep,
+                        resolve_ssh_transport: Arc::new(|_: &str| {
+                            SshTransportIdentity::from_config(
+                                "hostname mac-mini.example.ts.net\nport 22\nuser fake-ci\nproxycommand none\nproxyjump none\n",
+                            )
+                        }),
+                    }
+                }),
+        ),
+        ..f
+    };
+    f.engine
+        .set_inventory_path(Some(f.tmp.path().join("fleet.toml").display().to_string()))
+        .unwrap();
+    f.fleet.world().latest_version = "2.330.0".into();
+    let review = f
+        .engine
+        .desired_review(ChangeRequest::Upgrade {
+            host: "mini".into(),
+            runner: Some("mini-01".into()),
+        })
+        .await
+        .unwrap();
+    assert!(review.ready, "{:?}", review.blockers);
+    f.engine
+        .desired_execute(&review.id, ChangeSecrets::default(), None)
+        .await
+        .unwrap();
+    let op = wait_done(&f.engine).await;
+    assert_eq!(op.status, OperationStatus::Failed);
+    assert!(op.error.unwrap().contains("nothing was changed"));
+    assert!(f.fleet.world().calls.is_empty(), "nothing was stopped or upgraded");
+}

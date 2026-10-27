@@ -78,6 +78,7 @@ fn candidates_are_fixed_per_platform() {
             "diag",
             "previous-bin",
             "previous-externals",
+            "upgrade-leftovers",
             "xcode-derived-data",
             "simulators",
             "docker"
@@ -85,7 +86,14 @@ fn candidates_are_fixed_per_platform() {
     );
     assert_eq!(
         kinds("linux", true),
-        ["work", "diag", "previous-bin", "previous-externals", "docker"]
+        [
+            "work",
+            "diag",
+            "previous-bin",
+            "previous-externals",
+            "upgrade-leftovers",
+            "docker"
+        ]
     );
     assert_eq!(
         kinds("windows", false),
@@ -94,7 +102,8 @@ fn candidates_are_fixed_per_platform() {
             "work-actions",
             "diag",
             "previous-bin",
-            "previous-externals"
+            "previous-externals",
+            "upgrade-leftovers"
         ]
     );
 }
@@ -649,4 +658,53 @@ fn only_runners_actually_upgraded_are_reported() {
     );
     assert_eq!(report.left_stopped, ["studio-01"]);
     assert!(report.upgraded.is_empty(), "studio-02 was never attempted");
+}
+
+#[test]
+fn a_cleanup_the_host_stopped_part_way_holds_its_runners() {
+    let inventory = example_inventory();
+    let fleet = linux_fleet(&inventory, "2.330.0");
+    fleet.world().cleanup_times_out = true;
+    let mut report = ChangeReport::default();
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host(
+            "linux",
+            &CleanupOptions::default(),
+            &[target(CleanupKind::Work, Some("linux-01"), "/r/_work")],
+            &HeldRunners::default(),
+            &mut report,
+        )
+        .unwrap_err();
+    assert!(error.0.contains("ran out of time"), "{error}");
+    assert_eq!(report.left_stopped, ["linux-01"]);
+    assert!(
+        !fleet.world().calls.iter().any(|c| c.starts_with("start")),
+        "a half-emptied runner isn't started"
+    );
+}
+
+#[test]
+fn a_runner_on_the_wrong_version_after_upgrading_is_stopped_and_held() {
+    let inventory = example_inventory();
+    let fleet = linux_fleet(&inventory, "2.329.0");
+    fleet.world().upgrade_wrong_version.push("linux-01".into());
+    let mut report = ChangeReport::default();
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"), &mut report)
+        .unwrap_err();
+    assert!(
+        error.0.contains("version mismatch") && error.0.contains("held"),
+        "{error}"
+    );
+    assert_eq!(
+        fleet.world().calls,
+        [
+            "stop linux linux-01",
+            "upgrade linux linux-01 2.999.0",
+            "start linux linux-01",
+            "stop linux linux-01"
+        ]
+    );
+    assert_eq!(report.left_stopped, ["linux-01"]);
+    assert_eq!(fleet.world().local["linux-01"].service_state, "inactive");
 }

@@ -55,13 +55,19 @@ if ((Get-Content -LiteralPath $runnerFile -Raw | ConvertFrom-Json).agentName -ne
 # can be read for (another account, without elevation) counts as this
 # runner's, so the check fails closed. An elevated session attributes
 # precisely.
-$fromRoot = @(Get-CimInstance Win32_Process | Where-Object {
-  $where = if ($_.ExecutablePath) { $_.ExecutablePath } else { $_.CommandLine }
-  ($where -and $where.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
-    (-not $where -and $_.Name -in @('Runner.Listener.exe', 'Runner.Worker.exe'))
-})
-if ($fromRoot | Where-Object { $_.Name -eq 'Runner.Worker.exe' }) { throw "a job is running in $root; refusing to upgrade $env:RF_NAME" }
-if ($fromRoot) { throw "$env:RF_NAME is still running (a process from $root, such as its service or a self-update); it must be stopped before upgrading" }
+# Compared with a trailing separator, so runner-1 doesn't match runner-10.
+# Checked again right before the swap.
+function Assert-Stopped {
+  $prefix = $root.TrimEnd('\') + '\'
+  $fromRoot = @(Get-CimInstance Win32_Process | Where-Object {
+    $where = if ($_.ExecutablePath) { $_.ExecutablePath } else { $_.CommandLine }
+    ($where -and $where.IndexOf($prefix, [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+      (-not $where -and $_.Name -in @('Runner.Listener.exe', 'Runner.Worker.exe'))
+  })
+  if ($fromRoot | Where-Object { $_.Name -eq 'Runner.Worker.exe' }) { throw "a job is running in $root; refusing to upgrade $env:RF_NAME" }
+  if ($fromRoot) { throw "$env:RF_NAME is still running (a process from $root, such as its service or a self-update); it must be stopped before upgrading" }
+}
+Assert-Stopped
 # A self-update writes _work\_update.cmd, then update.finished when it's done.
 $updateScript = Join-Path $root '_work\_update.cmd'
 $finished = Join-Path $root 'update.finished'
@@ -69,13 +75,16 @@ if ((Test-Path -LiteralPath $updateScript) -and (Get-Item -LiteralPath $updateSc
     -not ((Test-Path -LiteralPath $finished) -and (Get-Item -LiteralPath $finished).LastWriteTime -ge (Get-Item -LiteralPath $updateScript).LastWriteTime)) {
   throw "a runner self-update of $env:RF_NAME started in the last 30 minutes and hasn't finished; try again later"
 }
-# A cleanup holds the maintenance lock while it works.
+# A cleanup holds the maintenance lock while it works; the upgrade takes it
+# too, until it ends. A recycled PID keeps a lock live: that fails closed.
 $lock = Join-Path $root '.fleet-maintenance'
 if (Test-Path -LiteralPath $lock) {
   $live = @((Get-Content -LiteralPath $lock -Raw) -split '\s+' | Where-Object { $_ -match '^\d+$' } | Where-Object { Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue })
-  if ($live.Count -gt 0) { throw "a cleanup is still working in $root; try again when it has finished" }
+  if ($live.Count -gt 0) { throw "a cleanup or another upgrade is still working in $root; try again when it has finished" }
   Remove-Item -LiteralPath $lock -Force
 }
+Set-Content -LiteralPath $lock -Value $PID -NoNewline
+try {
 
 # Where bin or externals points, as a folder name in the root: bin.2.329.0, or
 # bin itself for a plain folder.
@@ -99,26 +108,38 @@ function Set-Link([string]$Name, [string]$Folder) {
 $marker = Join-Path $root '.fleet-upgrade-swap'
 # The marker names the folder that held the old version for bin and externals;
 # rolling back points each link at it again.
+# Returns $true only when every link points back; the marker stays otherwise,
+# so the next run tries again.
 function Restore-Marker {
+  $failed = $false
   foreach ($line in @(Get-Content -LiteralPath $marker)) {
     $name, $previous = $line -split '=', 2
     if ($name -notin @('bin', 'externals') -or -not $previous.StartsWith("$name.")) { continue }
     $folder = Join-Path $root $previous
-    if (-not (Test-Path -LiteralPath $folder -PathType Container) -or (Test-Link $folder)) { continue }
     $path = Join-Path $root $name
-    if ((Test-Link $path) -or -not (Test-Path -LiteralPath $path)) { Set-Link $name $previous }
+    # Still the plain folder it was: this one was never moved.
+    if ((Test-Path -LiteralPath $path -PathType Container) -and -not (Test-Link $path)) { continue }
+    if (-not (Test-Path -LiteralPath $folder -PathType Container) -or (Test-Link $folder)) { $failed = $true; continue }
+    try {
+      if ((Test-Link $path) -or -not (Test-Path -LiteralPath $path)) { Set-Link $name $previous }
+      if ((Get-Target $name) -ne $previous) { $failed = $true }
+    } catch { $failed = $true }
   }
+  if ($failed) { return $false }
   Remove-Item -LiteralPath $marker -Force
+  return $true
 }
 if (Test-Path -LiteralPath $marker) {
-  Restore-Marker
+  if (-not (Restore-Marker)) {
+    throw "An earlier upgrade of $env:RF_NAME was interrupted and couldn't be rolled back: with its service stopped, point bin and externals at the folders named in $marker, remove the marker, then upgrade again"
+  }
   Write-Output "Rolled back an interrupted upgrade of $env:RF_NAME"
 }
 
 $oldBin = Get-Target 'bin'
 $oldExternals = Get-Target 'externals'
 $current = (& (Join-Path $root 'bin\Runner.Listener.exe') --version 2>$null | Select-Object -Last 1)
-if ($current -eq $version) { Write-Output "$env:RF_NAME already runs $version"; exit 0 }
+if ($current -eq $version) { Write-Output "$env:RF_NAME already runs $version"; return }
 if (($oldBin -eq 'bin' -or $oldExternals -eq 'externals') -and $current -notmatch '^\d+\.\d+\.\d+$') {
   throw "Can't tell which version $env:RF_NAME runs ('$current'), so its folders can't be kept as a rollback copy; refusing"
 }
@@ -156,21 +177,40 @@ try {
     if (Test-Path -LiteralPath $folder) { Remove-Entry $folder }
     Move-Item -LiteralPath (Join-Path $extracted $name) -Destination $folder
   }
+  Assert-Stopped
   Set-Content -LiteralPath $marker -Value "bin=$($keep['bin'])`nexternals=$($keep['externals'])"
   $swapping = $true
   foreach ($name in @('bin', 'externals')) {
     if ((Get-Target $name) -eq $name) { Rename-Item -LiteralPath (Join-Path $root $name) -NewName $keep[$name] }
     Set-Link $name "$name.$version"
   }
+  # Complete: removing the marker is the commit point.
   Remove-Item -LiteralPath $marker -Force
   $swapping = $false
+  # Refresh the root files a self-update copies (the package's top-level
+  # scripts and templates), each through a temporary file and a rename.
+  $stale = @()
+  foreach ($file in @(Get-ChildItem -LiteralPath $extracted -File -Force)) {
+    if ($file.Name.StartsWith('.') -or $file.Extension -notin @('.cmd', '.sh', '.template')) { continue }
+    $destination = Join-Path $root $file.Name
+    if (Test-Path -LiteralPath $destination -PathType Container) { $stale += $file.Name; continue }
+    try {
+      $temporary = Join-Path $root ".$($file.Name).fleet-new"
+      Copy-Item -LiteralPath $file.FullName -Destination $temporary -Force
+      Move-Item -LiteralPath $temporary -Destination $destination -Force
+    } catch { $stale += $file.Name }
+  }
+  if ($stale.Count -gt 0) { Write-Warning "Switched $env:RF_NAME to $version, but couldn't refresh: $($stale -join ', ')" }
 } catch {
   if ($swapping -and (Test-Path -LiteralPath $marker)) {
-    Restore-Marker
-    Write-Warning "Restored the previous bin and externals of $env:RF_NAME"
+    if (Restore-Marker) { Write-Warning "Restored the previous bin and externals of $env:RF_NAME" }
+    else { Write-Warning "Couldn't restore the previous bin and externals of $env:RF_NAME; they're named in $marker" }
   }
   throw
 } finally {
   if (Test-Path -LiteralPath $stage) { Remove-Entry $stage }
 }
 Write-Output "Switched $env:RF_NAME to $version (bin -> bin.$version); the previous version stays beside it as the rollback copy"
+} finally {
+  Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue
+}

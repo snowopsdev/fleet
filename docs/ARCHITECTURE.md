@@ -326,7 +326,11 @@ script on SSH stdin.
   extra facts (a read-only cleanup survey, the latest release asset); sizes are shown but not
   compared, so a re-check compares only what will change. Execution uses the reviewed targets and
   release. Host scripts (`worker-cleanup.*`, `worker-upgrade.*`, the stop script) check for a
-  running `Runner.Worker` in the runner directory immediately before acting. Cleanup stops each
+  running `Runner.Worker` in the runner directory immediately before acting. Cleanup and upgrade
+  share the runner's `.fleet-maintenance` lock (process groups, so a recycled PID fails closed),
+  start scripts refuse while it's live or an upgrade's `.fleet-upgrade-swap` marker exists, and
+  each cleanup removal runs in its own process group that the script's deadline kills and waits
+  for; a removal stopped that way (`RFT`) holds the runners like a lost connection. Cleanup stops each
   affected runner's service first (machine-wide targets need every inventory runner stopped) and
   restores it afterwards; it resolves
   fixed suffixes of the runner or home directory and refuses symlinks, the only recursive

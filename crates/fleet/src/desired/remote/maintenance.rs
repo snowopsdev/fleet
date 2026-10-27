@@ -235,7 +235,8 @@ pub fn format_kib(kib: u64) -> String {
     }
 }
 
-/// Parses the clean script's RFX (removed) and RFE (refused or failed) rows.
+/// Parses the clean script's RFX (removed), RFE (refused or failed) and RFT
+/// (stopped part-way at the host's deadline) rows.
 pub fn parse_clean(output: &str) -> Result<Vec<CleanupOutcome>> {
     let mut outcomes = Vec::new();
     for raw in splitlines(output) {
@@ -263,6 +264,10 @@ pub fn parse_clean(output: &str) -> Result<Vec<CleanupOutcome>> {
                         "removed {} previous runner version folder(s) from {path} ({freed})",
                         number(count).unwrap_or(0)
                     ),
+                    CleanupKind::UpgradeLeftovers => format!(
+                        "removed {} leftover upgrade staging folder(s) from {path} ({freed})",
+                        number(count).unwrap_or(0)
+                    ),
                     CleanupKind::UnavailableSimulators => {
                         format!("deleted {} unavailable simulator(s)", number(count).unwrap_or(0))
                     }
@@ -273,9 +278,10 @@ pub fn parse_clean(output: &str) -> Result<Vec<CleanupOutcome>> {
                     runner: field(runner),
                     message,
                     ok: true,
+                    timed_out: false,
                 });
             }
-            Some("RFE") => {
+            Some(tag @ ("RFE" | "RFT")) => {
                 let [_, k, runner, message] = fields[..] else {
                     return Err(malformed(raw));
                 };
@@ -284,6 +290,7 @@ pub fn parse_clean(output: &str) -> Result<Vec<CleanupOutcome>> {
                     runner: field(runner),
                     message: message.to_string(),
                     ok: false,
+                    timed_out: tag == "RFT",
                 });
             }
             _ => {}
@@ -345,7 +352,7 @@ Write-Output \"stopped $($service.Name)\"\n",
 test -x \"$root/svc.sh\" || {{ echo \"missing svc.sh at $root\" >&2; exit 1; }}\n\
 cd \"$root\"\n\
 real=\"$(pwd -P)\"\n\
-processes=\"$(ps -A -o command= 2>/dev/null || true)\"\n\
+processes=\"$(ps -A -ww -o command= 2>/dev/null || true)\"\n\
 if printf '%s\\n' \"$processes\" | grep -F -- \"$real/bin\" | grep -F -- Runner.Worker >/dev/null; then\n\
   echo \"{busy} in $real; refusing to stop {shown}\" >&2\n\
   exit 5\n\

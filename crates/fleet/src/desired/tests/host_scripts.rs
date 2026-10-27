@@ -7,7 +7,8 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
-use super::super::maintenance::{CleanupKind, CleanupOptions, cleanup_candidates};
+use super::super::maintenance::{CleanupKind, CleanupOptions, CleanupTarget, cleanup_candidates};
+use super::super::model::RunnerRole;
 use super::super::remote::{FleetRemote as _, clean_script, parse_clean, parse_survey, survey_script};
 use super::*;
 
@@ -219,6 +220,9 @@ impl Upgrade {
         std::fs::create_dir_all(package.join("externals/node")).unwrap();
         std::fs::write(package.join("externals/node/version"), "new").unwrap();
         std::fs::write(package.join("bin/runsvc.sh"), "new service script").unwrap();
+        std::fs::write(package.join("run.sh"), "new run.sh").unwrap();
+        std::fs::write(package.join("config.sh"), "new config.sh").unwrap();
+        std::fs::write(package.join(".env"), "never copied").unwrap();
         let archive = home.join("runner.tar.gz");
         let status = Command::new("tar")
             .arg("-czf")
@@ -312,20 +316,36 @@ RF_ASSET_NAME=actions-runner-linux-x64-2.330.0.tar.gz\nRF_CHECKSUM={}\nRF_VERSIO
 fn upgrade_converts_plain_folders_to_the_versioned_layout() {
     let u = Upgrade::new();
     std::fs::write(u.root.join("runsvc.sh"), "old").unwrap();
+    std::fs::write(u.root.join("run.sh"), "old run.sh").unwrap();
+    std::fs::write(u.root.join(".env"), "LANG=C").unwrap();
     let (code, out, err) = u.run();
     assert_eq!(code, 0, "{out}{err}");
+    // The root files a self-update refreshes; never dotfiles like .env.
+    assert_eq!(std::fs::read_to_string(u.root.join("run.sh")).unwrap(), "new run.sh");
+    assert_eq!(
+        std::fs::read_to_string(u.root.join("config.sh")).unwrap(),
+        "new config.sh"
+    );
+    assert_eq!(std::fs::read_to_string(u.root.join(".env")).unwrap(), "LANG=C");
+    assert!(
+        !u.root.join(".fleet-maintenance").exists(),
+        "the upgrade releases its lock"
+    );
     assert_eq!((u.version(), u.externals()), ("2.330.0".to_string(), "new".to_string()));
     assert_eq!(
         u.entries(),
         [
             ".credentials",
+            ".env",
             ".runner",
             "bin",
             "bin.2.320.0",
             "bin.2.330.0",
+            "config.sh",
             "externals",
             "externals.2.320.0",
             "externals.2.330.0",
+            "run.sh",
             "runsvc.sh"
         ]
     );
@@ -460,7 +480,7 @@ fn upgrade_refuses_escaping_links_a_running_service_a_self_update_and_a_cleanup(
     std::fs::write(u.root.join(".fleet-maintenance"), holder.0.id().to_string()).unwrap();
     let (code, _, err) = u.run();
     assert_eq!(code, 5);
-    assert!(err.contains("a cleanup is still working"), "{err}");
+    assert!(err.contains("is still working"), "{err}");
 }
 
 /// The start script every change and the watchdog use refuses while a live
@@ -482,7 +502,7 @@ fn starting_a_runner_waits_for_a_cleanup_holding_its_lock() {
     std::fs::write(root.join(".fleet-maintenance"), holder.0.id().to_string()).unwrap();
     let (code, _, err) = bash(&script, &[("HOME", &home)], None);
     assert_eq!(code, 5, "{err}");
-    assert!(err.contains("a cleanup is still working"), "{err}");
+    assert!(err.contains("is still working"), "{err}");
     assert!(!root.join("started").exists());
     drop(holder);
     let (code, _, err) = bash(&script, &[("HOME", &home)], None);
@@ -508,6 +528,10 @@ fn windows_scripts_never_use_cmd_and_fail_closed_on_unreadable_processes() {
         );
         assert!(code.contains(".fleet-maintenance"), "the maintenance lock is honoured");
         assert!(code.contains("_work\\_update.cmd") && code.contains("update.finished"));
+        assert!(
+            code.contains("TrimEnd('\\') + '\\'"),
+            "roots match with a trailing separator"
+        );
     }
     let inventory = example_inventory();
     let host = inventory.find_host("windows").unwrap();
@@ -515,10 +539,12 @@ fn windows_scripts_never_use_cmd_and_fail_closed_on_unreadable_processes() {
     assert!(stop.contains("Get-CimInstance Win32_Process") && stop.contains("-not $where -or"));
     let (commands, client) = recording_remote();
     client.start(host, &host.runners[0], &Transient::NONE).unwrap();
+    let start = decoded(&commands);
     assert!(
-        decoded(&commands).contains(".fleet-maintenance"),
+        start.contains(".fleet-maintenance"),
         "Windows starts honour the lock too"
     );
+    assert!(start.contains(".fleet-upgrade-swap"), "and refuse mid-swap");
 }
 
 /// Runs the PowerShell cleanup against a directory with awkward names and a
@@ -557,4 +583,199 @@ fn powershell_cleanup_removes_odd_names_and_never_follows_links() {
     assert!(out.contains("RFX\twork-temp"), "{out}");
     assert_eq!(std::fs::read_dir(root.join("_work/_temp")).unwrap().count(), 0);
     assert_eq!(std::fs::read_to_string(outside.join("keep")).unwrap(), "keep");
+}
+
+/// A slow `find -delete` stands in for a huge removal: at the script's
+/// deadline its whole process group is killed and waited for, the row says it
+/// stopped part-way, and the lock is released only then.
+#[cfg(unix)]
+#[test]
+fn the_deadline_stops_the_whole_removal_before_releasing_the_lock() {
+    let (_tmp, root, host) = runner_dir();
+    let shims = root.parent().unwrap().join("shims");
+    let pid_file = root.parent().unwrap().join("find.pid");
+    write_exec(
+        &shims.join("find"),
+        &format!(
+            "#!/bin/sh\nfor a; do if [ \"$a\" = -delete ]; then echo $$ > '{}'; exec sleep 60; fi; done\nexec /usr/bin/find \"$@\"\n",
+            pid_file.display()
+        ),
+    );
+    let options = CleanupOptions::default();
+    let candidates: Vec<_> = cleanup_candidates(&host, &options)
+        .into_iter()
+        .filter(|c| c.kind == CleanupKind::WorkTemp)
+        .collect();
+    let survey = parse_survey(&bash(&survey_script(&host, &candidates, &options), &[], None).1).unwrap();
+    let script = clean_script(&host, &survey.targets, &options)
+        .unwrap()
+        .replacen("RF_SECONDS=840", "RF_SECONDS=2", 1);
+    let started = std::time::Instant::now();
+    let outcomes = parse_clean(&bash(&script, &[], Some(&shims)).1).unwrap();
+    assert!(started.elapsed() < std::time::Duration::from_secs(30));
+    assert!(outcomes[0].timed_out && !outcomes[0].ok, "{outcomes:?}");
+    let pid = std::fs::read_to_string(&pid_file).unwrap();
+    let alive = Command::new("kill")
+        .args(["-0", pid.trim()])
+        .status()
+        .unwrap()
+        .success();
+    assert!(!alive, "the removal was killed, not orphaned");
+    assert!(!root.join(".fleet-maintenance").exists());
+}
+
+/// A missing or dangling bin (a self-update that removed the link and failed
+/// to make the new one) can't tell the version in use apart: nothing is offered.
+#[cfg(unix)]
+#[test]
+fn previous_versions_need_a_resolvable_bin() {
+    let (_tmp, root, host) = runner_dir();
+    std::fs::remove_dir_all(root.join("bin")).unwrap();
+    for version in ["2.320.0", "2.330.0"] {
+        std::fs::create_dir_all(root.join(format!("bin.{version}/x"))).unwrap();
+    }
+    let options = CleanupOptions::default();
+    let candidates: Vec<_> = cleanup_candidates(&host, &options)
+        .into_iter()
+        .filter(|c| c.kind == CleanupKind::PreviousBin)
+        .collect();
+    for dangling in [false, true] {
+        if dangling {
+            std::os::unix::fs::symlink(root.join("bin.2.999.0"), root.join("bin")).unwrap();
+        }
+        let survey = parse_survey(&bash(&survey_script(&host, &candidates, &options), &[], None).1).unwrap();
+        assert!(survey.targets.is_empty(), "dangling={dangling}: {survey:?}");
+        assert!(
+            survey
+                .refused
+                .iter()
+                .any(|(_, _, m)| m.contains("previous versions are kept"))
+        );
+        let reviewed = CleanupTarget {
+            kind: CleanupKind::PreviousBin,
+            runner: Some("linux-01".into()),
+            path: Some(root.display().to_string()),
+            kib: None,
+            count: None,
+            detail: None,
+            files: vec!["bin.2.320.0".into(), "bin.2.330.0".into()],
+        };
+        let outcomes = parse_clean(&bash(&clean_script(&host, &[reviewed], &options).unwrap(), &[], None).1).unwrap();
+        assert!(!outcomes[0].ok, "{outcomes:?}");
+        assert!(root.join("bin.2.320.0/x").exists() && root.join("bin.2.330.0/x").exists());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn leftover_upgrade_staging_folders_are_offered_unless_an_upgrade_is_live() {
+    let (_tmp, root, host) = runner_dir();
+    std::fs::create_dir_all(root.join(".fleet-upgrade.Ab12Cd/new")).unwrap();
+    let options = CleanupOptions::default();
+    let candidates: Vec<_> = cleanup_candidates(&host, &options)
+        .into_iter()
+        .filter(|c| c.kind == CleanupKind::UpgradeLeftovers)
+        .collect();
+    let survey = || parse_survey(&bash(&survey_script(&host, &candidates, &options), &[], None).1).unwrap();
+    // While an upgrade holds the lock, its staging folder isn't offered.
+    {
+        let holder = Running::start(&root.parent().unwrap().join("elsewhere/holder.sh"));
+        std::fs::write(root.join(".fleet-maintenance"), holder.0.id().to_string()).unwrap();
+        assert!(survey().targets.is_empty());
+    }
+    let found = survey();
+    assert_eq!(found.targets[0].files, [".fleet-upgrade.Ab12Cd"]);
+    let mut reviewed = found.targets.clone();
+    reviewed[0].files.push("../escape".into());
+    let outcomes = parse_clean(&bash(&clean_script(&host, &reviewed, &options).unwrap(), &[], None).1).unwrap();
+    assert!(outcomes.iter().any(|o| o.ok), "{outcomes:?}");
+    assert!(
+        outcomes
+            .iter()
+            .any(|o| !o.ok && o.message.contains("isn't an upgrade's staging folder"))
+    );
+    assert!(!root.join(".fleet-upgrade.Ab12Cd").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_rollback_that_cant_relink_keeps_its_marker_and_fails() {
+    let u = Upgrade::new();
+    u.versioned("2.320.0");
+    std::fs::create_dir_all(u.root.join("bin.2.330.0")).unwrap();
+    std::fs::remove_file(u.root.join("bin")).unwrap();
+    std::os::unix::fs::symlink(u.root.join("bin.2.330.0"), u.root.join("bin")).unwrap();
+    std::fs::write(
+        u.root.join(".fleet-upgrade-swap"),
+        "bin=bin.2.320.0\nexternals=externals.2.320.0\n",
+    )
+    .unwrap();
+    write_exec(&u.shims.join("ln"), "#!/bin/sh\necho simulated >&2\nexit 1\n");
+    let (code, out, err) = u.run();
+    assert_eq!(code, 3, "{out}{err}");
+    assert!(err.contains("couldn't be rolled back"), "{err}");
+    assert!(!out.contains("rolled back"), "{out}");
+    assert!(
+        u.root.join(".fleet-upgrade-swap").exists(),
+        "the marker stays until every link is back"
+    );
+    assert!(!u.root.join(".fleet-maintenance").exists());
+}
+
+/// Something started from the runner directory while the release downloaded:
+/// the re-check right before the swap refuses, and nothing is switched.
+#[cfg(unix)]
+#[test]
+fn upgrade_rechecks_processes_right_before_the_swap_and_holds_its_lock() {
+    let u = Upgrade::new();
+    let archive = u.home.join("runner.tar.gz");
+    let late = u.root.join("bin/late-start.sh");
+    write_exec(&late, "#!/bin/sh\nsleep 30\n");
+    let seen = u.home.join("lock-seen");
+    let pid_file = u.home.join("late.pid");
+    write_exec(
+        &u.shims.join("curl"),
+        &format!(
+            "#!/bin/sh\n[ -f '{lock}' ] && touch '{seen}'\nsh '{late}' > /dev/null 2>&1 &\necho $! > '{pid}'\n\
+while [ $# -gt 0 ]; do [ \"$1\" = --output ] && cp '{archive}' \"$2\"; shift; done\n",
+            lock = u.root.join(".fleet-maintenance").display(),
+            seen = seen.display(),
+            late = late.display(),
+            pid = pid_file.display(),
+            archive = archive.display(),
+        ),
+    );
+    let (code, _, err) = u.run();
+    let pid = std::fs::read_to_string(&pid_file).unwrap();
+    let _ = Command::new("kill").arg(pid.trim()).status();
+    assert!(seen.exists(), "the upgrade held the maintenance lock while it worked");
+    assert_eq!(code, 5, "{err}");
+    assert!(err.contains("still running"), "{err}");
+    assert!(!u.root.join(".fleet-upgrade-swap").exists());
+    assert!(
+        u.root.join("bin").is_dir() && !u.root.join("bin").is_symlink(),
+        "nothing was switched"
+    );
+    assert!(!u.root.join(".fleet-maintenance").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn starting_a_runner_refuses_while_an_upgrade_is_mid_swap() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().canonicalize().unwrap();
+    let inventory = example_inventory();
+    let host = inventory.find_host("mini").unwrap();
+    let root = home.join("gh-runners/acme/runner-01");
+    write_exec(&root.join("svc.sh"), "#!/bin/sh\ntouch started\n");
+    std::fs::write(root.join(".fleet-upgrade-swap"), "bin=bin.2.320.0\n").unwrap();
+    let (commands, client) = recording_remote();
+    client
+        .restart(host, &host.runners[0], RunnerRole::Declared, &Transient::NONE)
+        .unwrap();
+    let script = commands.last().unwrap().input.unwrap();
+    let (code, _, err) = bash(&script, &[("HOME", &home)], None);
+    assert_eq!(code, 5, "{err}");
+    assert!(err.contains("interrupted mid-swap"), "{err}");
+    assert!(!root.join("started").exists());
 }

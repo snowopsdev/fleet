@@ -35,9 +35,11 @@ function Get-KiB([string]$Path) {
 # account, without elevation) counts as this runner's: the check fails closed.
 # An elevated SSH session attributes precisely.
 function Get-RootProcesses([string]$Root) {
+  # With a trailing separator, so runner-1 doesn't match runner-10.
+  $prefix = $Root.TrimEnd('\') + '\'
   @(Get-CimInstance Win32_Process | Where-Object {
     $where = if ($_.ExecutablePath) { $_.ExecutablePath } else { $_.CommandLine }
-    ($where -and $where.IndexOf($Root, [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
+    ($where -and $where.IndexOf($prefix, [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
       (-not $where -and $_.Name -in @('Runner.Listener.exe', 'Runner.Worker.exe'))
   })
 }
@@ -59,6 +61,7 @@ function Lock-Root([string]$Root) {
   $lock = Join-Path $Root '.fleet-maintenance'
   if ($script:locks -contains $lock) { return $true }
   if (Test-Path -LiteralPath $lock) {
+    # A recycled PID keeps the lock live: that fails closed.
     $live = @((Get-Content -LiteralPath $lock -Raw) -split '\s+' | Where-Object { $_ -match '^\d+$' } | Where-Object { Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue })
     if ($live.Count -gt 0) { return $false }
     Remove-Item -LiteralPath $lock -Force
@@ -69,7 +72,8 @@ function Lock-Root([string]$Root) {
 }
 # Releases every lock this run took; the controller calls it in a finally block.
 function Unlock-All { foreach ($lock in $script:locks) { Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue } }
-function Test-Deadline { if ((Get-Date) -ge $deadline) { throw 'the cleanup ran out of time; nothing more was removed' } }
+$timeoutMessage = 'the cleanup ran out of time and stopped part-way'
+function Test-Deadline { if ((Get-Date) -ge $deadline) { throw $timeoutMessage } }
 # Removes one entry. A symlink or junction is removed itself and never
 # followed; a directory's contents go first. Names are only ever passed as
 # -LiteralPath or .NET paths, never through a shell.
@@ -98,21 +102,42 @@ function Get-OldLogs([string]$Path) {
     Where-Object { ($_.Name -like 'Runner_*.log' -or $_.Name -like 'Worker_*.log') -and $_.LastWriteTime -lt $cutoff -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } |
     Sort-Object Name
 }
-# The folder bin (or externals) uses: its junction's target name, or itself.
+# The folder bin (or externals) uses: a plain folder (itself), or a junction or
+# link that resolves to an existing NAME.VERSION folder directly in the root.
+# $null when it's missing, dangling or points anywhere else: then nothing counts
+# as a previous version, since the version in use can't be told apart.
 function Get-InUse([string]$Root, [string]$Name) {
   $item = Get-Item -LiteralPath (Join-Path $Root $Name) -Force -ErrorAction SilentlyContinue
-  if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return Split-Path -Leaf (@($item.Target)[0]) }
-  return $Name
+  if (-not $item) { return $null }
+  if (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return $(if ($item.PSIsContainer) { $Name } else { $null }) }
+  $target = @($item.Target)[0]
+  if (-not $target) { return $null }
+  $target = [IO.Path]::GetFullPath($target)
+  $leaf = Split-Path -Leaf $target
+  if ((Split-Path -Parent $target) -ne $Root -or -not $leaf.StartsWith("$Name.", [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $target -PathType Container)) { return $null }
+  return $leaf
 }
 function Test-PreviousName([string]$Name, [string]$Entry) {
   return ($Entry -eq "$Name.fleet-previous") -or ($Entry -match ('^' + [regex]::Escape($Name) + '\.\d+\.\d+\.\d+$'))
 }
 # Previous versions: real folders named NAME.VERSION that NAME doesn't point at.
+# $null when NAME can't be resolved; nothing while an upgrade is mid-swap.
 function Get-PreviousVersions([string]$Root, [string]$Name) {
   if (Test-Path -LiteralPath (Join-Path $Root '.fleet-upgrade-swap')) { return @() }
   $current = Get-InUse $Root $Name
+  if (-not $current) { return $null }
   @(Get-ChildItem -LiteralPath $Root -Directory -Force | Where-Object {
     -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -and (Test-PreviousName $Name $_.Name) -and $_.Name -ne $current
+  } | Sort-Object Name)
+}
+# Staging folders an interrupted upgrade left behind (.fleet-upgrade-GUID).
+function Test-LeftoverName([string]$Entry) { return $Entry -match '^\.fleet-upgrade-[0-9a-fA-F-]+$' }
+function Get-UpgradeLeftovers([string]$Root) {
+  if (Test-Path -LiteralPath (Join-Path $Root '.fleet-upgrade-swap')) { return @() }
+  $lock = Join-Path $Root '.fleet-maintenance'
+  if ((Test-Path -LiteralPath $lock) -and @((Get-Content -LiteralPath $lock -Raw) -split '\s+' | Where-Object { $_ -match '^\d+$' } | Where-Object { Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue }).Count -gt 0) { return @() }
+  @(Get-ChildItem -LiteralPath $Root -Directory -Force | Where-Object {
+    -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -and (Test-LeftoverName $_.Name)
   } | Sort-Object Name)
 }
 
@@ -124,6 +149,7 @@ function Invoke-RunnerTarget([string]$Kind, [string]$Runner, [string]$Root, [str
     'diag' { '_diag' }
     'previous-bin' { '' }
     'previous-externals' { '' }
+    'upgrade-leftovers' { '' }
     default { $null }
   }
   if ($null -eq $suffix) { Write-Row @('RFE', $Kind, $Runner, "unknown cleanup target $Kind"); return }
@@ -150,7 +176,10 @@ function Invoke-RunnerTarget([string]$Kind, [string]$Runner, [string]$Root, [str
   $real = [IO.Path]::GetFullPath($path)
   $name = if ($Kind -eq 'previous-bin') { 'bin' } elseif ($Kind -eq 'previous-externals') { 'externals' } else { $null }
   if ($survey) {
-    $entries = if ($Kind -eq 'diag') { @(Get-OldLogs $real) } elseif ($name) { @(Get-PreviousVersions $real $name) } else { $null }
+    if ($name -and $null -eq (Get-InUse $real $name)) {
+      Write-Row @('RFE', $Kind, $Runner, "$real\$name is missing or doesn't point at a $name.VERSION folder here; previous versions are kept"); return
+    }
+    $entries = if ($Kind -eq 'diag') { @(Get-OldLogs $real) } elseif ($name) { @(Get-PreviousVersions $real $name) } elseif ($Kind -eq 'upgrade-leftovers') { @(Get-UpgradeLeftovers $real) } else { $null }
     if ($null -eq $entries) {
       if (-not (Get-ChildItem -LiteralPath $real -Force | Select-Object -First 1)) { return }
       Write-Row @('RFC', $Kind, $Runner, $real, (Get-KiB $real), '', '')
@@ -190,10 +219,25 @@ function Invoke-RunnerTarget([string]$Kind, [string]$Runner, [string]$Root, [str
     } elseif ($name) {
       if (Test-Path -LiteralPath (Join-Path $real '.fleet-upgrade-swap')) { Write-Row @('RFE', $Kind, $Runner, "an upgrade of $Runner was interrupted; its previous versions are kept"); return }
       $current = Get-InUse $real $name
+      if (-not $current) { Write-Row @('RFE', $Kind, $Runner, "$real\$name is missing or doesn't point at a $name.VERSION folder here; previous versions are kept"); return }
       $removed = 0
       $freed = 0
       foreach ($entry in $Files) {
         if (-not (Test-PreviousName $name $entry) -or $entry -eq $current) { Write-Row @('RFE', $Kind, $Runner, "$entry isn't a previous version of $name here; left it alone"); continue }
+        $folder = Join-Path $real $entry
+        if (-not (Test-Path -LiteralPath $folder -PathType Container) -or (Test-Link $folder)) { continue }
+        $size = [int64](Get-KiB $folder)
+        Remove-Tree $folder
+        $removed += 1
+        $freed += $size
+      }
+      Write-Row @('RFX', $Kind, $Runner, $real, [string]$freed, [string]$removed, '')
+    } elseif ($Kind -eq 'upgrade-leftovers') {
+      if (Test-Path -LiteralPath (Join-Path $real '.fleet-upgrade-swap')) { Write-Row @('RFE', $Kind, $Runner, "an upgrade of $Runner was interrupted; its folders are kept"); return }
+      $removed = 0
+      $freed = 0
+      foreach ($entry in $Files) {
+        if (-not (Test-LeftoverName $entry)) { Write-Row @('RFE', $Kind, $Runner, "$entry isn't an upgrade's staging folder; left it alone"); continue }
         $folder = Join-Path $real $entry
         if (-not (Test-Path -LiteralPath $folder -PathType Container) -or (Test-Link $folder)) { continue }
         $size = [int64](Get-KiB $folder)
@@ -208,6 +252,11 @@ function Invoke-RunnerTarget([string]$Kind, [string]$Runner, [string]$Root, [str
       Write-Row @('RFX', $Kind, $Runner, $real, $size, '', '')
     }
   } catch {
-    Write-Row @('RFE', $Kind, $Runner, "couldn't clean $real`: $($_.Exception.Message)")
+    if ($_.Exception.Message -eq $timeoutMessage) {
+      # RFT: stopped part-way at the deadline; the controller holds the runner.
+      Write-Row @('RFT', $Kind, $Runner, "ran out of time cleaning $real; stopped part-way, so the runner stays stopped")
+    } else {
+      Write-Row @('RFE', $Kind, $Runner, "couldn't clean $real`: $($_.Exception.Message)")
+    }
   }
 }

@@ -71,24 +71,33 @@ fn powershell_preamble(values: &[(&str, String)]) -> String {
         .collect()
 }
 
-/// Refuses while a live process holds `$root/.fleet-maintenance` (a cleanup is
-/// still removing files there); a lock whose processes are gone is stale and
-/// removed. Shared by every script that starts a runner.
+/// Refuses to start a runner while a live process (or process group) holds
+/// `$root/.fleet-maintenance` (a cleanup or upgrade is working there), or while
+/// `$root/.fleet-upgrade-swap` shows an upgrade stopped mid-swap. A lock whose
+/// processes are gone is stale and removed; a recycled PID keeps it live, which
+/// fails closed. Shared by every script that starts a runner.
 pub(super) const SH_LOCK_CHECK: &str = "lock=\"$root/.fleet-maintenance\"\n\
 if [ -f \"$lock\" ]; then\n\
   for pid in $(cat \"$lock\" 2>/dev/null); do\n\
     case \"$pid\" in ''|*[!0-9]*) continue ;; esac\n\
-    if kill -0 \"$pid\" 2>/dev/null; then echo \"a cleanup is still working in $root; not starting the runner until it finishes\" >&2; exit 5; fi\n\
+    if kill -0 \"$pid\" 2>/dev/null || kill -0 -- \"-$pid\" 2>/dev/null; then echo \"a cleanup or upgrade is still working in $root; not starting the runner until it finishes\" >&2; exit 5; fi\n\
   done\n\
   rm -f -- \"$lock\"\n\
+fi\n\
+if [ -f \"$root/.fleet-upgrade-swap\" ]; then\n\
+  echo \"an upgrade was interrupted mid-swap in $root; run Upgrade again to roll it back, or with the service stopped point bin and externals at the folders named in .fleet-upgrade-swap and remove it, before starting the runner\" >&2\n\
+  exit 5\n\
 fi\n";
 
 /// [`SH_LOCK_CHECK`] for PowerShell, on `$path`.
 pub(super) const WIN_LOCK_CHECK: &str = "$lock = Join-Path $path '.fleet-maintenance'\n\
 if (Test-Path -LiteralPath $lock) {\n\
   $live = @((Get-Content -LiteralPath $lock -Raw) -split '\\s+' | Where-Object { $_ -match '^\\d+$' } | Where-Object { Get-Process -Id ([int]$_) -ErrorAction SilentlyContinue })\n\
-  if ($live.Count -gt 0) { throw \"a cleanup is still working in $path; not starting the runner until it finishes\" }\n\
+  if ($live.Count -gt 0) { throw \"a cleanup or upgrade is still working in $path; not starting the runner until it finishes\" }\n\
   Remove-Item -LiteralPath $lock -Force\n\
+}\n\
+if (Test-Path -LiteralPath (Join-Path $path '.fleet-upgrade-swap')) {\n\
+  throw \"an upgrade was interrupted mid-swap in $path; run Upgrade again to roll it back, or with the service stopped point bin and externals at the folders named in .fleet-upgrade-swap and remove it, before starting the runner\"\n\
 }\n";
 
 /// Finds the Actions runner service whose executable lives under `$path`.

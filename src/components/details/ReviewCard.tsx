@@ -159,7 +159,7 @@ function ChangeNotes({ review: r }: { review: ReviewView }) {
 function TargetSize({ target: t }: { target: FleetCleanupTarget }) {
   const parts = [
     t.kib != null ? formatKib(t.kib) : null,
-    t.count != null ? (t.kind === "simulators" ? `${t.count} simulators` : t.kind === "diag" ? `${t.count} logs` : t.kind.startsWith("previous-") ? `${t.count} versions` : `${t.count}`) : null,
+    t.count != null ? (t.kind === "simulators" ? `${t.count} simulators` : t.kind === "diag" ? `${t.count} logs` : t.kind.startsWith("previous-") ? `${t.count} versions` : t.kind === "upgrade-leftovers" ? `${t.count} folders` : `${t.count}`) : null,
     t.detail,
   ].filter(Boolean);
   return parts.length ? <span className="shrink-0 font-mono text-[11.5px] text-ink-2 tabular">{parts.join(" · ")}</span> : null;

@@ -258,7 +258,8 @@ impl Engine {
     /// Before an upgrade or cleanup stops anything: holds every runner it may
     /// stop, durably, so a crash or quit mid-change can't leave one silently
     /// stopped for the watchdog to restart half-changed. Returns the runners
-    /// newly held this way (ones already held keep their existing hold).
+    /// newly held this way (ones already held keep their existing hold), or why
+    /// the holds couldn't be saved, in which case the change must not run.
     pub(super) fn begin_holds(
         &self,
         host: &str,
@@ -266,7 +267,7 @@ impl Engine {
         inventory: &Inventory,
         upgrade: &[String],
         drained: &BTreeSet<String>,
-    ) -> Vec<String> {
+    ) -> Result<Vec<String>, String> {
         let (names, what): (Vec<String>, &str) = match request {
             ChangeRequest::Upgrade { .. } => (upgrade.to_vec(), "An upgrade"),
             ChangeRequest::Cleanup { .. } => (
@@ -286,7 +287,7 @@ impl Engine {
             | ChangeRequest::Decommission { .. }
             | ChangeRequest::Restart { .. }
             | ChangeRequest::Drain { .. }
-            | ChangeRequest::Resume { .. } => return Vec::new(),
+            | ChangeRequest::Resume { .. } => return Ok(Vec::new()),
         };
         let reason = format!(
             "{what} was running and may have been interrupted. Check the machine, then resume it (or upgrade it again)."
@@ -309,10 +310,7 @@ impl Engine {
             }
             begun
         });
-        begun.unwrap_or_else(|e| {
-            tracing::warn!("saving in-progress holds failed: {e}");
-            Vec::new()
-        })
+        begun.map_err(|e| e.to_string())
     }
 
     /// After an upgrade or cleanup: runners it left stopped on purpose are

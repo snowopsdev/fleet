@@ -56,6 +56,10 @@ pub struct World {
     pub cleanup_lost: bool,
     /// Stopping one of these runners stops it but reports an error.
     pub stop_errors_after_stopping: Vec<String>,
+    /// The host's deadline stops a cleanup part-way.
+    pub cleanup_times_out: bool,
+    /// Upgrading one of these runners leaves it on its old version.
+    pub upgrade_wrong_version: Vec<String>,
 }
 
 impl Default for World {
@@ -77,6 +81,8 @@ impl Default for World {
             start_failures: Vec::new(),
             cleanup_lost: false,
             stop_errors_after_stopping: Vec::new(),
+            cleanup_times_out: false,
+            upgrade_wrong_version: Vec::new(),
         }
     }
 }
@@ -328,6 +334,19 @@ impl FleetRemote for FakeFleet {
             return Err(RemoteError("ssh: connection timed out".into()));
         }
         let mut outcomes = Vec::new();
+        if world.cleanup_times_out {
+            world.calls.push(format!("cleanup {} (ran out of time)", host.id));
+            return Ok(targets
+                .iter()
+                .map(|t| CleanupOutcome {
+                    kind: t.kind,
+                    runner: t.runner.clone(),
+                    message: "ran out of time; stopped part-way".into(),
+                    ok: false,
+                    timed_out: true,
+                })
+                .collect());
+        }
         let names: Vec<&str> = host.runner_names().collect();
         let active = |world: &World, name: &str| world.local.get(name).is_some_and(LocalRunner::service_active);
         for target in targets {
@@ -353,6 +372,7 @@ impl FleetRemote for FakeFleet {
                     runner: target.runner.clone(),
                     message: format!("{why} in {path}; left it alone"),
                     ok: false,
+                    timed_out: false,
                 });
                 continue;
             }
@@ -367,6 +387,7 @@ impl FleetRemote for FakeFleet {
                 runner: target.runner.clone(),
                 message: format!("emptied {path}"),
                 ok: true,
+                timed_out: false,
             });
         }
         world.cleanup_targets.retain(|t| !targets.contains(t));
@@ -380,7 +401,9 @@ impl FleetRemote for FakeFleet {
         if world.upgrade_failures.contains(&runner.name) {
             return Err(RemoteError("SHA-256 mismatch for runner.tar.gz".into()));
         }
-        if let Some(local) = world.local.get_mut(&runner.name) {
+        if !world.upgrade_wrong_version.contains(&runner.name)
+            && let Some(local) = world.local.get_mut(&runner.name)
+        {
             local.version = Some(asset.version.clone());
         }
         Ok(String::new())

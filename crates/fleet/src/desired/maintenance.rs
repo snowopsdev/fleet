@@ -69,6 +69,8 @@ pub enum CleanupKind {
     PreviousBin,
     /// `RUNNER/externals.VERSION` folders that `externals` doesn't point at.
     PreviousExternals,
+    /// `RUNNER/.fleet-upgrade.*` staging folders an interrupted upgrade left.
+    UpgradeLeftovers,
     /// macOS: the contents of `~/Library/Developer/Xcode/DerivedData`.
     XcodeDerivedData,
     /// macOS: `xcrun simctl delete unavailable`.
@@ -89,6 +91,7 @@ impl CleanupKind {
             Self::Diag => "diag",
             Self::PreviousBin => "previous-bin",
             Self::PreviousExternals => "previous-externals",
+            Self::UpgradeLeftovers => "upgrade-leftovers",
             Self::XcodeDerivedData => "xcode-derived-data",
             Self::UnavailableSimulators => "simulators",
             Self::Docker => "docker",
@@ -103,6 +106,7 @@ impl CleanupKind {
             Self::Diag,
             Self::PreviousBin,
             Self::PreviousExternals,
+            Self::UpgradeLeftovers,
             Self::XcodeDerivedData,
             Self::UnavailableSimulators,
             Self::Docker,
@@ -119,7 +123,8 @@ impl CleanupKind {
             | Self::Work
             | Self::Diag
             | Self::PreviousBin
-            | Self::PreviousExternals => true,
+            | Self::PreviousExternals
+            | Self::UpgradeLeftovers => true,
             Self::XcodeDerivedData | Self::UnavailableSimulators | Self::Docker => false,
         }
     }
@@ -175,6 +180,10 @@ impl CleanupTarget {
                 "remove previous runner version folder(s) from {path}: {}",
                 self.files.join(", ")
             ),
+            CleanupKind::UpgradeLeftovers => format!(
+                "remove staging folder(s) an interrupted upgrade left in {path}: {}",
+                self.files.join(", ")
+            ),
             CleanupKind::UnavailableSimulators => "run xcrun simctl delete unavailable".into(),
             CleanupKind::Docker => "run docker system prune -f (volumes are kept)".into(),
         }
@@ -209,6 +218,7 @@ pub fn cleanup_candidates(host: &Host, options: &CleanupOptions) -> Vec<CleanupC
             CleanupKind::Diag,
             CleanupKind::PreviousBin,
             CleanupKind::PreviousExternals,
+            CleanupKind::UpgradeLeftovers,
         ]) {
             out.push(CleanupCandidate {
                 kind: *kind,
@@ -329,6 +339,8 @@ pub struct CleanupOutcome {
     /// What happened, as a sentence fragment for the operation messages.
     pub message: String,
     pub ok: bool,
+    /// The host's deadline stopped this removal part-way.
+    pub timed_out: bool,
 }
 
 impl Ops<'_> {
@@ -445,7 +457,31 @@ impl Ops<'_> {
             _ => Ok(Vec::new()),
         };
         let mut failures = Vec::new();
+        // A removal the host's deadline stopped part-way leaves a half-emptied
+        // directory: treat it like a lost connection and keep the runners stopped.
         let outcomes = match outcomes {
+            Ok(outcomes) if outcomes.iter().any(|o| o.timed_out) => {
+                let names: Vec<String> = stopped.iter().map(|r| r.name.clone()).collect();
+                report.left_stopped.extend(names.iter().cloned());
+                let stopped_part_way: Vec<String> = outcomes
+                    .iter()
+                    .filter(|o| o.timed_out)
+                    .map(|o| o.message.clone())
+                    .collect();
+                let held_note = if names.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        " {} stay stopped and held; check the machine, then resume them.",
+                        names.join(", ")
+                    )
+                };
+                return fail(format!(
+                    "cleanup on {} ran out of time: {}.{held_note}",
+                    host.id,
+                    stopped_part_way.join("; ")
+                ));
+            }
             Ok(outcomes) => {
                 // Put every service the cleanup stopped back the way it was.
                 for runner in stopped {
@@ -650,11 +686,23 @@ impl Ops<'_> {
             return Err(recovery(&"the host no longer reports it"));
         };
         if after.version.as_deref() != Some(asset.version.as_str()) {
-            return Err(recovery(&format!(
-                "it reports version {} after the upgrade, not {}",
+            // It started on the wrong version: stop it again so it doesn't take
+            // jobs, and hold it, rather than leave it running under a hold.
+            let mismatch = format!(
+                "version mismatch: it reports {} after the upgrade, not {}",
                 after.version.as_deref().unwrap_or("unknown"),
                 asset.version
-            )));
+            );
+            return Err(match self.remote.stop(host, runner, sudo) {
+                Ok(_) => recovery(&mismatch),
+                Err(e) => {
+                    report.left_stopped.retain(|n| n != name);
+                    OperationError(format!(
+                        "upgrade of {name} ended with a {mismatch}, and stopping it again failed ({e}), so it's still \
+                         running. Check its diagnostic log and stop or upgrade it by hand."
+                    ))
+                }
+            });
         }
         if !after.service_active() {
             return Err(recovery(&format!(

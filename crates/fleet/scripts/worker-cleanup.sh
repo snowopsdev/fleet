@@ -38,7 +38,7 @@ row() { local IFS="$tab"; printf '%s\n' "$*"; }
 
 # Command lines of every process, read in full before searching so the search
 # itself (whose arguments contain the pattern) isn't in the list.
-processes() { ps -A -o command= 2>/dev/null; }
+processes() { ps -A -ww -o command= 2>/dev/null; }
 # A process of NAME from ROOT's bin, or a versioned bin.VERSION after a
 # self-update (the listener resolves the bin link to bin.VERSION).
 proc_in() {
@@ -68,22 +68,44 @@ updating() {
 
 out_of_time() { [ "$(date +%s)" -ge "$deadline" ]; }
 
-# Runs a removal in the background, adding its PID to the lock, and stops it at the deadline.
+# Runs a command in its own process group (job control), adding the group to
+# LOCK when one is given. At the deadline it kills the whole group (find, du,
+# docker and anything they started) and returns 124 only once every member
+# has exited, so nothing keeps removing files after the lock is released.
 bounded() {
-  local lock="$1"
+  local lock="$1" pid waited
   shift
+  set -m
   "$@" &
-  local pid=$!
-  printf ' %s' "$pid" >> "$lock"
-  while kill -0 "$pid" 2>/dev/null; do
+  pid=$!
+  set +m
+  if [ -n "$lock" ]; then printf ' %s' "$pid" >> "$lock"; fi
+  while kill -0 -- "-$pid" 2>/dev/null; do
     if out_of_time; then
-      kill "$pid" 2>/dev/null
+      kill -TERM -- "-$pid" 2>/dev/null
+      waited=0
+      while kill -0 -- "-$pid" 2>/dev/null; do
+        sleep 0.2
+        waited=$((waited + 1))
+        if [ "$waited" -ge 50 ]; then kill -KILL -- "-$pid" 2>/dev/null; fi
+      done
       wait "$pid" 2>/dev/null
       return 124
     fi
-    sleep 1
+    sleep 0.2
   done
   wait "$pid"
+}
+
+# A lock is live while any recorded process, or process group, still exists.
+# A recycled PID keeps it live: that fails closed.
+lock_live() {
+  local pid
+  for pid in $(cat "$1" 2>/dev/null); do
+    case "$pid" in ''|*[!0-9]*) continue ;; esac
+    if kill -0 "$pid" 2>/dev/null || kill -0 -- "-$pid" 2>/dev/null; then return 0; fi
+  done
+  return 1
 }
 
 locks=""
@@ -95,20 +117,26 @@ trap release_locks EXIT
 
 # Takes RUNNER/.fleet-maintenance for this run, unless something live holds it.
 lock_root() {
-  local lock="$1/.fleet-maintenance" pid
+  local lock="$1/.fleet-maintenance"
   case " $locks " in *" $lock "*) return 0 ;; esac
   if [ -f "$lock" ]; then
-    for pid in $(cat "$lock" 2>/dev/null); do
-      case "$pid" in ''|*[!0-9]*) continue ;; esac
-      if kill -0 "$pid" 2>/dev/null; then return 1; fi
-    done
+    lock_live "$lock" && return 1
     rm -f -- "$lock"
   fi
   printf '%s' "$$" > "$lock" || return 1
   locks="$locks $lock"
 }
 
-kib() { du -skx "$1" 2>/dev/null | awk 'END { print $1 + 0 }'; }
+# Size of a directory in KiB, bounded by the deadline (0 when it ran out).
+kib() {
+  local out size=0
+  out="$(mktemp "${TMPDIR:-/tmp}/fleet-du.XXXXXX")" || { echo 0; return; }
+  if bounded "" du -skx "$1" > "$out" 2>/dev/null; then size="$(awk 'END { print $1 + 0 }' "$out")"; fi
+  rm -f -- "$out"
+  echo "${size:-0}"
+}
+# Size of one file in KiB.
+file_kib() { du -sk "$1" 2>/dev/null | awk 'END { print $1 + 0 }'; }
 
 # Prints BASE/SUFFIX resolved, when it is a directory, no component below BASE
 # is a symlink, and it resolves to exactly BASE/SUFFIX. Returns 1 when it
@@ -145,7 +173,7 @@ suffix_for() {
     work-actions) echo "_work/_actions" ;;
     work) echo "_work" ;;
     diag) echo "_diag" ;;
-    previous-bin|previous-externals) echo "" ;;
+    previous-bin|previous-externals|upgrade-leftovers) echo "" ;;
     *) return 1 ;;
   esac
 }
@@ -155,23 +183,33 @@ old_logs() {
     -mtime "+$RF_DIAG_DAYS" -print | sed 's|.*/||' | sort
 }
 
-# The folder bin (or externals) uses: its link's target name, or itself.
+# The folder bin (or externals) uses: a plain folder (itself), or a link that
+# resolves to an existing D.VERSION folder directly in the root. Fails when it
+# is missing, dangling or points anywhere else; then nothing counts as a
+# previous version, since the version in use can't be told apart.
 in_use() {
-  local root="$1" d="$2" link
+  local root="$1" d="$2" link real
   if [ -L "$root/$d" ]; then
     link="$(readlink "$root/$d")"
-    basename "$link"
-  else
+    case "$link" in /*) ;; *) link="$root/$link" ;; esac
+    real="$(cd "$link" 2>/dev/null && pwd -P)" || return 1
+    [ "$(dirname "$real")" = "$root" ] || return 1
+    case "$(basename "$real")" in "$d".*) ;; *) return 1 ;; esac
+    basename "$real"
+  elif [ -d "$root/$d" ]; then
     echo "$d"
+  else
+    return 1
   fi
 }
 
 # Previous versions of bin (or externals): real folders named D.VERSION (or the
-# D.fleet-previous an older upgrade kept) that D doesn't point at.
+# D.fleet-previous an older upgrade kept) that D doesn't point at. Prints
+# nothing when an upgrade is mid-swap, and fails when D can't be resolved.
 previous_versions() {
   local root="$1" d="$2" current entry name
-  [ -f "$root/.fleet-upgrade-swap" ] && return
-  current="$(in_use "$root" "$d")"
+  [ -f "$root/.fleet-upgrade-swap" ] && return 0
+  current="$(in_use "$root" "$d")" || return 1
   find "$root" -mindepth 1 -maxdepth 1 -type d -name "$d.*" -print 2>/dev/null | sort | while IFS= read -r entry; do
     name="${entry##*/}"
     previous_name "$d" "$name" || continue
@@ -179,6 +217,19 @@ previous_versions() {
     printf '%s\n' "$name"
   done
 }
+
+# Staging folders an interrupted upgrade left behind (.fleet-upgrade.XXXXXX).
+upgrade_leftovers() {
+  local root="$1"
+  [ -f "$root/.fleet-upgrade-swap" ] && return 0
+  if [ -f "$root/.fleet-maintenance" ] && lock_live "$root/.fleet-maintenance"; then return 0; fi
+  find "$root" -mindepth 1 -maxdepth 1 -type d -name '.fleet-upgrade.*' -print 2>/dev/null | sed 's|.*/||' | sort
+}
+leftover_name() {
+  case "$1" in .fleet-upgrade.*/*|.fleet-upgrade.) return 1 ;; .fleet-upgrade.*) ;; *) return 1 ;; esac
+  case "${1#.fleet-upgrade.}" in *[!A-Za-z0-9]*) return 1 ;; esac
+}
+
 previous_name() {
   case "$2" in
     "$1".fleet-previous) return 0 ;;
@@ -214,14 +265,22 @@ runner_target() {
       refuse "$real_root/$suffix is a symlink or resolves outside $real_root; left it alone"; return
     fi
   fi
-  local d=""
+  local d="" status
   case "$kind" in previous-bin) d=bin ;; previous-externals) d=externals ;; esac
+  # RFT: the deadline stopped a removal part-way; the controller holds the runner.
+  timed_out() { row RFT "$kind" "$runner" "ran out of time removing $1; stopped part-way, so the runner stays stopped"; }
 
   if [ "$RF_MODE" = survey ]; then
     local names f count=0 total=0
     case "$kind" in
       diag) names="$(old_logs "$real")" ;;
-      previous-*) names="$(previous_versions "$real_root" "$d")" ;;
+      previous-*)
+        if ! names="$(previous_versions "$real_root" "$d")"; then
+          refuse "$real_root/$d is missing or doesn't point at a $d.VERSION folder here; previous versions are kept"
+          return
+        fi
+        ;;
+      upgrade-leftovers) names="$(upgrade_leftovers "$real_root")" ;;
       *)
         [ -n "$(find "$real" -mindepth 1 -maxdepth 1 -print 2>/dev/null | head -n 1)" ] || return
         row RFC "$kind" "$runner" "$real" "$(kib "$real")" "" ""
@@ -231,7 +290,7 @@ runner_target() {
     [ -n "$names" ] || return
     while IFS= read -r f; do
       count=$((count + 1))
-      total=$((total + $(kib "$real/$f")))
+      if [ -d "$real/$f" ]; then total=$((total + $(kib "$real/$f"))); else total=$((total + $(file_kib "$real/$f"))); fi
       row RFF "$kind" "$runner" "$f"
     done <<< "$names"
     row RFC "$kind" "$runner" "$real" "$total" "$count" ""
@@ -269,7 +328,7 @@ runner_target() {
         esac
         if [ -f "$real/$f" ] && [ ! -L "$real/$f" ] \
           && [ -n "$(find "$real/$f" -maxdepth 0 -mtime "+$RF_DIAG_DAYS" -print)" ]; then
-          size="$(kib "$real/$f")"
+          size="$(file_kib "$real/$f")"
           if rm -f -- "$real/$f"; then
             removed=$((removed + 1))
             freed=$((freed + size))
@@ -279,10 +338,12 @@ runner_target() {
       row RFX "$kind" "$runner" "$real" "$freed" "$removed" ""
       ;;
     previous-*)
-      local f removed=0 freed=0 current
-      current="$(in_use "$real_root" "$d")"
+      local f removed=0 freed=0 current status
       if [ -f "$real_root/.fleet-upgrade-swap" ]; then
         refuse "an upgrade of $runner was interrupted; its previous versions are kept"; return
+      fi
+      if ! current="$(in_use "$real_root" "$d")"; then
+        refuse "$real_root/$d is missing or doesn't point at a $d.VERSION folder here; previous versions are kept"; return
       fi
       for f in "$@"; do
         if ! previous_name "$d" "$f" || [ "$f" = "$current" ] || [ "$f" = "$d" ]; then
@@ -292,9 +353,39 @@ runner_target() {
           continue
         fi
         size="$(kib "$real/$f")"
-        if bounded "$lock" remove_dir "$real/$f"; then
+        bounded "$lock" remove_dir "$real/$f"
+        status=$?
+        if [ "$status" = 0 ]; then
           removed=$((removed + 1))
           freed=$((freed + size))
+        elif [ "$status" = 124 ]; then
+          timed_out "$real/$f"; return
+        else
+          refuse "couldn't remove all of $real/$f"
+        fi
+      done
+      row RFX "$kind" "$runner" "$real" "$freed" "$removed" ""
+      ;;
+    upgrade-leftovers)
+      local f removed=0 freed=0 status
+      if [ -f "$real_root/.fleet-upgrade-swap" ]; then
+        refuse "an upgrade of $runner was interrupted; its folders are kept"; return
+      fi
+      for f in "$@"; do
+        if ! leftover_name "$f"; then
+          refuse "$f isn't an upgrade's staging folder; left it alone"; continue
+        fi
+        if [ ! -d "$real/$f" ] || [ -L "$real/$f" ] || [ "$(cd "$real/$f" && pwd -P)" != "$real/$f" ]; then
+          continue
+        fi
+        size="$(kib "$real/$f")"
+        bounded "$lock" remove_dir "$real/$f"
+        status=$?
+        if [ "$status" = 0 ]; then
+          removed=$((removed + 1))
+          freed=$((freed + size))
+        elif [ "$status" = 124 ]; then
+          timed_out "$real/$f"; return
         else
           refuse "couldn't remove all of $real/$f"
         fi
@@ -303,17 +394,21 @@ runner_target() {
       ;;
     *)
       size="$(kib "$real")"
-      if bounded "$lock" empty_dir "$real"; then
+      bounded "$lock" empty_dir "$real"
+      status=$?
+      if [ "$status" = 0 ]; then
         row RFX "$kind" "$runner" "$real" "$size" "" ""
+      elif [ "$status" = 124 ]; then
+        timed_out "$real"
       else
-        refuse "couldn't remove everything inside $real (or ran out of time)"
+        refuse "couldn't remove everything inside $real"
       fi
       ;;
   esac
 }
 
 machine_target() {
-  local kind="$1" expected="$2" runner=""
+  local kind="$1" expected="$2" runner="" status
   refuse() { row RFE "$kind" "$runner" "$1"; }
   # Shared caches: no runner of any kind may be running or working on this machine.
   if [ "$RF_MODE" = clean ] && { any_named "Runner.Worker" || any_named "Runner.Listener"; }; then
@@ -325,7 +420,7 @@ machine_target() {
   case "$kind" in
     xcode-derived-data)
       [ "$(uname -s)" = Darwin ] || return
-      local home real status size
+      local home real size
       home="$(cd "$HOME" && pwd -P)" || { refuse "can't resolve the home directory"; return; }
       real="$(resolve "$home" "Library/Developer/Xcode/DerivedData")"
       status=$?
@@ -342,10 +437,11 @@ machine_target() {
       fi
       [ "$real" = "$expected" ] || { refuse "DerivedData resolves to $real, not the reviewed $expected"; return; }
       size="$(kib "$real")"
-      local lock
-      lock="$(mktemp "${TMPDIR:-/tmp}/fleet-cleanup.XXXXXX")"
-      if bounded "$lock" empty_dir "$real"; then row RFX "$kind" "" "$real" "$size" "" ""; else refuse "couldn't remove everything inside $real (or ran out of time)"; fi
-      rm -f -- "$lock"
+      bounded "" empty_dir "$real"
+      status=$?
+      if [ "$status" = 0 ]; then row RFX "$kind" "" "$real" "$size" "" ""
+      elif [ "$status" = 124 ]; then row RFT "$kind" "" "ran out of time emptying $real; stopped part-way"
+      else refuse "couldn't remove everything inside $real"; fi
       ;;
     simulators)
       command -v xcrun >/dev/null 2>&1 || { [ "$RF_MODE" = survey ] || refuse "xcrun isn't available"; return; }
@@ -370,11 +466,17 @@ machine_target() {
         return
       fi
       local out
-      if out="$(docker system prune -f 2>&1)"; then
-        row RFX "$kind" "" "" "" "" "$(printf '%s\n' "$out" | tail -n 1)"
+      out="$(mktemp "${TMPDIR:-/tmp}/fleet-docker.XXXXXX")" || { refuse "can't create a temporary file"; return; }
+      bounded "" docker system prune -f > "$out" 2>&1
+      status=$?
+      if [ "$status" = 0 ]; then
+        row RFX "$kind" "" "" "" "" "$(tail -n 1 "$out")"
+      elif [ "$status" = 124 ]; then
+        row RFT "$kind" "" "docker system prune ran out of time and was stopped"
       else
-        refuse "docker system prune -f failed: $(printf '%s\n' "$out" | tail -n 1)"
+        refuse "docker system prune -f failed: $(tail -n 1 "$out")"
       fi
+      rm -f -- "$out"
       ;;
     *) refuse "unknown cleanup target $kind" ;;
   esac
