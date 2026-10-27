@@ -12,8 +12,8 @@ export function Unlinked({ view }: { view: FleetView }) {
   return (
     <Section title="Not linked to a machine" count={view.unmatchedRunners.length}>
       <p className="mb-2 px-0.5 text-[12px] text-ink-2">
-        GitHub lists these runners, but none is on a known machine: typically hosted runner pools, or machines not in the
-        inventory.
+        GitHub lists these runners, but none is on a known machine: typically hosted runner pools, machines not in the
+        inventory, or repository runners, which the inventory doesn't manage.
       </p>
       <List>
         {groups.map((g) =>

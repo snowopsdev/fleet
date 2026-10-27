@@ -1,10 +1,12 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import type { AccountKind } from "../bindings/AccountKind";
 import type { OrgAuth } from "../bindings/OrgAuth";
 import type { OrgConfig } from "../bindings/OrgConfig";
 import type { OrgStatusView } from "../bindings/OrgStatusView";
 import type { RepoScope } from "../bindings/RepoScope";
 import { Button, Card, ErrorText, Pill, TimeAgo } from "../components/ui";
+import { formatClock } from "../lib/format";
 import { CopyValue } from "../components/CopyValue";
 import { commands, isTauri } from "../lib/tauri";
 
@@ -12,9 +14,10 @@ export function GitHubSettings({ orgs, status }: { orgs: OrgConfig[]; status: Or
   const statusFor = (login: string) => status.find((o) => o.login.toLowerCase() === login.toLowerCase());
   return (
     <>
-      <h2 className="text-[13px] font-semibold">GitHub organizations</h2>
+      <h2 className="text-[13px] font-semibold">GitHub organizations and accounts</h2>
       <p className="mt-1 text-[12px] text-ink-2">
-        Read-only. Tokens are stored in your macOS Keychain and never sent to runner machines.
+        Read-only. Tokens are stored in your macOS Keychain and never sent to runner machines. Personal accounts and
+        repository runners are monitored only; inventory changes apply to organization runners.
       </p>
       <div className="mt-3 space-y-2">
         {orgs.map((o) => (
@@ -37,10 +40,17 @@ function scopeText(s: RepoScope): string {
   }
 }
 
+/** Repository names from free text: `web, api` or `acme/web` on separate lines. */
+function parseRepoList(text: string): string[] {
+  return text.split(/[\s,]+/).map((r) => r.trim()).filter(Boolean);
+}
+
 function OrgRow({ org, status }: { org: OrgConfig; status?: OrgStatusView }) {
-  const [mode, setMode] = useState<"view" | "token" | "scope" | "remove">("view");
+  const [mode, setMode] = useState<"view" | "token" | "scope" | "runners" | "remove">("view");
   const [token, setToken] = useState("");
   const [scope, setScope] = useState<RepoScope>(org.repoScope);
+  const [runnerRepos, setRunnerRepos] = useState(org.runnerRepos.join("\n"));
+  const pausedUntil = status?.rateLimitedUntil && Date.parse(status.rateLimitedUntil) > Date.now() ? status.rateLimitedUntil : null;
   const save = useMutation({
     mutationFn: (command: () => Promise<void>) => command(),
     onSuccess: () => {
@@ -52,6 +62,7 @@ function OrgRow({ org, status }: { org: OrgConfig; status?: OrgStatusView }) {
     save.reset();
     setToken("");
     setScope(org.repoScope);
+    setRunnerRepos(org.runnerRepos.join("\n"));
     setMode(next);
   };
 
@@ -59,7 +70,8 @@ function OrgRow({ org, status }: { org: OrgConfig; status?: OrgStatusView }) {
     <Card className="px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <CopyValue value={org.login} label="Organization" className="font-medium" truncate />
-        {status?.error ? <Pill tone="bad">Error</Pill> : status?.runnersAsOf ? <Pill tone="ok">Connected</Pill> : <Pill tone="muted">Pending</Pill>}
+        {pausedUntil ? <Pill tone="warn">Rate limited</Pill> : status?.error ? <Pill tone="bad">Error</Pill> : status?.runnersAsOf ? <Pill tone="ok">Connected</Pill> : <Pill tone="muted">Pending</Pill>}
+        {org.kind === "user" && <Pill tone="muted">Personal account</Pill>}
         <div className="ml-auto flex flex-wrap gap-1">
           {org.auth === "token" ? (
             <Button small variant="ghost" disabled={save.isPending} onClick={() => save.mutate(() => commands.useGhForOrg(org.login))}>
@@ -72,6 +84,9 @@ function OrgRow({ org, status }: { org: OrgConfig; status?: OrgStatusView }) {
           <Button small variant="ghost" onClick={() => show("scope")}>
             Scope…
           </Button>
+          <Button small variant="ghost" onClick={() => show("runners")}>
+            Runners…
+          </Button>
           <Button small variant="ghost" onClick={() => show("remove")}>
             Remove…
           </Button>
@@ -79,9 +94,19 @@ function OrgRow({ org, status }: { org: OrgConfig; status?: OrgStatusView }) {
       </div>
       <div className="mt-1 break-words text-[11.5px] text-ink-2">
         {org.auth === "ghCli" ? "Signed in with the GitHub CLI (gh)" : "Token in Keychain"} · Jobs: {scopeText(org.repoScope)}
+        {status?.jobsAsOf && org.repoScope.kind === "recent" && status.reposScanned > 0 && ` (${status.reposScanned} scanned)`}
         {status?.runnersAsOf && <> · runners checked <TimeAgo iso={status.runnersAsOf} /></>}
         {status?.rateLimit && ` · API ${status.rateLimit.remaining}/${status.rateLimit.limit} left`}
       </div>
+      <div className="mt-0.5 break-words text-[11.5px] text-ink-2">
+        Runners: {org.kind === "organization" ? "organization runners" : "no account-wide list"}
+        {org.runnerRepos.length > 0 && `${org.kind === "organization" ? ", plus" : ""} repository runners of ${org.runnerRepos.join(", ")}`}
+      </div>
+      {pausedUntil && (
+        <div className="mt-1 text-[11.5px] text-warn">
+          GitHub's rate limit was reached. Checks for {org.login} resume at {formatClock(pausedUntil)}.
+        </div>
+      )}
       {status?.error && <div className="mt-1 break-words text-[11.5px] text-bad selectable">{status.error}</div>}
       {status?.jobsTruncated && (
         <div className="mt-1 text-[11.5px] text-warn">Some repositories couldn't be scanned for jobs (no access, or over the 50 repo cap).</div>
@@ -104,6 +129,19 @@ function OrgRow({ org, status }: { org: OrgConfig; status?: OrgStatusView }) {
           <div className="mt-2 flex gap-2">
             <Button type="submit" variant="primary" disabled={save.isPending}>
               Save
+            </Button>
+            <Button variant="ghost" onClick={() => show("view")}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      )}
+      {mode === "runners" && (
+        <form className="mt-3" onSubmit={(e) => { e.preventDefault(); save.mutate(() => commands.setOrgRunnerRepos(org.login, parseRepoList(runnerRepos))); }}>
+          <RunnerReposField kind={org.kind} value={runnerRepos} onChange={setRunnerRepos} />
+          <div className="mt-2 flex gap-2">
+            <Button type="submit" variant="primary" disabled={save.isPending || (org.kind === "user" && !parseRepoList(runnerRepos).length)}>
+              {save.isPending ? "Checking access…" : "Save"}
             </Button>
             <Button variant="ghost" onClick={() => show("view")}>
               Cancel
@@ -183,6 +221,26 @@ function ScopePicker({ value, onChange }: { value: RepoScope; onChange: (s: Repo
   );
 }
 
+function RunnerReposField({ kind, value, onChange }: { kind: AccountKind; value: string; onChange: (text: string) => void }) {
+  return (
+    <div className="space-y-1 text-[12.5px]">
+      <textarea
+        className="input h-[56px] py-1"
+        placeholder={kind === "user" ? "dotfiles, side-project" : "Optional: web, api"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <p className="text-[11.5px] text-ink-3">
+        {kind === "user"
+          ? "A personal account's runners are registered to its repositories. List each repository whose runners to show."
+          : "Also show runners registered to these repositories rather than to the organization."}{" "}
+        Listing a repository's runners needs admin access to it: the fine-grained repository permission{" "}
+        <b>Administration: Read</b>, or the repo scope for gh and classic tokens. Monitoring only.
+      </p>
+    </div>
+  );
+}
+
 function GhStatusLine() {
   const { data: gh, refetch, isFetching } = useQuery({ queryKey: ["gh-status"], queryFn: commands.getGhStatus });
   if (!gh) return <div className="text-[12px] text-ink-3">Checking the GitHub CLI…</div>;
@@ -216,13 +274,16 @@ function AddOrg() {
   const [login, setLogin] = useState("");
   const [auth, setAuth] = useState<OrgAuth>("ghCli");
   const [token, setToken] = useState("");
+  const [kind, setKind] = useState<AccountKind>("organization");
+  const [runnerRepos, setRunnerRepos] = useState("");
   const [scope, setScope] = useState<RepoScope>({ kind: "recent", maxRepos: 20 });
   const add = useMutation({
-    mutationFn: () => commands.addOrg(login, auth, auth === "token" ? token : null, scope),
+    mutationFn: () => commands.addOrg(login, auth, auth === "token" ? token : null, scope, kind, parseRepoList(runnerRepos)),
     onSuccess: () => {
       setOpen(false);
       setLogin("");
       setToken("");
+      setRunnerRepos("");
     },
   });
 
@@ -230,7 +291,7 @@ function AddOrg() {
     return (
       <div className="mt-2">
         <Button onClick={() => setOpen(true)} disabled={!isTauri}>
-          Add organization…
+          Add organization or account…
         </Button>
       </div>
     );
@@ -244,8 +305,21 @@ function AddOrg() {
           add.mutate();
         }}
       >
-        <Field label="Organization">
+        <Field label="Account">
           <input className="input" placeholder="acme" value={login} onChange={(e) => setLogin(e.target.value)} autoFocus />
+          <div className="mt-2 flex flex-wrap gap-4 text-[12.5px]">
+            <label className="flex items-center gap-2">
+              <input type="radio" checked={kind === "organization"} onChange={() => setKind("organization")} />
+              Organization
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" checked={kind === "user"} onChange={() => setKind("user")} />
+              Personal account
+            </label>
+          </div>
+        </Field>
+        <Field label={kind === "user" ? "Repositories with runners" : "Repository runners"}>
+          <RunnerReposField kind={kind} value={runnerRepos} onChange={setRunnerRepos} />
         </Field>
         <Field label="Sign in">
           <div className="space-y-2 text-[12.5px]">
@@ -262,8 +336,14 @@ function AddOrg() {
               <>
                 <input className="input" type="password" placeholder="github_pat_…" value={token} onChange={(e) => setToken(e.target.value)} />
                 <p className="text-[11.5px] text-ink-2">
-                  Fine-grained token with this organization as resource owner: organization permission{" "}
-                  <b>Self-hosted runners: Read</b> and repository permission <b>Actions: Read</b>. Stored in your Keychain.
+                  {kind === "organization" ? <>
+                    Fine-grained token with this organization as resource owner: organization permission{" "}
+                    <b>Self-hosted runners: Read</b> and repository permission <b>Actions: Read</b>.
+                  </> : <>
+                    Fine-grained token for this account&apos;s repositories: repository permissions <b>Administration: Read</b> and{" "}
+                    <b>Actions: Read</b>.
+                  </>}{" "}
+                  Stored in your Keychain.
                 </p>
               </>
             )}
@@ -273,7 +353,7 @@ function AddOrg() {
           <ScopePicker value={scope} onChange={setScope} />
         </Field>
         <div className="flex items-center gap-2">
-          <Button type="submit" variant="primary" disabled={!login || (auth === "token" && !token) || add.isPending}>
+          <Button type="submit" variant="primary" disabled={!login || (auth === "token" && !token) || (kind === "user" && !parseRepoList(runnerRepos).length) || add.isPending}>
             {add.isPending ? "Checking access…" : "Add"}
           </Button>
           <Button variant="ghost" onClick={() => setOpen(false)}>

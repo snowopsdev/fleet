@@ -4,9 +4,9 @@
 use std::sync::Arc;
 
 use fleet::engine::desired::{ChangeSecrets, ReviewView};
-use fleet::engine::{Engine, EngineError};
+use fleet::engine::{AccountSetup, Engine, EngineError};
 use fleet::fleet_plan::ChangeRequest;
-use fleet::model::{AppConfig, FleetView, OrgAuth, RepoScope};
+use fleet::model::{AccountKind, AppConfig, FleetView, OrgAuth, RepoScope};
 use fleet::sync::MutexExt;
 use tauri::{AppHandle, State};
 
@@ -60,6 +60,10 @@ pub fn refresh_now(engine: EngineState, poller: State<'_, Poller>) {
 }
 
 #[tauri::command]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Tauri passes each command argument by name from the frontend"
+)]
 pub async fn add_org(
     app: AppHandle,
     engine: EngineState<'_>,
@@ -67,8 +71,27 @@ pub async fn add_org(
     auth: OrgAuth,
     token: Option<String>,
     repo_scope: RepoScope,
+    kind: Option<AccountKind>,
+    runner_repos: Option<Vec<String>>,
 ) -> Result<()> {
-    engine.add_org(&login, auth, token.as_deref(), repo_scope, None).await?;
+    let setup = AccountSetup {
+        kind: kind.unwrap_or_default(),
+        repo_scope,
+        runner_repos: runner_repos.unwrap_or_default(),
+    };
+    engine.add_account(&login, setup, auth, token.as_deref(), None).await?;
+    emit_view(&app, &engine);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_org_runner_repos(
+    app: AppHandle,
+    engine: EngineState<'_>,
+    login: String,
+    runner_repos: Vec<String>,
+) -> Result<()> {
+    engine.set_org_runner_repos(&login, &runner_repos).await?;
     emit_view(&app, &engine);
     Ok(())
 }
