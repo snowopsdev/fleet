@@ -202,3 +202,5 @@ None of them start automatically.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): data flow, status rules and boundaries.
 - [docs/HTTP_API.md](docs/HTTP_API.md): the local API.
 - [AGENTS.md](AGENTS.md): rules for coding agents.
+- [docs/screenshots](docs/screenshots): screens from demo data (Activity, diagnostics, maintenance,
+  alert destinations and more).
