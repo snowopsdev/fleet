@@ -1,4 +1,8 @@
+import type { FleetAnalytics } from "../bindings/FleetAnalytics";
+import type { FleetAnalyticsWindow } from "../bindings/FleetAnalyticsWindow";
+import type { FleetJobHistoryPage } from "../bindings/FleetJobHistoryPage";
 import type { FleetView } from "../bindings/FleetView";
+import activityFixture from "../fixtures/demo-activity.json";
 import fixture from "../fixtures/demo-fleet.json";
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
@@ -19,4 +23,17 @@ function shiftTimestamps<T>(value: T, deltaMs: number): T {
 export function previewFleet(): FleetView {
   const view = fixture as unknown as FleetView;
   return shiftTimestamps(view, Date.now() - Date.parse(view.generatedAt));
+}
+
+/** The preview's job history and analytics, generated with the fleet fixture. */
+export interface PreviewActivity {
+  generatedAt: string;
+  history: FleetJobHistoryPage;
+  analytics: Record<FleetAnalyticsWindow, FleetAnalytics>;
+}
+
+/** Browser-only preview: demo job history and analytics with timestamps moved to now. */
+export function previewActivity(): PreviewActivity {
+  const activity = activityFixture as unknown as PreviewActivity;
+  return shiftTimestamps(activity, Date.now() - Date.parse(activity.generatedAt));
 }

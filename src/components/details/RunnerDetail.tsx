@@ -13,6 +13,7 @@ import { Button, Callout, Card, KeyValuePanel, Label, Pill, Section, Stat, StatS
 import { Icon } from "../icons";
 import { OperationCard, PlanItems, useChange } from "./changes";
 import { LogsPanel } from "./LogsPanel";
+import { RecentJobsSection } from "./RecentJobs";
 import { ChangePanel } from "./ReviewCard";
 import { JobCard, PageHeader } from "./shared";
 import { CopyValue } from "../CopyValue";
@@ -91,6 +92,8 @@ export function RunnerDetail({ runner: r, view }: { runner: RunnerView; view: Fl
             : `No SSH read yet. Check ${machine?.displayName ?? "its machine"} to see local details.`} />
         </div>
       </Section>
+
+      <RecentJobsSection view={view} runnerKey={r.key} />
 
       {labels.length > 0 && <Section title="Labels" action={<span className="text-[12px] text-ink-2">declared vs GitHub{gh?.stale ? " · last known" : ""}</span>}>
         <Card className="overflow-hidden">

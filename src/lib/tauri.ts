@@ -13,7 +13,12 @@ import type { ReviewView } from "../bindings/ReviewView";
 import type { GhStatus } from "../bindings/GhStatus";
 import type { OrgAuth } from "../bindings/OrgAuth";
 import type { RepoScope } from "../bindings/RepoScope";
-import { previewFleet } from "./preview";
+import type { FleetAnalytics } from "../bindings/FleetAnalytics";
+import type { FleetAnalyticsWindow } from "../bindings/FleetAnalyticsWindow";
+import type { FleetHostedRates } from "../bindings/FleetHostedRates";
+import type { FleetJobHistoryFilter } from "../bindings/FleetJobHistoryFilter";
+import type { FleetJobHistoryPage } from "../bindings/FleetJobHistoryPage";
+import { previewActivity, previewFleet } from "./preview";
 
 const previewConfigEvents = new EventTarget();
 
@@ -74,6 +79,14 @@ export const commands = {
     invoke<void>("desired_execute", { reviewId, secrets, confirmation }),
   desiredDismissOperation: () => invoke<void>("desired_dismiss_operation"),
 
+  // Completed-job history and analytics (local data only), and the optional job feed.
+  getJobHistory: (filter: FleetJobHistoryFilter): Promise<FleetJobHistoryPage> =>
+    isTauri ? invoke("get_job_history", { filter }) : Promise.resolve(previewHistory(filter)),
+  getAnalytics: (window: FleetAnalyticsWindow): Promise<FleetAnalytics> =>
+    isTauri ? invoke("get_analytics", { window }) : Promise.resolve(previewActivity().analytics[window]),
+  setHostedRates: (rates: FleetHostedRates) => updateConfig("set_hosted_rates", { rates }),
+  setJobFeed: (org: string, enabled: boolean) => updateConfig("set_job_feed", { org, enabled }),
+
   // Local read-only API for agents
   getLocalApiStatus: (): Promise<LocalApiStatus> =>
     isTauri
@@ -81,6 +94,17 @@ export const commands = {
       : Promise.resolve({ enabled: false, url: null, error: "Only in the desktop app", discoveryFile: null }),
   setLocalApi: (on: boolean) => updateConfig("set_local_api", { on }),
 };
+
+/** The preview fixture's first history page, filtered like the desktop app's first page. */
+function previewHistory(filter: FleetJobHistoryFilter): FleetJobHistoryPage {
+  const page = previewActivity().history;
+  if (filter.before || filter.after) return { ...page, jobs: [], hasMore: false, nextCursor: null };
+  const jobs = page.jobs.filter((j) =>
+    (!filter.runnerKey || j.runnerKey === filter.runnerKey)
+    && (!filter.machineKey || j.machineKey === filter.machineKey)
+    && (!filter.conclusion || j.conclusion === filter.conclusion));
+  return { ...page, jobs: jobs.slice(0, filter.limit ?? 50), hasMore: false, nextCursor: null };
+}
 
 /** Mirrors `LocalApiStatus` in src-tauri/src/local_api.rs, which has no generated binding. */
 export interface LocalApiStatus {
