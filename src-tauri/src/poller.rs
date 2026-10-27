@@ -1,48 +1,105 @@
 //! Background polling. Each source has its own cadence; after every poll the
-//! fresh `FleetView` is pushed to the frontend as `fleet-updated`.
+//! fresh `FleetView` is pushed to the frontend as `fleet-updated`. A five-second tick
+//! re-derives the view and pushes it only when its content changed.
 
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use fleet::engine::Engine;
+use fleet::model::FleetView;
 use fleet::monitoring::FleetMachineEvent;
-use tauri::{AppHandle, Emitter};
-use tokio::sync::Notify;
+use fleet::sync::MutexExt;
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::watch;
 
 pub const FLEET_UPDATED: &str = "fleet-updated";
 
 pub struct Poller {
-    pub refresh: Arc<Notify>,
+    /// A generation counter, so a request made while a loop is polling isn't lost.
+    refresh: watch::Sender<u64>,
+    last_push: Mutex<LastPush>,
+}
+
+impl Poller {
+    /// Poll every source now, or right after a poll already in progress.
+    pub fn refresh_now(&self) {
+        self.refresh
+            .send_modify(|generation| *generation = generation.wrapping_add(1));
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Push {
+    Always,
+    IfChanged,
+}
+
+/// The last view pushed to the UI.
+#[derive(Debug, Default)]
+struct LastPush {
+    generated_at: Option<DateTime<Utc>>,
+    revision: Option<String>,
+}
+
+impl LastPush {
+    /// Whether to push `view`: never one derived before the last push (a tick's view can be
+    /// overtaken by a poll's), and for `IfChanged` only when its content differs.
+    fn accept(&mut self, view: &FleetView, when: Push) -> bool {
+        let revision = fleet::local_api::revision(view).ok();
+        let older = self.generated_at.is_some_and(|at| view.generated_at < at);
+        let unchanged = when == Push::IfChanged && revision.is_some() && revision == self.revision;
+        if older || unchanged {
+            return false;
+        }
+        self.generated_at = Some(view.generated_at);
+        self.revision = revision;
+        true
+    }
 }
 
 pub fn emit_view(app: &AppHandle, engine: &Engine) {
-    if let Err(e) = app.emit(FLEET_UPDATED, engine.view()) {
+    push(app, engine.view(), Push::Always);
+}
+
+fn push(app: &AppHandle, view: FleetView, when: Push) {
+    // Emit under the lock so pushes reach the UI in the order they were accepted.
+    let mut last = app.state::<Poller>().inner().last_push.locked();
+    if last.accept(&view, when)
+        && let Err(e) = app.emit(FLEET_UPDATED, view)
+    {
         tracing::warn!("emit failed: {e}");
     }
 }
 
-pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
-    let refresh = Arc::new(Notify::new());
+/// Starts the polling loops and manages the [`Poller`] that Refresh Now and [`emit_view`] use.
+pub fn start(app: AppHandle, engine: Arc<Engine>) {
+    // Managed before any loop can push.
+    app.manage(Poller {
+        refresh: watch::Sender::new(0),
+        last_push: Mutex::default(),
+    });
+    let refresh = &app.state::<Poller>().inner().refresh;
 
-    spawn_loop(&app, &engine, &refresh, Duration::from_secs(15), |e| async move {
+    spawn_loop(&app, &engine, refresh, Duration::from_secs(15), |e| async move {
         e.poll_tailscale().await
     });
-    spawn_loop(&app, &engine, &refresh, Duration::from_secs(60), |e| async move {
+    spawn_loop(&app, &engine, refresh, Duration::from_secs(60), |e| async move {
         if !e.tailnet_available() {
             e.poll_tailscale().await;
         }
         e.poll_machines().await
     });
-    spawn_loop(&app, &engine, &refresh, Duration::from_secs(20), |e| async move {
+    spawn_loop(&app, &engine, refresh, Duration::from_secs(20), |e| async move {
         e.poll_github_runners().await
     });
-    spawn_loop(&app, &engine, &refresh, Duration::from_secs(45), |e| async move {
+    spawn_loop(&app, &engine, refresh, Duration::from_secs(45), |e| async move {
         e.poll_github_jobs().await
     });
 
-    // Re-derive periodically even without new data so "as of" ages and
-    // staleness thresholds advance on screen.
+    // Re-derive periodically even without new data so history is recorded and
+    // staleness thresholds advance on screen; unchanged views aren't pushed.
     {
         let app = app.clone();
         let engine = engine.clone();
@@ -51,12 +108,16 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
             loop {
                 tick.tick().await;
                 let monitor = engine.clone();
-                match tauri::async_runtime::spawn_blocking(move || monitor.record_monitoring(chrono::Utc::now())).await
-                {
-                    Ok(events) => deliver_notifications(&app, &engine, events).await,
-                    Err(error) => tracing::warn!("recording machine history failed: {error}"),
+                match tauri::async_runtime::spawn_blocking(move || monitor.record_monitoring(Utc::now())).await {
+                    Ok((events, view)) => {
+                        push(&app, view, Push::IfChanged);
+                        deliver_notifications(&app, &engine, events).await;
+                    }
+                    Err(error) => {
+                        tracing::warn!("recording machine history failed: {error}");
+                        push(&app, engine.view(), Push::IfChanged);
+                    }
                 }
-                emit_view(&app, &engine);
             }
         });
     }
@@ -84,8 +145,6 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
             }
         });
     }
-
-    Poller { refresh }
 }
 
 /// Ask the OS to show due alerts, then record that it accepted them so they aren't sent again.
@@ -107,24 +166,79 @@ async fn deliver_notifications(app: &AppHandle, engine: &Arc<Engine>, events: Ve
     }
 }
 
-fn spawn_loop<F, Fut>(app: &AppHandle, engine: &Arc<Engine>, refresh: &Arc<Notify>, period: Duration, poll: F)
+fn spawn_loop<F, Fut>(app: &AppHandle, engine: &Arc<Engine>, refresh: &watch::Sender<u64>, period: Duration, poll: F)
 where
     F: Fn(Arc<Engine>) -> Fut + Send + 'static,
     Fut: Future<Output = ()> + Send + 'static,
 {
     let app = app.clone();
     let engine = engine.clone();
-    let refresh = refresh.clone();
+    let mut refresh = refresh.subscribe();
     tauri::async_runtime::spawn(async move {
         loop {
             if !engine.config().demo_mode {
                 poll(engine.clone()).await;
                 emit_view(&app, &engine);
             }
-            tokio::select! {
-                _ = tokio::time::sleep(period) => {}
-                _ = refresh.notified() => {}
-            }
+            wait_for_next_poll(period, &mut refresh).await;
         }
     });
+}
+
+/// Sleep for `period`, or until a refresh requested since the last wait, even during the poll.
+async fn wait_for_next_poll(period: Duration, refresh: &mut watch::Receiver<u64>) {
+    tokio::select! {
+        _ = tokio::time::sleep(period) => {}
+        Ok(()) = refresh.changed() => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeDelta;
+    use fleet::model::DataSource;
+
+    fn view() -> FleetView {
+        let now = Utc::now();
+        let (config, obs) = fleet::demo::dataset(now);
+        let plan = fleet::demo_desired::plan_inputs(now);
+        fleet::derive::derive(&config, &obs, &plan, now, DataSource::Demo)
+    }
+
+    #[test]
+    fn ticks_push_changed_views_only_and_never_an_older_one() {
+        let mut last = LastPush::default();
+        let first = view();
+        assert!(last.accept(&first, Push::IfChanged));
+        let mut same = first.clone();
+        same.generated_at += TimeDelta::seconds(5);
+        assert!(!last.accept(&same, Push::IfChanged), "only the time changed");
+        assert!(last.accept(&same, Push::Always));
+        let mut changed = same.clone();
+        changed.machines.pop().expect("demo machines");
+        let mut overtaken = changed.clone();
+        overtaken.generated_at = first.generated_at;
+        assert!(
+            !last.accept(&overtaken, Push::IfChanged),
+            "derived before the last push"
+        );
+        changed.generated_at += TimeDelta::seconds(5);
+        assert!(last.accept(&changed, Push::IfChanged));
+    }
+
+    #[tokio::test]
+    async fn refresh_requested_during_a_poll_wakes_the_next_wait() {
+        let poller = Poller {
+            refresh: watch::Sender::new(0),
+            last_push: Mutex::default(),
+        };
+        let mut refresh = poller.refresh.subscribe();
+        // The loop is still polling, not waiting, when Refresh Now arrives.
+        poller.refresh_now();
+        let wait = wait_for_next_poll(Duration::from_secs(3600), &mut refresh);
+        tokio::time::timeout(Duration::from_secs(5), wait)
+            .await
+            .expect("the refresh request was kept");
+    }
 }
