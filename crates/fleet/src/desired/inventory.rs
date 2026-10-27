@@ -349,8 +349,16 @@ fn validate_toolchains(host: &Host) -> Result<()> {
         }
     }
     for runtime in &host.simulator_runtimes {
+        if let Some(version) = runtime.strip_prefix("iPadOS ") {
+            return err(format!(
+                "{}: invalid simulator runtime: {} (iPad simulators use iOS runtimes: use 'iOS {version}')",
+                host.id,
+                repr(runtime)
+            ));
+        }
+        // simctl names runtimes iOS, watchOS, tvOS and visionOS (xrOS in early Xcode 15 betas).
         let valid = runtime.split_once(' ').is_some_and(|(os, version)| {
-            matches!(os, "iOS" | "iPadOS" | "watchOS" | "tvOS" | "visionOS" | "xrOS") && safe_version(version)
+            matches!(os, "iOS" | "watchOS" | "tvOS" | "visionOS" | "xrOS") && safe_version(version)
         });
         if !valid {
             return err(format!(

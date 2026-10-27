@@ -476,6 +476,28 @@ impl<'a> Checks<'a> {
         };
         let arm64 = reported.map(|a| matches!(a.to_ascii_lowercase().as_str(), "arm64" | "aarch64"));
         let x64 = reported.map(|a| matches!(a.to_ascii_lowercase().as_str(), "x86_64" | "amd64"));
+        // A 64-bit kernel with a 32-bit userland (Raspberry Pi OS armhf, i386 Debian) can't
+        // run the 64-bit runner either.
+        let userland = self.get("dpkg_architecture");
+        let thirty_two = self.get("userland_bits") == Some("32")
+            || userland.is_some_and(|a| matches!(a, "armhf" | "armel" | "i386"))
+            || reported.is_some_and(|a| a.starts_with("armv") || matches!(a, "i386" | "i686"));
+        if thirty_two {
+            self.add(
+                "architecture",
+                System,
+                "Architecture",
+                Warn,
+                &format!("{} · 32-bit userland", reported.unwrap_or("Unknown")),
+                format!(
+                    "The inventory platform {} installs the 64-bit {} runner, which can't run on a 32-bit userland{}. Install a 64-bit operating system.",
+                    host.platform,
+                    host.platform.runner_asset(),
+                    userland.map(|a| format!(" ({a})")).unwrap_or_default()
+                ),
+            );
+            return;
+        }
         let (status, detail) = match (arm64, x64) {
             (Some(arm64), Some(x64)) if (arm64 && host.platform.is_arm64()) || (x64 && !host.platform.is_arm64()) => {
                 (Pass, format!("Matches the inventory platform {}.", host.platform))
@@ -508,6 +530,20 @@ impl<'a> Checks<'a> {
 
     /// The filesystem holding the runner root, where every job's `_work` directory grows.
     fn runner_disk(&mut self, host: &Host) {
+        if let Some(link) = &self.report.runner_root_missing {
+            self.add(
+                "runner-disk",
+                Runners,
+                "Runner volume",
+                Warn,
+                "Not mounted",
+                format!(
+                    "{link} points to something that doesn't exist, so the volume holding {} may not be mounted. Runners there can't start until it's back.",
+                    host.root
+                ),
+            );
+            return;
+        }
         let Some(disk) = self.report.disks.iter().find(|d| d.runner_root) else {
             self.add(
                 "runner-disk",

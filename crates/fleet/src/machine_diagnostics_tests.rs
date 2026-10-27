@@ -119,17 +119,17 @@ fn incomplete_diagnostics_do_not_replace_unknown_with_partial_success() {
     }
 }
 
+/// Fake native commands for the POSIX diagnostics script. `TEST_HANG=security` makes the
+/// keychain check hang, as a stuck securityd would.
 #[cfg(unix)]
-#[test]
-fn posix_collection_reads_fake_macos_and_linux_without_emitting_private_preferences() {
-    use std::os::unix::fs::PermissionsExt;
-    let dir = tempfile::tempdir().unwrap();
-    let fake = r#"#!/bin/sh
+const FAKE_COMMANDS: &str = r#"#!/bin/sh
 case "${0##*/}" in
   uname) if [ "$1" = -s ]; then printf '%s\n' "$TEST_OS"; else echo arm64; fi ;;
   id) echo builder ;;
   ps) echo /usr/local/bin/tailscaled ;;
   stat) echo builder ;;
+  getconf) echo "${TEST_BITS:-64}" ;;
+  dpkg) echo armhf ;;
   pmset) printf 'Battery Power:\n sleep 5\nAC Power:\n sleep 0\n displaysleep 10\n autorestart 1\n womp 0\n' ;;
   systemctl) case "$2" in tailscaled.service) echo enabled ;; *) echo masked ;; esac ;;
   systemd-analyze) printf '[Login]\nIdleAction=ignore\n# override\nIdleAction=suspend\n' ;;
@@ -138,6 +138,8 @@ case "${0##*/}" in
     '      "IOConsoleUsers" = ({"kCGSSessionUserNameKey"="other","kCGSSessionOnConsoleKey"=No},{"kCGSSessionOnConsoleKey"=Yes,"kCGSSessionUserNameKey"="builder","CGSSessionScreenIsLocked"=Yes,"kCGSSessionLongUserNameKey"="Build User"})' ;;
   security) if [ "$1" = find-identity ]; then
     printf '  1) 0123456789ABCDEF "Apple Development: SECRET_IDENTITY"\n     1 valid identities found\n'
+  elif [ "${TEST_HANG-}" = security ]; then
+    exec sleep 47
   else
     echo 'security: SecKeychainCopySettings: User interaction is not allowed.' >&2; exit 36
   fi ;;
@@ -151,11 +153,23 @@ case "${0##*/}" in
   fi ;;
 esac
 "#;
+
+/// A directory of fake commands, a home with a login keychain and a fake Xcode bundle.
+#[cfg(unix)]
+fn fake_machine() -> tempfile::TempDir {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let executable = |path: &std::path::Path| {
+        std::fs::write(path, FAKE_COMMANDS).unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    };
     for name in [
         "uname",
         "id",
         "ps",
         "stat",
+        "getconf",
+        "dpkg",
         "pmset",
         "systemctl",
         "systemd-analyze",
@@ -166,65 +180,184 @@ esac
         "xcode-select",
         "PlistBuddy",
     ] {
-        let path = dir.path().join(name);
-        std::fs::write(&path, fake).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        executable(&dir.path().join(name));
     }
-    let home = dir.path().join("home");
-    std::fs::create_dir_all(home.join("Library/Keychains")).unwrap();
-    std::fs::write(home.join("Library/Keychains/login.keychain-db"), "").unwrap();
-    let developer = dir
-        .path()
-        .join("Applications/Xcode-26.1.app/Contents/Developer/usr/bin");
-    std::fs::create_dir_all(&developer).unwrap();
-    std::fs::write(
-        dir.path().join("Applications/Xcode-26.1.app/Contents/version.plist"),
-        "26.1",
-    )
-    .unwrap();
-    let xcodebuild = developer.join("xcodebuild");
-    std::fs::write(&xcodebuild, fake).unwrap();
-    std::fs::set_permissions(&xcodebuild, std::fs::Permissions::from_mode(0o755)).unwrap();
-    for os in ["Darwin", "Linux"] {
-        let output = std::process::Command::new("/bin/sh")
+    let keychains = dir.path().join("home/Library/Keychains");
+    std::fs::create_dir_all(&keychains).unwrap();
+    std::fs::write(keychains.join("login.keychain-db"), "").unwrap();
+    let app = dir.path().join("Applications/Xcode-26.1.app/Contents");
+    std::fs::create_dir_all(app.join("Developer/usr/bin")).unwrap();
+    std::fs::write(app.join("version.plist"), "26.1").unwrap();
+    executable(&app.join("Developer/usr/bin/xcodebuild"));
+    dir
+}
+
+/// Runs the diagnostics script with `shell` against `fake_machine` and parses its facts.
+#[cfg(unix)]
+fn run_diagnostics(shell: &str, dir: &tempfile::TempDir, os: &str, env: &[(&str, &str)]) -> (String, MachineReport) {
+    let output = std::process::Command::new(shell)
+        .arg("-c")
+        .arg(include_str!("../scripts/machine-diagnostics.sh"))
+        .env("PATH", format!("{}:/usr/bin:/bin", dir.path().display()))
+        .env("TEST_OS", os)
+        .env("HOME", dir.path().join("home"))
+        .env("RFM_APPLICATIONS", dir.path().join("Applications"))
+        .env("RFM_PLISTBUDDY", dir.path().join("PlistBuddy"))
+        .envs(env.iter().copied())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{shell}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = String::from_utf8(output.stdout).unwrap();
+    let report = parse_inspection(&any_os(), &format!("RFM\tos\tother\nRFM_END\n{output}RFM_RUNNERS\n")).unwrap();
+    (output, report)
+}
+
+/// Production runs the script with `bash -s` (bash 3.2 on macOS); `sh` keeps it portable.
+#[cfg(unix)]
+const SHELLS: [&str; 2] = ["/bin/bash", "/bin/sh"];
+
+#[cfg(unix)]
+#[test]
+fn posix_collection_reads_fake_macos_and_linux_without_emitting_private_preferences() {
+    let dir = fake_machine();
+    for shell in SHELLS {
+        for os in ["Darwin", "Linux"] {
+            let (output, report) = run_diagnostics(shell, &dir, os, &[]);
+            assert!(!output.contains("DO_NOT_EXPORT"));
+            assert!(!output.contains("SECRET_IDENTITY"));
+            assert!(!output.contains("Build User"));
+            assert_eq!(report.diagnostics["tailscale_ssh"], "true");
+            assert_eq!(report.diagnostics["tailscale_version"], "1.90.0");
+            assert_eq!(report.diagnostics["identity"], "builder");
+            assert_eq!(report.diagnostics["userland_bits"], "64");
+            if os == "Darwin" {
+                assert_eq!(report.diagnostics["ac_sleep"], "0");
+                assert_eq!(report.diagnostics["battery_sleep"], "5");
+                let xcode = format!("26.1|17A100|{}/Applications/Xcode-26.1.app", dir.path().display());
+                for (key, value) in [
+                    ("auto_login_status", "0"),
+                    ("auto_login_user", "builder"),
+                    ("console_session_user", "builder"),
+                    ("screen_locked", "yes"),
+                    ("login_keychain", "36"),
+                    ("codesign_identities", "1"),
+                    ("developer_dir", "/Library/Developer/CommandLineTools"),
+                    ("xcode_apps", xcode.as_str()),
+                    ("xcode_license", "69"),
+                ] {
+                    assert_eq!(
+                        report.diagnostics.get(key).map(String::as_str),
+                        Some(value),
+                        "{shell} {key}"
+                    );
+                }
+            } else {
+                assert_eq!(report.diagnostics["target_sleep"], "masked");
+                assert_eq!(report.diagnostics["idle_action"], "suspend");
+                assert_eq!(report.diagnostics["dpkg_architecture"], "armhf");
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_hanging_check_spends_only_the_readiness_budget_and_later_checks_stay_unknown() {
+    let dir = fake_machine();
+    for shell in SHELLS {
+        let started = std::time::Instant::now();
+        let (_, mut report) = run_diagnostics(
+            shell,
+            &dir,
+            "Darwin",
+            &[("TEST_HANG", "security"), ("RFM_READINESS_SECONDS", "2")],
+        );
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "{shell}: {:?}",
+            started.elapsed()
+        );
+        // The stuck keychain check uses up the budget and ends there; later checks are skipped.
+        assert_eq!(report.diagnostics["auto_login_status"], "0");
+        assert_eq!(report.diagnostics["login_keychain"], "137", "{shell}");
+        for key in ["codesign_identities", "developer_dir", "xcode_scan", "xcode_license"] {
+            let value = report.diagnostics.get(key).filter(|v| !v.is_empty());
+            assert_eq!(value, None, "{shell} {key}");
+        }
+        report.os = OsFamily::Macos;
+        let checks = evaluate(&report, Some(&mac_host()));
+        for id in ["login-keychain", "codesign-identities", "xcode-installed"] {
+            assert_eq!(check(&checks, id).status, DiagnosticStatus::Unknown, "{shell} {id}");
+        }
+        assert!(
+            check(&checks, "login-keychain")
+                .detail
+                .contains("didn't finish in time")
+        );
+        // Health and runner facts outside the readiness block are unaffected.
+        assert_eq!(report.diagnostics["ac_sleep"], "0");
+    }
+    let (_, mut skipped) = run_diagnostics("/bin/bash", &dir, "Darwin", &[("RFM_READINESS_SECONDS", "0")]);
+    skipped.os = OsFamily::Macos;
+    assert_eq!(skipped.diagnostics["auto_login_status"], "124");
+    let auto = evaluate(&skipped, Some(&mac_host()));
+    let auto = check(&auto, "auto-login");
+    assert_eq!(auto.status, DiagnosticStatus::Unknown);
+    assert!(auto.detail.contains("ran out of time"), "{}", auto.detail);
+}
+
+/// The `bounded` helper from the diagnostics script, by itself.
+#[cfg(unix)]
+fn bounded_function() -> &'static str {
+    let script = include_str!("../scripts/machine-diagnostics.sh");
+    let start = script.find("bounded() {").unwrap();
+    let end = start + script[start..].find("\n}\n").unwrap() + 3;
+    &script[start..end]
+}
+
+/// Whether a process with exactly this command line is still running.
+#[cfg(unix)]
+fn running(command: &str) -> bool {
+    let ps = std::process::Command::new("ps")
+        .args(["-A", "-o", "args="])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&ps.stdout).lines().any(|l| l.trim() == command)
+}
+
+#[cfg(unix)]
+#[test]
+fn bounded_kills_a_hanging_command_and_leaves_no_watcher_behind() {
+    for shell in SHELLS {
+        let started = std::time::Instant::now();
+        let output = std::process::Command::new(shell)
             .arg("-c")
-            .arg(include_str!("../scripts/machine-diagnostics.sh"))
-            .env("PATH", format!("{}:/usr/bin:/bin", dir.path().display()))
-            .env("TEST_OS", os)
-            .env("HOME", &home)
-            .env("RFM_APPLICATIONS", dir.path().join("Applications"))
-            .env("RFM_PLISTBUDDY", dir.path().join("PlistBuddy"))
+            .arg(format!(
+                "{}\nout=\"$(bounded 1 sleep 41)\"; echo \"hang=$?\"\nout=\"$(bounded 39 sh -c 'echo hi; exit 3')\"; echo \"fast=$? $out\"\n",
+                bounded_function()
+            ))
             .output()
             .unwrap();
-        assert!(output.status.success());
         let output = String::from_utf8(output.stdout).unwrap();
-        assert!(!output.contains("DO_NOT_EXPORT"));
-        assert!(!output.contains("SECRET_IDENTITY"));
-        assert!(!output.contains("Build User"));
-        let report = parse_inspection(&any_os(), &format!("RFM\tos\tother\nRFM_END\n{output}RFM_RUNNERS\n")).unwrap();
-        assert_eq!(report.diagnostics["tailscale_ssh"], "true");
-        assert_eq!(report.diagnostics["tailscale_version"], "1.90.0");
-        assert_eq!(report.diagnostics["identity"], "builder");
-        if os == "Darwin" {
-            assert_eq!(report.diagnostics["ac_sleep"], "0");
-            assert_eq!(report.diagnostics["battery_sleep"], "5");
-            let xcode = format!("26.1|17A100|{}/Applications/Xcode-26.1.app", dir.path().display());
-            for (key, value) in [
-                ("auto_login_user", "builder"),
-                ("console_session_user", "builder"),
-                ("screen_locked", "yes"),
-                ("login_keychain", "36"),
-                ("codesign_identities", "1"),
-                ("developer_dir", "/Library/Developer/CommandLineTools"),
-                ("xcode_apps", xcode.as_str()),
-                ("xcode_license", "69"),
-            ] {
-                assert_eq!(report.diagnostics.get(key).map(String::as_str), Some(value), "{key}");
-            }
-        } else {
-            assert_eq!(report.diagnostics["target_sleep"], "masked");
-            assert_eq!(report.diagnostics["idle_action"], "suspend");
+        assert_eq!(output, "hang=137\nfast=3 hi\n", "{shell}");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(4),
+            "{shell}: {:?}",
+            started.elapsed()
+        );
+        // Neither the killed command nor the fast command's watcher outlives the call.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while (running("sleep 41") || running("sleep 39")) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
+        assert!(
+            !running("sleep 41") && !running("sleep 39"),
+            "{shell} left processes behind"
+        );
     }
 }
 
@@ -299,7 +432,7 @@ const RECORDED_MAC: &[(&str, &str)] = &[
     ("identity", "builder"),
     ("architecture", "arm64"),
     ("console_user", "builder"),
-    ("auto_login_read", "1"),
+    ("auto_login_status", "1"),
     ("console_sessions", "1"),
     ("console_session_user", "builder"),
     ("screen_locked", "no"),
@@ -372,10 +505,16 @@ fn recorded_mac_readiness_maps_to_clear_findings() {
 #[test]
 fn locked_screens_and_other_console_users_warn_only_where_gui_jobs_run() {
     let mut facts = RECORDED_MAC.to_vec();
-    facts.retain(|(k, _)| !matches!(*k, "screen_locked" | "console_session_user" | "auto_login_user"));
+    facts.retain(|(k, _)| {
+        !matches!(
+            *k,
+            "screen_locked" | "console_session_user" | "auto_login_user" | "auto_login_status"
+        )
+    });
     facts.extend([
         ("screen_locked", "yes"),
         ("console_session_user", "admin"),
+        ("auto_login_status", "0"),
         ("auto_login_user", "admin"),
     ]);
     let locked = report("macos", &facts);
@@ -499,6 +638,44 @@ fn declared_versions_match_by_leading_components() {
         assert_eq!(version_satisfies(declared, installed), ok, "{declared} vs {installed}");
     }
     assert!(runtime_satisfies("iOS 26.0", "iOS 26.0.1"));
+    assert!(runtime_satisfies("visionOS 26", "visionOS 26.0"));
+    assert!(runtime_satisfies("xrOS 1.0", "visionOS 1.0"));
     assert!(!runtime_satisfies("iOS 26.0", "tvOS 26.0"));
     assert!(!runtime_satisfies("iOS 26", "garbage"));
+}
+
+#[test]
+fn a_32_bit_userland_on_a_64_bit_kernel_fails_the_architecture_check() {
+    use crate::desired::model::Platform;
+    let mut host = mac_host();
+    host.platform = Platform::LinuxArm64;
+    for facts in [
+        &[("architecture", "aarch64"), ("userland_bits", "32")][..],
+        &[
+            ("architecture", "aarch64"),
+            ("userland_bits", "64"),
+            ("dpkg_architecture", "armhf"),
+        ],
+        &[("architecture", "armv7l")],
+    ] {
+        let checks = evaluate(&report("linux", facts), Some(&host));
+        let arch = check(&checks, "architecture");
+        assert_eq!(arch.status, DiagnosticStatus::Warn, "{facts:?}");
+        assert!(
+            arch.value.ends_with("32-bit userland") && arch.detail.contains("linux-arm64"),
+            "{arch:?}"
+        );
+    }
+    let ok = evaluate(
+        &report(
+            "linux",
+            &[
+                ("architecture", "aarch64"),
+                ("userland_bits", "64"),
+                ("dpkg_architecture", "arm64"),
+            ],
+        ),
+        Some(&host),
+    );
+    assert_eq!(check(&ok, "architecture").status, DiagnosticStatus::Pass);
 }

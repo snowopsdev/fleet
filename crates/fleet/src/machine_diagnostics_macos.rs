@@ -12,6 +12,19 @@ const LICENSE_NOT_ACCEPTED: &str = "69";
 const KEYCHAIN_INTERACTION_NOT_ALLOWED: &str = "36";
 /// A bounded command killed at its time limit (`SIGKILL`).
 const TIMED_OUT: &str = "137";
+/// A check skipped because the readiness block's overall deadline had passed.
+const SKIPPED: &str = "124";
+/// `defaults read` exits 1 when the key doesn't exist: automatic login is off.
+const DEFAULTS_KEY_MISSING: &str = "1";
+
+/// Why a bounded check has no answer, for its detail text.
+fn unanswered(code: &str, what: &str) -> String {
+    match code {
+        TIMED_OUT => format!("{what} didn't finish in time."),
+        SKIPPED => format!("{what} was skipped: the readiness checks ran out of time."),
+        code => format!("{what} exited {code}."),
+    }
+}
 
 /// An installed Xcode: version, build and app path.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,7 +62,14 @@ pub(crate) fn version_satisfies(declared: &str, installed: &str) -> bool {
 pub(crate) fn runtime_satisfies(declared: &str, installed: &str) -> bool {
     match (declared.split_once(' '), installed.trim().split_once(' ')) {
         (Some((os, version)), Some((have_os, have_version))) => {
-            os.eq_ignore_ascii_case(have_os) && version_satisfies(version, have_version)
+            let platform = |os: &str| {
+                if os.eq_ignore_ascii_case("xrOS") {
+                    "visionos".to_string()
+                } else {
+                    os.to_ascii_lowercase()
+                }
+            };
+            platform(os) == platform(have_os) && version_satisfies(version, have_version)
         }
         _ => false,
     }
@@ -77,25 +97,30 @@ impl Checks<'_> {
         let runners = Self::launchagent(host);
         let attention = if runners { Warn } else { Info };
 
-        let (status, value, detail) = match (self.get("auto_login_read"), self.get("auto_login_user")) {
-            (_, Some(user)) if user == account => (
+        let (status, value, detail) = match (self.get("auto_login_status"), self.get("auto_login_user")) {
+            (Some("0"), Some(user)) if user == account => (
                 Pass,
                 format!("Enabled for {user}"),
                 "After a restart, macOS logs in as the runner account, so its LaunchAgents start.".to_string(),
             ),
-            (_, Some(user)) => (
+            (Some("0"), Some(user)) => (
                 attention,
                 format!("Logs in as {user}"),
                 format!("After a restart, macOS logs in as {user}; LaunchAgent runners wait until {account} logs in."),
             ),
-            (Some(_), None) => (
+            (Some(DEFAULTS_KEY_MISSING), _) => (
                 Info,
                 "Off".into(),
                 format!(
                     "After a restart, LaunchAgent runners wait until someone logs in as {account}. FileVault turns automatic login off."
                 ),
             ),
-            (None, None) => (
+            (Some(code), _) if code != "0" => (
+                Unknown,
+                "Unknown".into(),
+                unanswered(code, "Reading the login window preferences"),
+            ),
+            _ => (
                 Unknown,
                 "Unknown".into(),
                 "The login window preferences could not be read.".into(),
@@ -162,15 +187,10 @@ impl Checks<'_> {
                 "Not found".into(),
                 format!("{account} has no login keychain, so code signing has no identities to use."),
             ),
-            Some(TIMED_OUT) => (
-                Unknown,
-                "Unknown".into(),
-                "Reading the keychain status didn't finish in time.".into(),
-            ),
             Some(code) => (
                 Unknown,
                 "Unknown".into(),
-                format!("security show-keychain-info exited {code}."),
+                unanswered(code, "security show-keychain-info"),
             ),
             None => (Unknown, "Unknown".into(), "The login keychain status could not be read.".into()),
         };
@@ -270,8 +290,7 @@ impl Checks<'_> {
                         "xcodebuild refuses to build until an administrator runs sudo xcodebuild -license accept ({dir})."
                     ),
                 ),
-                Some(TIMED_OUT) => (Unknown, "Unknown", "The license check didn't finish in time.".into()),
-                Some(code) => (Unknown, "Unknown", format!("xcodebuild -license check exited {code}.")),
+                Some(code) => (Unknown, "Unknown", unanswered(code, "xcodebuild -license check")),
                 None => (Unknown, "Unknown", "The license check couldn't run.".into()),
             };
             self.add("xcode-license", Toolchain, "Xcode license", status, value, detail);

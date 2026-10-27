@@ -170,6 +170,10 @@ fn macos_hosts_can_declare_xcode_versions_and_simulator_runtimes() {
             "test: invalid simulator runtime: 'Android 14' (use a name like 'iOS 26.0')",
         ),
         ("xcode = \"26.1\"", "xcode must be an array of strings"),
+        (
+            "simulator_runtimes = [\"iPadOS 26.0\"]",
+            "test: invalid simulator runtime: 'iPadOS 26.0' (iPad simulators use iOS runtimes: use 'iOS 26.0')",
+        ),
     ] {
         let text = base().replace(
             "service_mode = \"launchagent\"",

@@ -38,6 +38,7 @@ fn parses_health_and_exact_runner_facts() {
                 available_bytes: 300_000_000_000,
                 runner_root: false,
             }],
+            runner_root_missing: None,
             runners: [(
                 "mini-02".into(),
                 LocalRunner::new(
@@ -366,4 +367,29 @@ fn machine_failures_are_not_retried_and_tailscale_ssh_is_never_shared() {
     let calls = fake.0.lock().unwrap();
     assert_eq!(calls[0].0[..2], ["tailscale".to_string(), "ssh".into()]);
     assert!(calls[0].0.iter().all(|a| !a.contains("Control")), "{:?}", calls[0].0);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_runner_root_on_an_unmounted_volume_is_reported_instead_of_its_parent() {
+    let home = tempfile::tempdir().unwrap();
+    // The recommended setup: ~/gh-runners links to an external volume that isn't mounted.
+    std::os::unix::fs::symlink("/Volumes/Missing CI SSD/gh-runners", home.path().join("gh-runners")).unwrap();
+    let output = run_posix_health(&host("mac-mini-02"), home.path());
+    let link = home.path().join("gh-runners").display().to_string();
+    assert!(output.contains(&format!("RFM\troot_missing\t{link}\n")), "{output}");
+    assert!(!output.contains("RFM\troot_disk\t"), "{output}");
+
+    let report = parse_inspection(
+        &host("mac-mini-02"),
+        &format!("RFM\troot_missing\t{link}\n{MAC_HEALTH}{MAC_RUNNERS}"),
+    )
+    .unwrap();
+    assert_eq!(report.runner_root_missing.as_deref(), Some(link.as_str()));
+    let checks = crate::machine_diagnostics::evaluate(&report, Some(&inventory_host("mac-mini-02")));
+    let volume = checks.iter().find(|c| c.id == "runner-disk").unwrap();
+    assert_eq!(
+        (volume.status, volume.value.as_str()),
+        (crate::machine_diagnostics::DiagnosticStatus::Warn, "Not mounted")
+    );
 }

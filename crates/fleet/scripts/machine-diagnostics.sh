@@ -18,8 +18,19 @@ bounded() {
   kill "$bounded_watcher" >/dev/null 2>&1
   return "$bounded_status"
 }
+# `bounded`, within the readiness deadline: 124, without running, once no time is left.
+checked() {
+  checked_limit="$1"; shift
+  checked_left=$(( readiness_deadline - $(date +%s) ))
+  [ "$checked_left" -gt 0 ] || return 124
+  [ "$checked_left" -lt "$checked_limit" ] && checked_limit="$checked_left"
+  bounded "$checked_limit" "$@"
+}
 fact identity "$(id -un 2>/dev/null)"
 fact architecture "$(uname -m 2>/dev/null)"
+# A 64-bit kernel can run a 32-bit userland (Raspberry Pi OS armhf); the runner needs 64-bit.
+fact userland_bits "$(getconf LONG_BIT 2>/dev/null)"
+if command -v dpkg >/dev/null 2>&1; then fact dpkg_architecture "$(dpkg --print-architecture 2>/dev/null)"; fi
 os="$(uname -s)"
 ts="$(command -v tailscale 2>/dev/null)"
 if [ -z "$ts" ]; then
@@ -30,9 +41,9 @@ fi
 fact tailscale_cli "$ts"
 if [ -n "$ts" ]; then
   # Read only selected fields. Never emit the complete preferences or state.
-  prefs="$(TAILSCALE_BE_CLI=1 "$ts" debug prefs 2>/dev/null)"
+  prefs="$(bounded 5 env TAILSCALE_BE_CLI=1 "$ts" debug prefs 2>/dev/null)"
   fact tailscale_ssh "$(printf '%s\n' "$prefs" | sed -En 's/^[[:space:]]*"RunSSH":[[:space:]]*(true|false).*/\1/p')"
-  status="$(TAILSCALE_BE_CLI=1 "$ts" status --json 2>/dev/null)"
+  status="$(bounded 5 env TAILSCALE_BE_CLI=1 "$ts" status --json 2>/dev/null)"
   fact tailscale_version "$(printf '%s\n' "$status" | sed -n 's/^  "Version": "\([^"]*\)".*/\1/p')"
   fact tailscale_backend "$(printf '%s\n' "$status" | sed -n 's/^  "BackendState": "\([^"]*\)".*/\1/p')"
 fi
@@ -56,13 +67,18 @@ case "$os" in
     done
     fact battery_sleep "$(printf '%s\n' "$power" | awk '/^[^[:space:]]/ {battery=($0 ~ /^Battery Power:/)} battery && $1=="sleep" {print $2; exit}')"
     fact console_user "$(stat -f '%Su' /dev/console 2>/dev/null)"
+    # macOS CI readiness. The block gets RFM_READINESS_SECONDS (10 by default) in total, so a
+    # slow securityd, xcodebuild or simctl can't push the whole SSH read past its timeout;
+    # checks that don't fit report 124 and stay unknown.
+    readiness_deadline=$(( $(date +%s) + ${RFM_READINESS_SECONDS:-10} ))
     # The account macOS logs in automatically after a restart (FileVault turns this off).
-    if auto="$(bounded 3 defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser 2>/dev/null)"; then
-      fact auto_login_user "$auto"
-    fi
-    fact auto_login_read 1
+    # `defaults` exits 1 when the key is absent, which means automatic login is off.
+    auto="$(checked 2 defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser 2>/dev/null)"
+    auto_status=$?
+    fact auto_login_status "$auto_status"
+    if [ "$auto_status" = 0 ]; then fact auto_login_user "$auto"; fi
     # The session on the console and whether its screen is locked. Only these two fields are kept.
-    if registry="$(bounded 3 ioreg -n Root -d1 -k IOConsoleUsers 2>/dev/null)" && [ -n "$registry" ]; then
+    if registry="$(checked 2 ioreg -n Root -d1 -k IOConsoleUsers 2>/dev/null)" && [ -n "$registry" ]; then
       session="$(printf '%s\n' "$registry" | awk '/"IOConsoleUsers"/ {
         n = split($0, parts, /\},\{/)
         for (i = 1; i <= n; i++) if (parts[i] ~ /"kCGSSessionOnConsoleKey"=Yes/ && parts[i] ~ /"kCGSSessionUserNameKey"="/) {
@@ -79,16 +95,16 @@ case "$os" in
     # Whether this SSH session can read the login keychain without a prompt (exit status only).
     keychain="$HOME/Library/Keychains/login.keychain-db"
     if [ -e "$keychain" ]; then
-      bounded 3 security show-keychain-info "$keychain" >/dev/null 2>&1
+      checked 2 security show-keychain-info "$keychain" >/dev/null 2>&1
       fact login_keychain "$?"
     else
       fact login_keychain missing
     fi
     # Count valid code-signing identities; the identities themselves never leave the machine.
-    fact codesign_identities "$(bounded 3 security find-identity -v -p codesigning 2>/dev/null | awk '/valid identities found/ {print $1; exit}')"
+    fact codesign_identities "$(checked 2 security find-identity -v -p codesigning 2>/dev/null | awk '/valid identities found/ {print $1; exit}')"
     # Installed Xcode versions from each app bundle; never run the /usr/bin shims, which can
     # offer to install the Command Line Tools on the console.
-    developer="$(bounded 3 xcode-select -p 2>/dev/null)"
+    developer="$(checked 2 xcode-select -p 2>/dev/null)"
     fact developer_dir "$developer"
     apps=""
     first_xcode=""
@@ -96,26 +112,30 @@ case "$os" in
     plistbuddy="${RFM_PLISTBUDDY:-/usr/libexec/PlistBuddy}"
     for app in "${RFM_APPLICATIONS:-/Applications}"/Xcode*.app; do
       [ -f "$app/Contents/version.plist" ] || continue
-      version="$("$plistbuddy" -c 'Print :CFBundleShortVersionString' "$app/Contents/version.plist" 2>/dev/null)"
-      build="$("$plistbuddy" -c 'Print :ProductBuildVersion' "$app/Contents/version.plist" 2>/dev/null)"
+      version="$(checked 2 "$plistbuddy" -c 'Print :CFBundleShortVersionString' "$app/Contents/version.plist" 2>/dev/null)" ||
+        { [ $? = 124 ] && scan_skipped=1; }
+      build="$(checked 2 "$plistbuddy" -c 'Print :ProductBuildVersion' "$app/Contents/version.plist" 2>/dev/null)"
       [ -n "$version" ] || continue
       apps="$apps${apps:+;}$version|$build|$app"
       [ -n "$first_xcode" ] || first_xcode="$app/Contents/Developer"
     done
-    fact xcode_scan 1
-    fact xcode_apps "$apps"
+    # A scan cut short by the deadline isn't evidence that Xcode is missing.
+    if [ -z "${scan_skipped-}" ]; then
+      fact xcode_scan 1
+      fact xcode_apps "$apps"
+    fi
     case "$developer" in
       */Contents/Developer) xcode_dir="$developer" ;;
       *) xcode_dir="$first_xcode" ;;
     esac
     if [ -n "$xcode_dir" ] && [ -x "$xcode_dir/usr/bin/xcodebuild" ]; then
       fact xcode_license_dir "$xcode_dir"
-      bounded 5 "$xcode_dir/usr/bin/xcodebuild" -license check >/dev/null 2>&1
+      checked 4 "$xcode_dir/usr/bin/xcodebuild" -license check >/dev/null 2>&1
       license=$?
       fact xcode_license "$license"
       # Simulator runtimes, only for hosts that declare some (simctl can be slow to start).
       if [ "$license" = 0 ] && [ -n "${RFM_SIMULATOR_RUNTIMES-}" ] && [ -x "$xcode_dir/usr/bin/simctl" ]; then
-        if runtimes="$(bounded 8 "$xcode_dir/usr/bin/simctl" list runtimes 2>/dev/null)"; then
+        if runtimes="$(checked 5 "$xcode_dir/usr/bin/simctl" list runtimes 2>/dev/null)"; then
           fact simulator_runtimes "$(printf '%s\n' "$runtimes" | awk '/^[A-Za-z]+OS [0-9]/ && !/unavailable/ {
             sub(/ \(.*/, ""); printf "%s%s", sep, $0; sep = ";"
           }')"

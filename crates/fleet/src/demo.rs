@@ -416,6 +416,7 @@ fn report(
             available_bytes: disk_gb.1 * GB,
             runner_root: true,
         }],
+        runner_root_missing: None,
         runners,
         warnings: vec![],
         diagnostics: [
@@ -462,7 +463,7 @@ fn report(
             ("ac_hibernate", "0"),
             ("ac_lid", "0"),
             ("ac_standby_network", "2"),
-            ("auto_login_read", "1"),
+            ("auto_login_status", "0"),
             ("auto_login_user", "ci"),
             ("console_sessions", "1"),
             ("console_session_user", "ci"),

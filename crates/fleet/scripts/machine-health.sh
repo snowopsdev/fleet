@@ -46,12 +46,19 @@ disk_rows() {
 df -Pk / "$HOME" 2>/dev/null | disk_rows disk
 # The filesystem holding the inventory host's runner root (RFM_RUNNER_ROOT, set ahead of this
 # script), often an external volume. Before the first install the root may not exist yet, so
-# use its nearest existing parent. df follows symlinks to the volume they point at.
+# use its nearest existing parent. df follows symlinks to the volume they point at, but a
+# symlink whose target is gone (an unmounted volume) is reported instead of its parent.
 if [ -n "${RFM_RUNNER_ROOT-}" ]; then
   root_path="$RFM_RUNNER_ROOT"
+  dangling=""
   while [ ! -e "$root_path" ] && [ "$root_path" != / ] && [ "$root_path" != . ]; do
+    if [ -L "$root_path" ]; then dangling="$root_path"; break; fi
     root_path="$(dirname -- "$root_path")"
   done
-  df -Pk -- "$root_path" 2>/dev/null | disk_rows root_disk
+  if [ -n "$dangling" ]; then
+    printf 'RFM\troot_missing\t%s\n' "$dangling"
+  else
+    df -Pk -- "$root_path" 2>/dev/null | disk_rows root_disk
+  fi
 fi
 printf 'RFM_END\n'

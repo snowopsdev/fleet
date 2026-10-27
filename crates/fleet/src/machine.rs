@@ -112,6 +112,9 @@ pub struct MachineReport {
     pub uptime_secs: Option<u64>,
     pub boot_id: Option<String>,
     pub disks: Vec<DiskStats>,
+    /// A symlink on the way to the runner root whose target doesn't exist, such as an
+    /// unmounted external volume.
+    pub runner_root_missing: Option<String>,
     pub runners: BTreeMap<String, LocalRunner>,
     /// Selected, non-secret facts; absent or unreadable settings remain unknown.
     pub diagnostics: BTreeMap<String, String>,
@@ -354,6 +357,7 @@ pub fn parse_inspection(target: &MachineTarget, output: &str) -> Result<MachineR
         uptime_secs: get("uptime").map(|v| number("uptime", v)).transpose()?,
         boot_id: get("boot_id").map(str::to_string),
         disks: disks.into_values().collect(),
+        runner_root_missing: get("root_missing").map(str::to_string),
         runners,
         diagnostics: if get("diag:complete") == Some("1") {
             fields

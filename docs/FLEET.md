@@ -143,7 +143,8 @@ Windows:     C:\gh-runners\acme\runner-01
 To keep runner workspaces on another volume, such as an external SSD on a Mac mini, make
 `~/gh-runners` a symlink to a directory on it. The machine's health then shows the runner
 volume's free space, its diagnostics include a **Runner volume** check, and low-disk alerts
-cover it like the system disk.
+cover it like the system disk. If the volume isn't mounted, the symlink dangles and the check
+warns **Not mounted** instead of reporting the home volume.
 
 ## Using the app
 
@@ -274,7 +275,9 @@ code-signing identities there are (a count; identities never leave the machine).
 screen or another user on the console is a warning on hosts with a GUI lane (an `*-e2e`
 label). SSH logins get their own security session, so a keychain that is locked for SSH may
 still be unlocked for the LaunchAgent; the check says so instead of guessing. Every command has
-a few seconds to finish, with stdin closed.
+a few seconds to finish, with stdin closed, and these checks share a 10-second budget: anything
+that doesn't fit, such as a slow first `simctl` after boot, is reported as unknown rather than
+delaying the machine's health and runner read.
 
 ### Xcode and simulators
 
@@ -291,8 +294,9 @@ xcode = ["26.1", "16.4"]           # 26 accepts any 26.x; 26.1 accepts 26.1 and 
 simulator_runtimes = ["iOS 26.0"]  # read with simctl list runtimes, only when declared
 ```
 
-The app never installs Xcode or runtimes. Simulator runtimes can't be listed until the
-license is accepted.
+Use simctl's runtime names: `iOS` (also for iPad simulators), `watchOS`, `tvOS` and
+`visionOS`. The app never installs Xcode or runtimes. Simulator runtimes can't be listed until
+the license is accepted.
 
 **Tailscale SSH hosts** use `ssh_transport = "tailscale"` and explicit
 `builder@HOST.example.ts.net` targets; scripts and transient passwords go over stdin. Tailscale
