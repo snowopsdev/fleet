@@ -33,6 +33,7 @@ pub fn dataset(now: DateTime<Utc>) -> (AppConfig, Observations) {
         local_api: true,
         inventory_path: None,
         machine_preferences: Default::default(),
+        job_activity: Default::default(),
     };
 
     let peers = vec![

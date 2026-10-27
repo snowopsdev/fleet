@@ -40,7 +40,7 @@ async function updateConfig(cmd: string, args?: Record<string, unknown>): Promis
 export const commands = {
   getFleet: (): Promise<FleetView> => (isTauri ? invoke("get_fleet") : Promise.resolve(previewFleet())),
   getConfig: (): Promise<AppConfig> =>
-    isTauri ? invoke("get_config") : Promise.resolve({ orgs: [], ignoredPeers: [], machinePreferences: {}, demoMode: true, localApi: false, desktopNotifications: false, inventoryPath: null }),
+    isTauri ? invoke("get_config") : Promise.resolve({ orgs: [], ignoredPeers: [], machinePreferences: {}, demoMode: true, localApi: false, desktopNotifications: false, inventoryPath: null, jobActivity: { hostedRates: { linux: 0.006, windows: 0.01, macos: 0.062, asOf: "2026-10-26" }, feedOrgs: [] } }),
   refreshNow: () => invoke<void>("refresh_now"),
   addOrg: (login: string, auth: OrgAuth, token: string | null, repoScope: RepoScope) =>
     updateConfig("add_org", { login, auth, token, repoScope }),

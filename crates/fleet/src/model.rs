@@ -34,6 +34,9 @@ pub struct AppConfig {
     /// repository's `inventory/fleet.toml`.
     #[serde(default)]
     pub inventory_path: Option<String>,
+    /// Completed-job history settings: hosted-cost rates and the optional real-time job feed.
+    #[serde(default)]
+    pub job_activity: crate::jobs::FleetJobSettings,
 }
 
 /// Matches the serde defaults, so a missing settings file and an empty one mean the same.
@@ -47,6 +50,7 @@ impl Default for AppConfig {
             demo_mode: false,
             local_api: true,
             inventory_path: None,
+            job_activity: crate::jobs::FleetJobSettings::default(),
         }
     }
 }
@@ -300,6 +304,8 @@ pub struct FleetView {
     pub orgs: Vec<OrgStatusView>,
     pub tailnet: TailnetStatusView,
     pub monitoring: crate::monitoring::FleetMonitoring,
+    /// Recently completed jobs and the real-time job feed; analytics are a separate read.
+    pub activity: crate::jobs::FleetActivity,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]

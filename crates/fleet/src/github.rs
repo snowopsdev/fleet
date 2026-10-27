@@ -21,6 +21,8 @@ use serde_json::Value;
 use crate::model::{GhJob, GhRunner, JobScan, RateLimit, RepoScope};
 use crate::sync::MutexExt;
 
+mod completed;
+
 pub const API_VERSION: &str = "2026-03-10";
 /// Hard cap on repos scanned per org per cycle, whatever the scope says.
 pub const MAX_REPOS: usize = 50;
