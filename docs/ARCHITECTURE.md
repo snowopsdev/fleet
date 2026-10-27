@@ -79,6 +79,53 @@ announcement state prevent duplicates after a restart. Stable inventory keys pre
 across tailnet node replacements; a changed SSH target resets alert and boot baselines. Demo
 history is fictional, generated separately, and never touches the journal or sends alerts.
 
+## Job history and analytics
+
+`jobs/` keeps completed self-hosted jobs in `job-history.json` beside the app settings: at most
+30 days and 20,000 jobs, deduplicated by job ID. Writes are atomic and run off the async
+runtime; a change that only refreshes timestamps is checkpointed at most every 10 minutes.
+Corrupt or newer-format files are preserved with a visible storage error, and jobs are then
+kept in memory until the app quits. History starts when the file is first created
+(`historySince`); analytics never count earlier time as idle.
+
+After each job scan, `update_job_history` follows every run seen with a queued or running
+self-hosted job (persisted, so a restart doesn't lose them; dropped after six days). When a run
+leaves the scan, its latest attempt is read once with
+`GET /repos/{o}/{r}/actions/runs/{id}/jobs`, which also returns jobs too short to have been
+seen running; jobs seen running in an earlier attempt are read with
+`GET /repos/{o}/{r}/actions/jobs/{id}`. A run that's still going, or can't be read, is asked
+about again after two minutes. Only jobs assigned to a runner and asking for `self-hosted` (or
+run by one of the account's runners) are recorded, with queue wait (created → started), run
+time (started → completed), conclusion, labels, repository, workflow, runner key and the
+machine's stable history identity. At most 20 runs per account are read per round. Reads use
+the client the account's polls created, skip a rate-limited account, stop with fewer than 200
+requests left, and a rate-limited read sets the account's `rateLimitedUntil` like any poll.
+
+`jobs/analytics.rs` summarizes a 24-hour, 7-day or 30-day window without I/O: busy time is
+each job's run overlapping the window, and busy percent divides it by the recorded part of the
+window (times the runner count for a machine). The hosted-cost estimate rounds each job up to
+whole minutes at the editable rates in Settings. Analytics are read on demand (Tauri command,
+`/v1/analytics`), not pushed with every fleet view; the view carries only the latest 10 jobs
+per runner and machine and the job feed's state.
+
+The optional real-time job feed (`jobs/feed.rs`, `jobs/webhook.rs`) supervises one
+`gh webhook forward --org=ORG --events=workflow_job --url=URL --secret=SECRET` per organization
+that turned it on. The extension creates a temporary `cli` webhook on the organization
+(`admin:org_hook`) and relays deliveries over a websocket. The receiver is a separate loopback
+listener on an ephemeral port: it refuses non-loopback peers and requests with an `Origin`
+header, and checks `X-Hub-Signature-256` against a random per-launch secret that is never
+written down (it's visible in the child's argv, which the extension requires). Deliveries
+update the in-flight scan between polls and record completed jobs directly. Forwarders run in
+their own process group; they restart after an exit (quickly after a healthy run, since GitHub
+closes the websocket every few minutes; otherwise 5 s doubling to 5 min), retry every 10 minutes
+when the extension, scope or login is missing, and are terminated when the setting is turned
+off, in demo mode, and on app exit. While every scanned organization's feed is forwarding, the
+45-second job scan runs only every 3 minutes. If the app is killed without its exit handler,
+a forwarder can outlive it until it next disconnects.
+
+Demo job history is fictional, deterministic on a fixed time grid, generated from the demo
+view's runners, and never touches the journal.
+
 ## Status rules
 
 - Installed/configured and service state come from SSH; connected, busy and idle come from GitHub.
