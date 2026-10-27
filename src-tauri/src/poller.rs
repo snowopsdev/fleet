@@ -99,14 +99,25 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
                         // Push before delivery waits on the OS; a poll may push newer data meanwhile.
                         push(&app, view, Push::IfChanged);
                         deliver_notifications(&app, &engine, events).await;
-                        // Queued alerts for Slack, Discord, ntfy and webhooks, retried with backoff.
-                        engine.deliver_alerts().await;
                     }
                     Err(error) => {
                         tracing::warn!("recording machine history failed: {error}");
                         push(&app, engine.view(), Push::IfChanged);
                     }
                 }
+            }
+        });
+    }
+
+    // Queued alerts for Slack, Discord, ntfy and webhooks, retried with backoff, in
+    // their own task so a slow endpoint never delays monitoring rounds.
+    {
+        let engine = engine.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(5));
+            loop {
+                tick.tick().await;
+                engine.deliver_alerts().await;
             }
         });
     }

@@ -15,6 +15,8 @@ pub(crate) const MAX_EVENTS: usize = 5_000;
 pub(crate) const EVENT_PAGE_SIZE: usize = 50;
 // Bound delayed delivery independently of history; retain the newest requests.
 const MAX_NOTIFICATIONS: usize = 256;
+/// Undelivered alerts kept per destination; older ones are dropped with an event.
+pub(crate) const MAX_OUTBOUND_PER_DESTINATION: usize = 100;
 const RETRY_INTERVAL: Duration = Duration::minutes(1);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -206,9 +208,7 @@ impl MonitorStore {
         while self.journal.pending_notifications.len() > MAX_NOTIFICATIONS {
             self.journal.pending_notifications.pop_front();
         }
-        while self.journal.outbound.len() > MAX_NOTIFICATIONS {
-            self.journal.outbound.pop_front();
-        }
+        changed |= self.cap_outbound(now);
         changed |= self.journal.pending_notifications.len() != pending_before;
         if self.journal.pending_notifications.is_empty() {
             changed |= self.journal.notification_retry_at.is_some();
@@ -427,6 +427,50 @@ impl MonitorStore {
         Ok(())
     }
 
+    /// Keeps at most [`MAX_OUTBOUND_PER_DESTINATION`] undelivered alerts per
+    /// destination, dropping the oldest. Each drop is recorded as an event on
+    /// the affected machine and as the destination's error, never silently.
+    fn cap_outbound(&mut self, now: DateTime<Utc>) -> bool {
+        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+        for d in &self.journal.outbound {
+            *counts.entry(d.destination.clone()).or_default() += 1;
+        }
+        let mut excess: BTreeMap<String, usize> = counts
+            .into_iter()
+            .filter(|(_, n)| *n > MAX_OUTBOUND_PER_DESTINATION)
+            .map(|(d, n)| (d, n - MAX_OUTBOUND_PER_DESTINATION))
+            .collect();
+        if excess.is_empty() {
+            return false;
+        }
+        // Oldest first: the queue is in the order alerts were raised.
+        let mut dropped: BTreeMap<(String, String, String), usize> = BTreeMap::new();
+        self.journal.outbound.retain(|d| match excess.get_mut(&d.destination) {
+            Some(left) if *left > 0 => {
+                *left -= 1;
+                let key = (d.destination.clone(), d.event.machine_key.clone(), d.event.machine_name.clone());
+                *dropped.entry(key).or_default() += 1;
+                false
+            }
+            _ => true,
+        });
+        for ((destination, key, name), count) in dropped {
+            self.journal.outbound_status.entry(destination).or_default().error = Some(format!(
+                "Dropped {count} undelivered alert(s) for {name}: the queue holds at most {MAX_OUTBOUND_PER_DESTINATION}."
+            ));
+            self.event(
+                &key,
+                &name,
+                now,
+                FleetEventKind::AlertsDropped,
+                format!(
+                    "Dropped {count} undelivered alert(s) for an alert destination whose queue was full; see Settings ▸ Notifications."
+                ),
+            );
+        }
+        true
+    }
+
     fn queue_outbound(&mut self, destinations: &BTreeSet<String>, event: &FleetMachineEvent, now: DateTime<Utc>) {
         for destination in destinations {
             self.journal.outbound.push_back(OutboundDelivery {
@@ -463,6 +507,7 @@ impl MonitorStore {
         let event = self.event(machine_key, machine_name, now, kind, detail);
         if notify && !muted {
             self.queue_outbound(destinations, &event, now);
+            self.cap_outbound(now);
             if desktop {
                 self.journal.pending_notifications.push_back(event);
                 self.journal.notification_retry_at = None;

@@ -1,6 +1,8 @@
 //! Cleanup, upgrade, drain and resume against fake GitHub and hosts, the
 //! scripts they send, and the cleanup script run on a throwaway directory.
 
+use std::collections::BTreeSet;
+
 use super::super::github::ReleaseAsset;
 use super::super::maintenance::{
     CleanupKind, CleanupOptions, CleanupTarget, StopOutcome, cleanup_candidates, version_behind,
@@ -112,23 +114,60 @@ fn cleanup_skips_a_runner_that_became_busy_and_runs_the_rest() {
     ];
     fleet.world().github.get_mut("linux-01").unwrap().busy = true;
     let error = ops(&inventory, &fleet, Secrets::default())
-        .cleanup_host("linux", &CleanupOptions::default(), &targets)
+        .cleanup_host("linux", &CleanupOptions::default(), &targets, &BTreeSet::new(), &mut Vec::new())
         .unwrap_err();
     assert!(error.0.contains("linux-01 is busy"), "{error}");
     assert!(fleet.world().calls.is_empty(), "nothing is removed while a job runs");
 
     fleet.world().github.get_mut("linux-01").unwrap().busy = false;
     let messages = ops(&inventory, &fleet, Secrets::default())
-        .cleanup_host("linux", &CleanupOptions::default(), &targets)
+        .cleanup_host("linux", &CleanupOptions::default(), &targets, &BTreeSet::new(), &mut Vec::new())
         .unwrap();
     assert_eq!(messages.len(), 2);
+    // The runner is stopped around the removal, so it can't take a job meanwhile, then started again.
     assert_eq!(
         fleet.world().calls,
         [
+            "stop linux linux-01",
             "cleanup linux work-temp /home/builder/gh-runners/acme/runner-01/_work/_temp",
-            "cleanup linux docker -"
+            "cleanup linux docker -",
+            "start linux linux-01"
         ]
     );
+}
+
+#[test]
+fn cleanup_restores_each_runner_as_it_was_and_leaves_drained_ones_alone() {
+    let inventory = example_inventory();
+    let fleet = linux_fleet(&inventory, "2.330.0");
+    let temp = target(CleanupKind::WorkTemp, Some("linux-01"), "/r/_work/_temp");
+    let docker = target(CleanupKind::Docker, None, "");
+    let held: BTreeSet<String> = ["linux-01".to_string()].into();
+    let options = CleanupOptions::default();
+    // Draining and still running: neither its directories nor shared caches are touched.
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host("linux", &options, &[temp.clone(), docker], &held, &mut Vec::new())
+        .unwrap_err();
+    assert!(error.0.contains("is draining") && error.0.contains("machine-wide"), "{error}");
+    assert!(fleet.world().calls.is_empty());
+
+    // Stopped by its drain: cleaned without being started.
+    fleet.world().local.get_mut("linux-01").unwrap().service_state = "inactive".into();
+    ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host("linux", &options, std::slice::from_ref(&temp), &held, &mut Vec::new())
+        .unwrap();
+    assert_eq!(fleet.world().calls, ["cleanup linux work-temp /r/_work/_temp"]);
+
+    // Running, not drained, and it fails to start again: reported and left held.
+    fleet.world().calls.clear();
+    fleet.world().local.get_mut("linux-01").unwrap().service_state = "active".into();
+    fleet.world().start_failures.push("linux-01".into());
+    let mut left = Vec::new();
+    let error = ops(&inventory, &fleet, Secrets::default())
+        .cleanup_host("linux", &options, &[temp], &BTreeSet::new(), &mut left)
+        .unwrap_err();
+    assert!(error.0.contains("couldn't be started again"), "{error}");
+    assert_eq!(left, ["linux-01"]);
 }
 
 #[test]
@@ -138,9 +177,10 @@ fn cleanup_reports_targets_the_host_refused() {
     fleet.world().jobs_on_host.push("linux-01".into());
     let targets = [target(CleanupKind::WorkTemp, Some("linux-01"), "/x/_work/_temp")];
     let error = ops(&inventory, &fleet, Secrets::default())
-        .cleanup_host("linux", &CleanupOptions::default(), &targets)
+        .cleanup_host("linux", &CleanupOptions::default(), &targets, &BTreeSet::new(), &mut Vec::new())
         .unwrap_err();
-    assert!(error.0.contains("finished with errors: a job is running"), "{error}");
+    assert!(error.0.contains("a job started"), "{error}");
+    assert!(fleet.world().calls.is_empty(), "a runner with a job is neither stopped nor cleaned");
 }
 
 #[test]
@@ -196,7 +236,7 @@ fn upgrade_stops_replaces_starts_and_confirms_the_version() {
     let inventory = example_inventory();
     let fleet = linux_fleet(&inventory, "2.329.0");
     let messages = ops(&inventory, &fleet, Secrets::default())
-        .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"))
+        .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"), &mut Vec::new())
         .unwrap();
     assert_eq!(messages, ["linux-01 upgraded to 2.999.0 and is online"]);
     assert_eq!(
@@ -214,9 +254,11 @@ fn a_failed_upgrade_leaves_the_runner_stopped_with_recovery_steps() {
     let inventory = example_inventory();
     let fleet = linux_fleet(&inventory, "2.329.0");
     fleet.world().upgrade_failures.push("linux-01".into());
+    let mut left = Vec::new();
     let error = ops(&inventory, &fleet, Secrets::default())
-        .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"))
+        .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"), &mut left)
         .unwrap_err();
+    assert_eq!(left, ["linux-01"], "the failure is reported so the watchdog can leave it alone");
     assert!(
         error.0.starts_with("upgrade failed for linux-01: SHA-256 mismatch"),
         "{error}"
@@ -235,14 +277,14 @@ fn upgrade_never_touches_a_busy_runner_and_needs_a_digest() {
     let fleet = linux_fleet(&inventory, "2.329.0");
     fleet.world().github.get_mut("linux-01").unwrap().busy = true;
     let messages = ops(&inventory, &fleet, Secrets::default())
-        .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"))
+        .upgrade_runners("linux", &["linux-01".into()], &asset("2.999.0"), &mut Vec::new())
         .unwrap();
     assert_eq!(messages, ["skipped linux-01: busy"]);
     assert!(fleet.world().calls.is_empty());
     let mut unverified = asset("2.999.0");
     unverified.sha256 = None;
     let error = ops(&inventory, &fleet, Secrets::default())
-        .upgrade_runners("linux", &["linux-01".into()], &unverified)
+        .upgrade_runners("linux", &["linux-01".into()], &unverified, &mut Vec::new())
         .unwrap_err();
     assert!(error.0.contains("SHA-256"), "{error}");
 }

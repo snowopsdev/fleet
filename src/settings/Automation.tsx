@@ -52,7 +52,7 @@ export function PublishSettings({ view }: { view: FleetView }) {
             Off by default. When on, the app writes the organization Actions variable <span className="font-mono">{variable || "RUNNER_FLEET_STATUS"}</span> in {org},
             visible to its private repositories, with the number of inventory runners GitHub shows online per capability label, for example
             <span className="font-mono"> {"{"}"updatedAt":"…","online":{"{"}"macos-build":2,"linux-build":0{"}"},"healthy":false{"}"}</span>. It uses your gh login
-            (organization admin), writes only from fresh GitHub data, only when the counts change, and at most every {minutes || "5"} minutes.
+            (organization admin), only from fresh GitHub data, every {minutes || "5"} minutes so its updatedAt shows how current it is. Nothing is written while the app is closed, so have workflows check updatedAt (see the routing job in docs/FLEET.md).
             Workflows can then fall back to GitHub-hosted runners.
           </p>
         </div>
@@ -72,7 +72,8 @@ export function PublishSettings({ view }: { view: FleetView }) {
           : status.enabled ? status.waiting ?? "Waiting for the first write." : null}
         {status.value && <div className="mono mt-1 truncate text-[11.5px] text-ink-3 selectable">{status.value}</div>}
       </div>
-      <div className="mono mt-2 overflow-hidden rounded-[6px] bg-sunken px-2 py-1.5 text-[11.5px] text-ink">
+      <p className="mt-2 text-[11.5px] text-ink-3">Shortcut for a workflow; it can't check updatedAt, so prefer the routing job in docs/FLEET.md, which falls back when the value is stale.</p>
+      <div className="mono mt-1 overflow-hidden rounded-[6px] bg-sunken px-2 py-1.5 text-[11.5px] text-ink">
         <CopyValue value={snippet} label="Workflow snippet" truncate />
       </div>
     </Card>

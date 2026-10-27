@@ -3,7 +3,8 @@
 # (survey: read-only, or clean) and RF_DIAG_DAYS, then calls
 #   runner_target KIND RUNNER ROOT EXPECTED [FILE...]
 #   machine_target KIND EXPECTED
-# once per target. Every path is derived here from a fixed suffix of the exact
+# once per target, with the runner's service already stopped (it refuses
+# otherwise, and while a job or a self-update runs). Every path is derived here from a fixed suffix of the exact
 # runner directory (or the home directory) and must resolve to exactly that
 # place: no symlink below it, nothing outside it, no globs. Directory contents
 # are removed with find -delete, which never follows links or crosses
@@ -129,6 +130,13 @@ runner_target() {
   fi
   if job_in "$real_root"; then
     refuse "a job is running in $real_root; left it alone"; return
+  fi
+  # The controller stops the service first, so the runner can't take a job mid-removal.
+  if running "$real_root/bin/Runner.Listener"; then
+    refuse "$runner's service is still running; it must be stopped before cleaning"; return
+  fi
+  if [ -e "$real_root/_work/_update" ] || [ -e "$real_root/_update.sh" ]; then
+    refuse "a runner self-update is in progress in $real_root; left it alone"; return
   fi
   case "$kind" in
     diag)

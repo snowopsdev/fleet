@@ -27,6 +27,8 @@ export const eventStyle: Record<FleetEventKind, { label: string; tone: Tone }> =
   watchdogRestartFailed: { label: "Automatic restart failed", tone: "warn" },
   watchdogGaveUp: { label: "Automatic restarts stopped", tone: "bad" },
   watchdogRecovered: { label: "Running again", tone: "ok" },
+  heldStopped: { label: "Held stopped", tone: "warn" },
+  alertsDropped: { label: "Alerts dropped", tone: "warn" },
   wakeRequested: { label: "Wake requested", tone: "info" },
 };
 

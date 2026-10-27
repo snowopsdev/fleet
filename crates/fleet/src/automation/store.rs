@@ -57,6 +57,27 @@ impl DrainMark {
     }
 }
 
+/// A runner a failed upgrade or cleanup left stopped on purpose. The watchdog
+/// leaves it alone until a reviewed resume, restart or upgrade clears it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Hold {
+    pub host: String,
+    pub reason: String,
+    pub since: DateTime<Utc>,
+}
+
+impl Hold {
+    pub fn view(&self, runner: &str) -> super::FleetHold {
+        super::FleetHold {
+            runner: runner.into(),
+            host_id: self.host.clone(),
+            reason: self.reason.clone(),
+            since: self.since,
+        }
+    }
+}
+
 /// One runner's watchdog history.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -108,6 +129,8 @@ pub(crate) struct Journal {
     pub watchdog: BTreeMap<String, WatchdogRunner>,
     #[serde(default)]
     pub publish: PublishState,
+    #[serde(default)]
+    pub holds: BTreeMap<String, Hold>,
 }
 
 impl Default for Journal {
@@ -117,6 +140,7 @@ impl Default for Journal {
             drains: BTreeMap::new(),
             watchdog: BTreeMap::new(),
             publish: PublishState::default(),
+            holds: BTreeMap::new(),
         }
     }
 }

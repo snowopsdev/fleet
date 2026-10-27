@@ -304,13 +304,7 @@ impl Engine {
 
         let facts = self.review_facts(&inventory, &request).await?;
         let mut review = build_review(&inventory, host, &request, &snapshot, &facts)?;
-        if let ChangeRequest::Drain { runner } = &request
-            && self.drain_state(runner).is_some()
-        {
-            review.blockers.push(format!(
-                "{runner} is already drained or draining; resume it or cancel the drain first."
-            ));
-        }
+        self.apply_drain_rules(&mut review);
         let ssh_transport = host
             .ssh_target
             .as_ref()
@@ -437,6 +431,7 @@ impl Engine {
             .merge_snapshot(&inventory, snapshot.clone(), Some(&host_id));
         let facts = self.review_facts(&inventory, &reviewed.request).await?;
         let mut now = build_review(&inventory, host, &reviewed.request, &snapshot, &facts)?;
+        self.apply_drain_rules(&mut now);
         if let Some(conflict) = self.host_identity_conflict(&inventory, &host_id) {
             now.blockers.push(conflict);
             now.ready = false;
@@ -494,7 +489,10 @@ impl Engine {
                 _ => None,
             };
             let ran = request.clone();
-            let result = run_blocking("finish the change", move || {
+            let held = engine.drained_runners();
+            let upgraded = reviewed.upgrade.clone();
+            let outcome = run_blocking("finish the change", move || {
+                let mut left_stopped = Vec::new();
                 let ops = Ops {
                     inventory: &inventory,
                     github: github.as_ref(),
@@ -503,7 +501,7 @@ impl Engine {
                     sleep: &sleep,
                 };
                 let done = |messages: Vec<String>| Done { messages, stop: None };
-                match &request {
+                let result = match &request {
                     ChangeRequest::Apply { host, runner } => ops.apply_host(host, runner.as_deref()).map(done),
                     ChangeRequest::Retire { host, runner } => ops.retire_legacy(host, runner).map(|m| done(vec![m])),
                     ChangeRequest::Decommission { host, runner } => {
@@ -511,10 +509,13 @@ impl Engine {
                     }
                     ChangeRequest::Restart { runner } => ops.restart_runner(runner).map(|m| done(vec![m])),
                     ChangeRequest::Cleanup { host, options } => {
-                        ops.cleanup_host(host, options, &reviewed.cleanup).map(done)
+                        ops.cleanup_host(host, options, &reviewed.cleanup, &held, &mut left_stopped)
+                            .map(done)
                     }
                     ChangeRequest::Upgrade { host, .. } => match &reviewed.asset {
-                        Some(asset) => ops.upgrade_runners(host, &reviewed.upgrade, asset).map(done),
+                        Some(asset) => ops
+                            .upgrade_runners(host, &reviewed.upgrade, asset, &mut left_stopped)
+                            .map(done),
                         None => Err(operations::OperationError(
                             "the reviewed runner release is no longer available; review the upgrade again".into(),
                         )),
@@ -529,11 +530,15 @@ impl Engine {
                         stop: Some(outcome),
                     }),
                     ChangeRequest::Resume { runner } => ops.resume_runner(runner).map(|m| done(vec![m])),
-                }
+                };
+                (result, left_stopped)
             })
-            .await
-            .map_err(|e| e.to_string())
-            .and_then(|r| r.map_err(|e| e.0));
+            .await;
+            let (result, left_stopped) = match outcome {
+                Ok((result, left_stopped)) => (result.map_err(|e| e.0), left_stopped),
+                Err(e) => (Err(e.to_string()), Vec::new()),
+            };
+            engine.record_holds(&host_id, &ran, &left_stopped, &upgraded);
             match (&ran, &result) {
                 (
                     ChangeRequest::Drain { runner },
@@ -545,6 +550,7 @@ impl Engine {
                     engine.record_drain(&host_id, runner, path, &reviewed.id, outcome);
                 }
                 (ChangeRequest::Resume { runner }, Ok(_)) => engine.record_resume(&host_id, runner),
+                (ChangeRequest::Restart { runner }, Ok(_)) => engine.clear_hold(runner),
                 _ => {}
             }
             let result = result.map(|done| done.messages);

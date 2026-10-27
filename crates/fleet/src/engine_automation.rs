@@ -13,10 +13,13 @@ use chrono::{DateTime, Utc};
 use super::{Engine, EngineError};
 use crate::automation::watchdog::{self, Decision, MAX_ATTEMPTS};
 use crate::automation::{
-    AutomationSettings, DrainMark, DrainState, FleetAutomation, FleetPublishStatus, FleetWatchdog, PublishSettings,
+    AutomationSettings, DrainMark, DrainState, Hold, FleetAutomation, FleetPublishStatus, FleetWatchdog, PublishSettings,
     publish,
 };
+use super::desired::ReviewView;
 use crate::desired::maintenance::StopOutcome;
+use crate::desired::model::FleetPlanAction;
+use crate::fleet_plan::ChangeRequest;
 use crate::desired::model::{Inventory, is_active};
 use crate::desired::operations::{Ops, Secrets};
 use crate::model::{AppConfig, FleetView, MachineView, RunnerView};
@@ -52,6 +55,10 @@ fn demo_refused() -> EngineError {
     EngineError::Invalid("Turn off demo data to change automatic actions and alert destinations.".into())
 }
 
+/// A reviewed drain that hasn't found its runner idle within this long is
+/// cancelled: the review's authority doesn't last indefinitely.
+const DRAIN_MAX_HOURS: i64 = 24;
+
 static DESTINATION_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 impl Engine {
@@ -78,6 +85,7 @@ impl Engine {
         let publish = &settings.publish;
         view.automation = FleetAutomation {
             drains: journal.drains.values().map(DrainMark::view).collect(),
+            holds: journal.holds.iter().map(|(name, hold)| hold.view(name)).collect(),
             watchdog: FleetWatchdog {
                 enabled: settings.watchdog,
                 runners: journal.watchdog.iter().map(|(name, s)| s.view(name)).collect(),
@@ -210,7 +218,10 @@ impl Engine {
 
     /// After a reviewed resume: the runner is no longer held stopped.
     pub(super) fn record_resume(&self, host: &str, runner: &str) {
-        if let Err(e) = self.update_automation(|j| j.drains.remove(runner)) {
+        if let Err(e) = self.update_automation(|j| {
+            j.drains.remove(runner);
+            j.holds.remove(runner);
+        }) {
             tracing::warn!("clearing the drain of {runner} failed: {e}");
         }
         self.record_runner_history(
@@ -222,9 +233,118 @@ impl Engine {
         );
     }
 
-    /// Whether a drain holds `runner`, for reviews.
-    pub(super) fn drain_state(&self, runner: &str) -> Option<DrainState> {
-        self.automation.locked().journal().drains.get(runner).map(|m| m.state)
+    /// Runners a reviewed drain holds (draining or stopped).
+    pub(super) fn drained_runners(&self) -> BTreeSet<String> {
+        self.automation.locked().journal().drains.keys().cloned().collect()
+    }
+
+    /// A reviewed restart ends a hold left by a failed upgrade or cleanup.
+    pub(super) fn clear_hold(&self, runner: &str) {
+        if let Err(e) = self.update_automation(|j| j.holds.remove(runner)) {
+            tracing::warn!("clearing the hold on {runner} failed: {e}");
+        }
+    }
+
+    /// After an upgrade or cleanup: runners it left stopped on purpose are
+    /// held, so the watchdog doesn't restart them, and runners an upgrade
+    /// finished are released.
+    pub(super) fn record_holds(&self, host: &str, request: &ChangeRequest, left_stopped: &[String], upgraded: &[String]) {
+        let reason = match request {
+            ChangeRequest::Upgrade { .. } => {
+                "A failed upgrade left it stopped. Check its diagnostic log, then resume it or upgrade it again."
+            }
+            ChangeRequest::Cleanup { .. } => {
+                "A cleanup couldn't start its service again. Check its diagnostic log, then resume it."
+            }
+            ChangeRequest::Apply { .. }
+            | ChangeRequest::Retire { .. }
+            | ChangeRequest::Decommission { .. }
+            | ChangeRequest::Restart { .. }
+            | ChangeRequest::Drain { .. }
+            | ChangeRequest::Resume { .. } => return,
+        };
+        let now = Utc::now();
+        let finished: Vec<&String> = upgraded.iter().filter(|n| !left_stopped.contains(n)).collect();
+        let saved = self.update_automation(|j| {
+            if matches!(request, ChangeRequest::Upgrade { .. }) {
+                for name in &finished {
+                    j.holds.remove(*name);
+                }
+            }
+            for name in left_stopped {
+                j.holds.insert(
+                    name.clone(),
+                    Hold {
+                        host: host.to_string(),
+                        reason: reason.to_string(),
+                        since: now,
+                    },
+                );
+            }
+        });
+        if let Err(e) = saved {
+            tracing::warn!("saving held runners failed: {e}");
+        }
+        for name in left_stopped {
+            self.record_runner_history(
+                host,
+                name,
+                FleetEventKind::HeldStopped,
+                format!("{name} is held stopped: {reason} The watchdog leaves it alone until then."),
+                true,
+            );
+        }
+    }
+
+    /// Review rules that depend on drains: a drained runner isn't drained
+    /// again, restarted, upgraded or started by an apply until it's resumed or
+    /// its drain is cancelled. Applied at review and again before running.
+    pub(super) fn apply_drain_rules(&self, review: &mut ReviewView) {
+        let drained = self.drained_runners();
+        let before = review.blockers.len();
+        let held = |name: &str| drained.contains(name);
+        match &review.request {
+            ChangeRequest::Drain { runner } if held(runner) => review.blockers.push(format!(
+                "{runner} is already drained or draining; resume it or cancel the drain first."
+            )),
+            ChangeRequest::Restart { runner }
+            | ChangeRequest::Upgrade {
+                runner: Some(runner), ..
+            } if held(runner) => review.blockers.push(format!(
+                "{runner} is held by a drain; resume it or cancel the drain first."
+            )),
+            ChangeRequest::Upgrade { runner: None, .. } => {
+                for item in review
+                    .items
+                    .iter_mut()
+                    .filter(|i| i.action == FleetPlanAction::Upgrade && !i.blocked && held(&i.runner))
+                {
+                    item.reason = format!("{}; not now: held by a drain", item.reason);
+                    item.blocked = true;
+                }
+                if review.blockers.is_empty() && !review.items.iter().any(|i| !i.blocked) {
+                    review.blockers.push("No idle runner can be upgraded right now.".into());
+                }
+            }
+            ChangeRequest::Apply { .. } => {
+                let names: BTreeSet<&str> = review
+                    .items
+                    .iter()
+                    .filter(|i| i.is_runnable() && held(&i.runner))
+                    .map(|i| i.runner.as_str())
+                    .collect();
+                if !names.is_empty() {
+                    review.blockers.push(format!(
+                        "{} held by a drain; resume it or cancel the drain before applying, which could start it.",
+                        names.into_iter().collect::<Vec<_>>().join(", ")
+                    ));
+                }
+            }
+            _ => {}
+        }
+        if review.blockers.len() > before {
+            review.ready = false;
+        }
     }
 
     /// Cancels a drain that hasn't stopped its runner yet. Nothing on the
@@ -330,6 +450,13 @@ impl Engine {
                             false,
                         );
                     }
+                }
+                DrainState::Draining if Utc::now() - mark.requested_at > chrono::Duration::hours(DRAIN_MAX_HOURS) => {
+                    self.cancel_changed_drain(
+                        machine,
+                        &mark,
+                        &format!("it waited more than {DRAIN_MAX_HOURS} hours for the runner to become idle"),
+                    );
                 }
                 DrainState::Draining => {
                     // Fresh GitHub data showing it idle triggers the stop, which reads
@@ -594,13 +721,13 @@ impl Engine {
             }
         };
         let fingerprint = availability.fingerprint();
+        // Written every interval, changed or not, so `updatedAt` shows readers how fresh it is.
         let due = {
             let store = self.automation.locked();
             let state = &store.journal().publish;
-            let changed =
-                state.value.as_deref() != Some(fingerprint.as_str()) || state.target.as_deref() != Some(&target);
+            let retargeted = state.target.as_deref() != Some(&target);
             let interval = chrono::Duration::minutes(i64::from(settings.interval_minutes));
-            changed && state.attempted_at.is_none_or(|at| now - at >= interval)
+            retargeted || state.attempted_at.is_none_or(|at| now - at >= interval)
         };
         if !due {
             // Display only; a failed save shows as the automation storage error.
@@ -625,7 +752,7 @@ impl Engine {
         })
         .await
         .and_then(|r| r);
-        // A failed save leaves the old fingerprint, so the next round writes the same value again.
+        // A failed save only means the next interval writes again.
         let _ = self.update_automation(|j| match result {
             Ok(()) => {
                 j.publish.value = Some(fingerprint);
@@ -717,7 +844,7 @@ impl Engine {
                 let server = given(&input.ntfy_server)
                     .or_else(|| existing.as_ref().and_then(|d| d.ntfy_server.clone()))
                     .unwrap_or_else(|| "https://ntfy.sh".into());
-                let url = outbound::check_url(&server).map_err(EngineError::Invalid)?;
+                let url = outbound::check_ntfy_server(&server).map_err(EngineError::Invalid)?;
                 let topic = given(&input.ntfy_topic)
                     .or_else(|| existing.as_ref().and_then(|d| d.ntfy_topic.clone()))
                     .unwrap_or_default();
@@ -862,20 +989,26 @@ impl Engine {
                 return;
             }
         };
-        let mut results = Vec::new();
-        for delivery in claimed {
-            let result = match destinations.get(&delivery.destination) {
-                None => Err("The destination is turned off.".to_string()),
-                Some(destination) => match self.read_secret(&destination.id).await {
-                    Ok(secret) => match outbound::request(destination, &secret, &outbound::notice(&delivery.event)) {
-                        Ok(request) => outbound::send(&client, request).await,
+        // Concurrently, each bounded by the client's 10-second timeout, so one
+        // slow destination doesn't hold up the others.
+        let sends = claimed.into_iter().map(|delivery| {
+            let destinations = &destinations;
+            let client = &client;
+            async move {
+                let result = match destinations.get(&delivery.destination) {
+                    None => Err("The destination is turned off.".to_string()),
+                    Some(destination) => match self.read_secret(&destination.id).await {
+                        Ok(secret) => match outbound::request(destination, &secret, &outbound::notice(&delivery.event)) {
+                            Ok(request) => outbound::send(client, request).await,
+                            Err(e) => Err(e),
+                        },
                         Err(e) => Err(e),
                     },
-                    Err(e) => Err(e),
-                },
-            };
-            results.push((delivery, result));
-        }
+                };
+                (delivery, result)
+            }
+        });
+        let results: Vec<_> = futures::future::join_all(sends).await;
         let engine = self.clone();
         match blocking("save alert deliveries", move || {
             engine.monitoring.locked().finish_outbound(&results, Utc::now())

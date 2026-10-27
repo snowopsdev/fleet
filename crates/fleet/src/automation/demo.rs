@@ -22,6 +22,7 @@ pub(crate) fn attach(view: &mut FleetView, now: DateTime<Utc>) {
             stopped_at: None,
             error: None,
         }],
+        holds: Vec::new(),
         watchdog: FleetWatchdog {
             enabled: true,
             runners: vec![FleetWatchdogRunner {

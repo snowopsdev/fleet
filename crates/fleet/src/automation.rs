@@ -19,7 +19,7 @@ mod store;
 pub(crate) mod watchdog;
 
 pub use publish::{ActionsVariables, GhVariables, PublishSettings};
-pub(crate) use store::{AutomationStore, DrainMark, DrainState, Journal as AutomationJournal};
+pub(crate) use store::{AutomationStore, DrainMark, DrainState, Hold, Journal as AutomationJournal};
 
 /// Settings for automatic behaviour, saved with the app settings. Secrets
 /// (webhook URLs, tokens) are kept in the Keychain, never here.
@@ -47,6 +47,8 @@ pub struct AutomationSettings {
 pub struct FleetAutomation {
     /// Runners being drained or held stopped by a reviewed drain.
     pub drains: Vec<FleetDrain>,
+    /// Runners a failed upgrade or cleanup left stopped on purpose.
+    pub holds: Vec<FleetHold>,
     pub watchdog: FleetWatchdog,
     /// Alert destinations (no secrets), with their delivery state.
     pub destinations: Vec<crate::outbound::FleetAlertDestinationView>,
@@ -76,6 +78,18 @@ pub struct FleetDrain {
     pub stopped_at: Option<DateTime<Utc>>,
     /// Why the last attempt to stop it didn't succeed.
     pub error: Option<String>,
+}
+
+/// A runner left stopped by a failed upgrade or cleanup. The watchdog leaves
+/// it alone until a reviewed resume, restart or upgrade.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, schemars::JsonSchema)]
+#[ts(export, rename = "FleetHold")]
+#[serde(rename_all = "camelCase")]
+pub struct FleetHold {
+    pub runner: String,
+    pub host_id: String,
+    pub reason: String,
+    pub since: DateTime<Utc>,
 }
 
 /// The watchdog's settings and its per-runner restart history.

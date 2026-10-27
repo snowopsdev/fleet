@@ -427,6 +427,17 @@ another file system, and keeps the directory itself. On Windows, child folders a
 configuration files, `bin` and `externals` are never targets. Legacy and decommissioned runner
 directories are left alone.
 
+Each runner's service is stopped before its directories are cleaned, with the same job check as
+**Drain**, so it can't pick up a job while files are removed, and started again afterwards if it
+was running (a drained runner is never stopped or started by a cleanup, and a draining one keeps
+its directories). Machine-wide targets (DerivedData, simulators, Docker) are cleaned only with
+every inventory runner on the machine stopped this way; a running legacy or drained runner keeps
+them waiting. The host refuses a target while that runner's service or a job is running, or
+while a runner self-update is in progress (`_work/_update`). On Windows a runner process whose
+path can't be read counts as running, and removal never goes through `cmd.exe`: links and
+junctions are removed without being followed. If a runner can't be started again, the cleanup
+reports it and holds it stopped (see [Recovery](#recovery)).
+
 This is a deliberate, narrow exception to Runner Fleet's "no broad or glob-based deletion"
 rule: these runner caches grow without bound, and each target is an enumerated, reviewed,
 exact path. Nothing else is ever removed recursively.
@@ -463,8 +474,14 @@ the same directory (keeping the old ones as `bin.fleet-previous` and
 `externals.fleet-previous`), start the service, and confirm the runner reports the new version.
 The directory is never moved and `.runner`, `.credentials*` and `.env` are never touched. A
 runner that started a job in the meantime is skipped; a failure stops there and leaves that
-runner stopped (see [Recovery](#recovery)). If a newer release appears between review and run,
-the run refuses and you review again.
+runner stopped and *held*: the watchdog leaves it alone until a reviewed **Resume…**,
+**Restart…** or upgrade (see [Recovery](#recovery)). If a newer release appears between review
+and run, the run refuses and you review again. The host refuses while any process runs from the
+runner directory, during a runner self-update, and when `bin`, `externals` or their
+`.fleet-previous` copies are symlinks. If an earlier upgrade was interrupted mid-swap (the
+connection dropped), it puts `bin` back when only that step was done, and otherwise refuses with
+instructions, never removing the previous files. A drained runner can't be upgraded until it's
+resumed or its drain is cancelled.
 
 ### Drain and resume
 
@@ -475,7 +492,10 @@ about every 20 seconds, stops the service once GitHub shows the runner idle. Tha
 authorised by the original review: it checks that the inventory still declares the same runner
 at the same path and that GitHub lists the same registration, refuses a busy runner, and is
 recorded in the machine's history. **Cancel drain** on the runner's pane removes a drain that
-hasn't stopped anything yet. The sidebar marks drained runners *draining* or *paused*.
+hasn't stopped anything yet. A drain that hasn't found the runner idle within 24 hours is
+cancelled, with an event and a notification: drain again if you still want it. While a drain
+holds a runner, it can't be drained again, restarted, upgraded, or started by **Review apply…**.
+The sidebar marks drained runners *draining* or *paused*.
 
 A drained runner shows offline on GitHub and the watchdog leaves it alone. **Resume…** starts its
 service and ends the drain. The stop lasts until the service manager starts it again: a
@@ -504,7 +524,8 @@ stopped, then 5, 15 and 60 minutes between attempts, and makes at most 3 attempt
 6 hours. When a fourth would be due it gives up, raises an alert and stops trying until it sees
 the service running again. Every attempt, failure, give-up and recovery is recorded in the
 machine's history and sent through desktop notifications and alert destinations (maintenance
-mode pauses those). Attempts are saved before they are made, so restarting the app doesn't
+mode pauses those). It never restarts a runner a failed upgrade or cleanup left held stopped.
+Attempts are saved before they are made, so restarting the app doesn't
 repeat one. Turning the setting off or on starts its history afresh. It never uses a password,
 so hosts that need a sudo password can't be restarted this way.
 
@@ -522,23 +543,51 @@ needs organization admin, as for other changes):
 `online` counts the inventory runners GitHub reports online for each label the inventory gives
 them, except `fleet` and `host-*`; `healthy` means every one of those labels has at least one.
 Online runners can still be busy. It is written only from fresh GitHub data (the organization
-must also be added in Settings ▸ GitHub), only when the counts change, and at most every 5
-minutes (configurable). Nothing else is written. The value is not updated while the app isn't
-running, so `updatedAt` can be old.
+must also be added in Settings ▸ GitHub), every 5 minutes (configurable) whether or not the
+counts changed, so `updatedAt` always says how current it is. Nothing else is written. While the
+app is closed or the Mac sleeps, or GitHub data is stale, nothing is written and `updatedAt`
+grows old, so readers must treat an old value as unknown.
 
 Workflows can then fall back to GitHub-hosted runners when self-hosted capacity is down
-([community discussion #20019](https://github.com/orgs/community/discussions/20019)):
+([community discussion #20019](https://github.com/orgs/community/discussions/20019)). Use a
+small routing job that checks freshness first; here anything older than 20 minutes (four
+publishing intervals) counts as down:
 
 ```yaml
 jobs:
+  route:
+    runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.pick.outputs.runner }}
+    steps:
+      - id: pick
+        env:
+          STATUS: ${{ vars.RUNNER_FLEET_STATUS }}
+        run: |
+          runner='"macos-latest"'
+          if [ -n "$STATUS" ]; then
+            updated=$(jq -r '.updatedAt // empty' <<<"$STATUS")
+            online=$(jq -r '.online["macos-build"] // 0' <<<"$STATUS")
+            if [ -n "$updated" ]; then
+              age=$(( $(date -u +%s) - $(date -u -d "$updated" +%s) ))
+              if [ "$age" -lt 1200 ] && [ "$online" -gt 0 ]; then
+                runner='{"group":"Acme trusted builders","labels":"macos-build"}'
+              fi
+            fi
+          fi
+          echo "runner=$runner" >> "$GITHUB_OUTPUT"
   build:
-    runs-on: ${{ vars.RUNNER_FLEET_STATUS && fromJSON(vars.RUNNER_FLEET_STATUS).online['macos-build'] > 0 && fromJSON('["self-hosted","macos-build"]') || 'macos-latest' }}
+    needs: route
+    runs-on: ${{ fromJSON(needs.route.outputs.runner) }}
 ```
 
-To keep routing through the trusted group, return an object instead:
+The routing job's output is JSON, so `fromJSON` yields either the trusted-group object or the
+string `macos-latest`. A shortcut without the routing job reads the variable directly, but it
+**can't check `updatedAt`**, so a stale `online` count (the app closed while runners went down)
+keeps routing to self-hosted runners:
 
 ```yaml
-    runs-on: ${{ vars.RUNNER_FLEET_STATUS && fromJSON(vars.RUNNER_FLEET_STATUS).online['macos-build'] > 0 && fromJSON('{"group":"Acme trusted builders","labels":"macos-build"}') || 'macos-latest' }}
+    runs-on: ${{ vars.RUNNER_FLEET_STATUS && fromJSON(vars.RUNNER_FLEET_STATUS).online['macos-build'] > 0 && fromJSON('["self-hosted","macos-build"]') || 'macos-latest' }}
 ```
 
 `vars` is available in `runs-on`; the leading `vars.RUNNER_FLEET_STATUS &&` keeps `fromJSON`
@@ -565,6 +614,8 @@ than 0. Expressions bind `>` before `&&` before `||`. Jobs that need the machine
   directory (a failure while swapping puts them back by itself). Read **Diagnostic log**, then
   **Resume…** or **Restart…**, or move the previous folders back by hand with the service
   stopped.
+- **Held stopped:** a failed upgrade or cleanup left the runner stopped on purpose; its pane says
+  why. Fix the cause, then **Resume…** (or **Restart…** or upgrade again), which releases it.
 - **The watchdog gave up:** an alert says so. Read the diagnostic log, fix the cause, and
   **Restart…** the runner; the watchdog tries again once it has seen the service running.
 

@@ -2,6 +2,7 @@
 //! never contact a real host or the GitHub organization.
 
 mod decommission;
+mod host_scripts;
 mod inventory;
 mod maintenance;
 mod operations;

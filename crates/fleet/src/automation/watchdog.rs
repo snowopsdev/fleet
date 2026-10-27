@@ -8,7 +8,9 @@
 //! minutes after the service was first seen stopped, then 5, 15 and 60
 //! minutes after the previous attempt. At most three attempts are made per
 //! runner in six hours; when a fourth would be due the watchdog gives up,
-//! raises an alert, and waits until the service is seen running again.
+//! raises an alert, and waits until the service is seen running again. A
+//! runner held stopped by a drain, or by a failed upgrade or cleanup, is never
+//! restarted.
 
 use std::collections::BTreeSet;
 
@@ -125,7 +127,7 @@ pub(crate) fn plan(view: &FleetView, journal: &mut Journal, now: DateTime<Utc>) 
     for machine in &view.machines {
         for runner in &machine.runners {
             seen.insert(runner.name.clone());
-            if journal.drains.contains_key(&runner.name) {
+            if journal.drains.contains_key(&runner.name) || journal.holds.contains_key(&runner.name) {
                 continue;
             }
             match observe(machine, runner) {

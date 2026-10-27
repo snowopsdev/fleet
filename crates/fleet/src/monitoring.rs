@@ -8,6 +8,8 @@ pub(crate) mod demo;
 mod state;
 mod store;
 pub(crate) use store::{EVENT_PAGE_SIZE, EVENT_RETENTION, MAX_EVENTS, MonitorStore};
+#[cfg(test)]
+pub(crate) use store::MAX_OUTBOUND_PER_DESTINATION;
 
 /// Events retained on this Mac for up to 30 days (at most 5,000 entries).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]
@@ -44,6 +46,10 @@ pub enum FleetEventKind {
     WatchdogGaveUp,
     /// A service the watchdog acted on runs again.
     WatchdogRecovered,
+    /// A failed upgrade or cleanup left a runner stopped; it stays held until resumed.
+    HeldStopped,
+    /// A destination's alert queue was full and its oldest alerts were dropped.
+    AlertsDropped,
     /// A Wake-on-LAN magic packet was sent after a review.
     WakeRequested,
 }

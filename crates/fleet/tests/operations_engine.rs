@@ -58,7 +58,15 @@ impl ActionsVariables for RecordedVariables {
 }
 
 fn fixture() -> Fixture {
+    fixture_with(None)
+}
+
+/// A fixture whose `automation.json` already holds `automation` when the app starts.
+fn fixture_with(automation: Option<serde_json::Value>) -> Fixture {
     let tmp = tempfile::tempdir().unwrap();
+    if let Some(journal) = automation {
+        std::fs::write(tmp.path().join("automation.json"), journal.to_string()).unwrap();
+    }
     let path = tmp.path().join("fleet.toml");
     std::fs::write(&path, INVENTORY).unwrap();
     let fleet = FakeFleet::default();
@@ -203,9 +211,14 @@ async fn cleanup_review_shows_sizes_and_runs_only_idle_targets() {
         .unwrap();
     let op = wait_done(&f.engine).await;
     assert_eq!(op.status, OperationStatus::Succeeded, "{:?}", op.error);
+    // mini-01 is stopped for the removal and started again; busy mini-02 is never touched.
     assert_eq!(
         f.fleet.world().calls,
-        ["cleanup mini work-temp /Users/ci/gh-runners/acme/runner-01/_work/_temp"]
+        [
+            "stop mini mini-01",
+            "cleanup mini work-temp /Users/ci/gh-runners/acme/runner-01/_work/_temp",
+            "start mini mini-01"
+        ]
     );
 }
 
@@ -583,4 +596,130 @@ async fn publishing_is_off_by_default_and_validates_its_settings() {
     let status = f.engine.view().automation.publish;
     assert!(status.value.is_none());
     assert!(status.waiting.unwrap().contains("Settings ▸ GitHub"));
+}
+
+#[tokio::test]
+async fn a_drained_runner_is_not_upgraded_restarted_or_drained_again() {
+    let f = fixture();
+    f.fleet.world().latest_version = "2.330.0".into();
+    drain(&f, "mini-01").await;
+    let one = f
+        .engine
+        .desired_review(ChangeRequest::Upgrade {
+            host: "mini".into(),
+            runner: Some("mini-01".into()),
+        })
+        .await
+        .unwrap();
+    assert!(!one.ready);
+    assert!(one.blockers.iter().any(|b| b.contains("held by a drain")), "{:?}", one.blockers);
+    let all = f
+        .engine
+        .desired_review(ChangeRequest::Upgrade {
+            host: "mini".into(),
+            runner: None,
+        })
+        .await
+        .unwrap();
+    assert!(all.ready, "{:?}", all.blockers);
+    let items: Vec<(&str, bool)> = all.items.iter().map(|i| (i.runner.as_str(), i.blocked)).collect();
+    assert_eq!(items, [("mini-01", true), ("mini-02", false)]);
+    let restart = f
+        .engine
+        .desired_review(ChangeRequest::Restart { runner: "mini-01".into() })
+        .await
+        .unwrap();
+    assert!(!restart.ready);
+    let apply = f
+        .engine
+        .desired_review(ChangeRequest::Apply {
+            host: "mini".into(),
+            runner: Some("mini-01".into()),
+        })
+        .await
+        .unwrap();
+    assert!(
+        apply.blockers.iter().any(|b| b.contains("held by a drain")),
+        "apply would start the drained service: {:?}",
+        apply.blockers
+    );
+}
+
+#[tokio::test]
+async fn a_second_drain_reviewed_before_the_first_ran_is_refused() {
+    let f = fixture();
+    f.fleet.world().github.get_mut("mini-01").unwrap().busy = true;
+    let first = f
+        .engine
+        .desired_review(ChangeRequest::Drain { runner: "mini-01".into() })
+        .await
+        .unwrap();
+    let second = f
+        .engine
+        .desired_review(ChangeRequest::Drain { runner: "mini-01".into() })
+        .await
+        .unwrap();
+    assert!(first.ready && second.ready);
+    f.engine.desired_execute(&first.id, ChangeSecrets::default(), None).await.unwrap();
+    wait_done(&f.engine).await;
+    let e = f
+        .engine
+        .desired_execute(&second.id, ChangeSecrets::default(), None)
+        .await
+        .unwrap_err();
+    assert!(e.to_string().contains("changed since you reviewed it"), "{e}");
+}
+
+#[tokio::test]
+async fn a_failed_upgrade_holds_the_runner_until_a_reviewed_resume() {
+    let f = fixture();
+    f.fleet.world().latest_version = "2.330.0".into();
+    f.fleet.world().upgrade_failures.push("mini-01".into());
+    let review = f
+        .engine
+        .desired_review(ChangeRequest::Upgrade {
+            host: "mini".into(),
+            runner: Some("mini-01".into()),
+        })
+        .await
+        .unwrap();
+    f.engine.desired_execute(&review.id, ChangeSecrets::default(), None).await.unwrap();
+    let op = wait_done(&f.engine).await;
+    assert_eq!(op.status, OperationStatus::Failed);
+    let holds = f.engine.view().automation.holds;
+    assert_eq!(holds.len(), 1);
+    assert_eq!(holds[0].runner, "mini-01");
+    assert!(history(&f.engine).iter().any(|(k, _)| *k == FleetEventKind::HeldStopped));
+
+    let resume = f
+        .engine
+        .desired_review(ChangeRequest::Resume { runner: "mini-01".into() })
+        .await
+        .unwrap();
+    assert!(resume.ready, "{:?}", resume.blockers);
+    f.engine.desired_execute(&resume.id, ChangeSecrets::default(), None).await.unwrap();
+    wait_done(&f.engine).await;
+    assert!(f.engine.view().automation.holds.is_empty());
+}
+
+#[tokio::test]
+async fn a_drain_that_never_finds_its_runner_idle_expires() {
+    let requested = chrono::Utc::now() - chrono::Duration::hours(25);
+    let f = fixture_with(Some(serde_json::json!({
+        "version": 1,
+        "drains": { "mini-01": {
+            "runner": "mini-01", "host": "mini", "path": "~/gh-runners/acme/runner-01",
+            "registration": 1, "review": "review_mini_0", "requestedAt": requested,
+            "state": "draining", "stoppedAt": null, "lastError": null, "checkedAt": null,
+        }},
+    })));
+    assert_eq!(f.engine.view().automation.drains.len(), 1);
+    f.engine.run_automation().await;
+    assert!(f.engine.view().automation.drains.is_empty());
+    assert!(f.fleet.world().calls.is_empty(), "an expired drain stops nothing");
+    assert!(
+        history(&f.engine)
+            .iter()
+            .any(|(k, d)| *k == FleetEventKind::DrainCancelled && d.contains("24 hours"))
+    );
 }

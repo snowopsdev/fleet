@@ -1,9 +1,10 @@
 # Disk cleanup on a Windows worker. The controller sets RF_MODE (survey or
 # clean) and RF_DIAG_DAYS, then calls Invoke-RunnerTarget once per target.
-# Every path is derived here from a fixed suffix of the exact runner directory
-# and must not pass through a reparse point (symlink or junction). Child
-# directories are removed with rmdir /s, which removes junctions without
-# following them. .runner, .credentials*, config files, bin and externals are
+# The runner's service must already be stopped. Every path is derived here
+# from a fixed suffix of the exact runner directory and must not pass through a
+# reparse point (symlink or junction). Removal is plain PowerShell and .NET:
+# links and junctions are removed without being followed, and no name ever
+# passes through cmd.exe. .runner, .credentials*, config files, bin and externals are
 # never targets. Rows: RFC (survey), RFF (survey: a log file), RFX (removed),
 # RFE (refused or failed).
 $ErrorActionPreference = 'Stop'
@@ -21,21 +22,33 @@ function Get-KiB([string]$Path) {
   if ($null -eq $sum) { return '0' }
   return [string][int64][math]::Floor($sum / 1024)
 }
-function Test-Job([string]$Root) {
+# A process from the runner's bin. One whose path can't be read (another
+# account, no elevation) counts as running: the check fails closed.
+function Test-RunnerProcess([string]$Name, [string]$Root) {
   $bin = (Join-Path $Root 'bin') + [IO.Path]::DirectorySeparatorChar
-  return [bool](Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($bin, [StringComparison]::OrdinalIgnoreCase) })
+  return [bool](Get-Process -Name $Name -ErrorAction SilentlyContinue | Where-Object { -not $_.Path -or $_.Path.StartsWith($bin, [StringComparison]::OrdinalIgnoreCase) })
 }
+function Test-Job([string]$Root) { return Test-RunnerProcess 'Runner.Worker' $Root }
+# Removes one entry. A symlink or junction is removed itself and never
+# followed; a directory's contents go first. Names are only ever passed as
+# -LiteralPath or .NET paths, never through a shell.
 function Remove-Tree([string]$Path) {
-  if (Test-Link $Path) { [IO.Directory]::Delete($Path); return }
-  & cmd.exe /d /c rmdir /s /q $Path
-  if (Test-Path -LiteralPath $Path) { throw "couldn't remove $Path" }
+  $item = Get-Item -LiteralPath $Path -Force
+  if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+    if ($item.PSIsContainer) { [IO.Directory]::Delete($item.FullName, $false) } else { [IO.File]::Delete($item.FullName) }
+    return
+  }
+  if ($item.PSIsContainer) {
+    foreach ($child in @(Get-ChildItem -LiteralPath $item.FullName -Force)) { Remove-Tree $child.FullName }
+    $item.Attributes = [IO.FileAttributes]::Directory
+    [IO.Directory]::Delete($item.FullName, $false)
+  } else {
+    $item.Attributes = [IO.FileAttributes]::Normal
+    [IO.File]::Delete($item.FullName)
+  }
 }
 function Clear-Directory([string]$Path) {
-  foreach ($child in Get-ChildItem -LiteralPath $Path -Force) {
-    if ($child.PSIsContainer) { Remove-Tree $child.FullName }
-    elseif ($child.Attributes -band [IO.FileAttributes]::ReparsePoint) { [IO.File]::Delete($child.FullName) }
-    else { Remove-Item -LiteralPath $child.FullName -Force }
-  }
+  foreach ($child in @(Get-ChildItem -LiteralPath $Path -Force)) { Remove-Tree $child.FullName }
 }
 function Get-OldLogs([string]$Path) {
   $cutoff = (Get-Date).AddDays(-$days)
@@ -89,6 +102,10 @@ function Invoke-RunnerTarget([string]$Kind, [string]$Runner, [string]$Root, [str
   }
   if ($real -ne $Expected) { Write-Row @('RFE', $Kind, $Runner, "$path resolves to $real, not the reviewed $Expected; left it alone"); return }
   if (Test-Job $Root) { Write-Row @('RFE', $Kind, $Runner, "a job is running in $Root; left it alone"); return }
+  if (Test-RunnerProcess 'Runner.Listener' $Root) { Write-Row @('RFE', $Kind, $Runner, "$Runner's service is still running; it must be stopped before cleaning"); return }
+  if ((Test-Path -LiteralPath (Join-Path $Root '_work\_update')) -or (Test-Path -LiteralPath (Join-Path $Root '_update.cmd'))) {
+    Write-Row @('RFE', $Kind, $Runner, "a runner self-update is in progress in $Root; left it alone"); return
+  }
   try {
     if ($Kind -eq 'diag') {
       $cutoff = (Get-Date).AddDays(-$days)

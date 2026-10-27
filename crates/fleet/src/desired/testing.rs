@@ -50,6 +50,8 @@ pub struct World {
     pub latest_version: String,
     /// Upgrading one of these runners fails on the host.
     pub upgrade_failures: Vec<String>,
+    /// Starting one of these runners fails on the host.
+    pub start_failures: Vec<String>,
 }
 
 impl Default for World {
@@ -68,6 +70,7 @@ impl Default for World {
             jobs_on_host: Vec::new(),
             latest_version: "2.999.0".into(),
             upgrade_failures: Vec::new(),
+            start_failures: Vec::new(),
         }
     }
 }
@@ -229,6 +232,9 @@ impl FleetRemote for FakeFleet {
     }
     fn start(&self, host: &Host, runner: &Runner, _: &Transient) -> Result<String, RemoteError> {
         let mut world = self.world();
+        if world.start_failures.contains(&runner.name) {
+            return Err(RemoteError(format!("{} failed to start", runner.name)));
+        }
         world.calls.push(format!("start {} {}", host.id, runner.name));
         if let Some(local) = world.local.get_mut(&runner.name) {
             local.service_state = "active".into();
@@ -309,17 +315,26 @@ impl FleetRemote for FakeFleet {
     ) -> Result<Vec<CleanupOutcome>, RemoteError> {
         let mut world = self.world();
         let mut outcomes = Vec::new();
+        let names: Vec<&str> = host.runner_names().collect();
+        let active = |world: &World, name: &str| world.local.get(name).is_some_and(LocalRunner::service_active);
         for target in targets {
             let busy = match &target.runner {
                 Some(name) => world.jobs_on_host.contains(name),
                 None => !world.jobs_on_host.is_empty(),
             };
+            // Like the host script: a runner's own service must be stopped
+            // first, and shared caches need every runner on the host stopped.
+            let running = match &target.runner {
+                Some(name) => active(&world, name),
+                None => names.iter().any(|n| active(&world, n)),
+            };
             let path = target.path.clone().unwrap_or_default();
-            if busy {
+            if busy || running {
+                let why = if busy { JOB_RUNNING } else { "a service is still running" };
                 outcomes.push(CleanupOutcome {
                     kind: target.kind,
                     runner: target.runner.clone(),
-                    message: format!("{JOB_RUNNING} in {path}; left it alone"),
+                    message: format!("{why} in {path}; left it alone"),
                     ok: false,
                 });
                 continue;

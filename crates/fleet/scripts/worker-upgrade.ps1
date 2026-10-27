@@ -21,10 +21,25 @@ function Test-Link([string]$Path) {
   $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
   return [bool]($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint))
 }
+# Removes one entry without following links or junctions, and without cmd.exe.
+function Remove-Entry([string]$Path) {
+  $item = Get-Item -LiteralPath $Path -Force
+  if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+    if ($item.PSIsContainer) { [IO.Directory]::Delete($item.FullName, $false) } else { [IO.File]::Delete($item.FullName) }
+    return
+  }
+  if ($item.PSIsContainer) {
+    foreach ($child in @(Get-ChildItem -LiteralPath $item.FullName -Force)) { Remove-Entry $child.FullName }
+    $item.Attributes = [IO.FileAttributes]::Directory
+    [IO.Directory]::Delete($item.FullName, $false)
+  } else {
+    $item.Attributes = [IO.FileAttributes]::Normal
+    [IO.File]::Delete($item.FullName)
+  }
+}
 function Remove-Tree([string]$Path) {
   if (Test-Link $Path) { throw "refusing to remove $Path`: it is a symlink or junction" }
-  & cmd.exe /d /c rmdir /s /q $Path
-  if (Test-Path -LiteralPath $Path) { throw "couldn't remove $Path" }
+  Remove-Entry $Path
 }
 $runnerFile = Join-Path $root '.runner'
 if ((Test-Link $root) -or -not (Test-Path -LiteralPath $runnerFile)) { throw "No configured runner at exact path $root" }
@@ -32,9 +47,29 @@ if ((Get-Content -LiteralPath $runnerFile -Raw | ConvertFrom-Json).agentName -ne
   throw "The runner at exact path $root is not $env:RF_NAME"
 }
 $bin = (Join-Path $root 'bin') + [IO.Path]::DirectorySeparatorChar
-$running = Get-Process -Name Runner.Worker, Runner.Listener -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($bin, [StringComparison]::OrdinalIgnoreCase) }
+# A runner process whose path can't be read counts as this runner's: the check fails closed.
+$running = Get-Process -Name Runner.Worker, Runner.Listener -ErrorAction SilentlyContinue | Where-Object { -not $_.Path -or $_.Path.StartsWith($bin, [StringComparison]::OrdinalIgnoreCase) }
 if ($running | Where-Object { $_.ProcessName -eq 'Runner.Worker' }) { throw "a job is running in $root; refusing to upgrade $env:RF_NAME" }
 if ($running) { throw "$env:RF_NAME is still running; its service must be stopped before upgrading" }
+if ((Test-Path -LiteralPath (Join-Path $root '_work\_update')) -or (Test-Path -LiteralPath (Join-Path $root '_update.cmd'))) {
+  throw "a runner self-update is in progress in $root; refusing to upgrade $env:RF_NAME"
+}
+foreach ($name in @('bin', 'externals')) {
+  if ((Test-Link (Join-Path $root $name)) -or (Test-Link (Join-Path $root "$name.fleet-previous"))) {
+    throw "$name or $name.fleet-previous in $root is a symlink or junction, a layout this upgrade doesn't handle; upgrade $env:RF_NAME by hand"
+  }
+}
+$binPath = Join-Path $root 'bin'
+$externalsPath = Join-Path $root 'externals'
+if (-not (Test-Path -LiteralPath $binPath) -and (Test-Path -LiteralPath "$binPath.fleet-previous") -and (Test-Path -LiteralPath $externalsPath) -and -not (Test-Path -LiteralPath "$externalsPath.fleet-previous")) {
+  Rename-Item -LiteralPath "$binPath.fleet-previous" -NewName 'bin'
+  Write-Output "Restored $binPath from an interrupted upgrade"
+}
+foreach ($path in @($binPath, $externalsPath)) {
+  if (-not (Test-Path -LiteralPath $path -PathType Container)) {
+    throw "$path is missing: an earlier upgrade of $env:RF_NAME was interrupted. With its service stopped, move bin.fleet-previous and externals.fleet-previous back to bin and externals (keeping a copy of whatever is there), then upgrade again."
+  }
+}
 
 $current = (& (Join-Path $root 'bin\Runner.Listener.exe') --version 2>$null | Select-Object -Last 1)
 if ($current -eq $env:RF_VERSION) { Write-Output "$env:RF_NAME already runs $env:RF_VERSION"; exit 0 }
@@ -81,6 +116,6 @@ try {
   }
   throw
 } finally {
-  if (Test-Path -LiteralPath $stage) { & cmd.exe /d /c rmdir /s /q $stage }
+  if (Test-Path -LiteralPath $stage) { Remove-Entry $stage }
 }
 Write-Output "Replaced bin and externals of $env:RF_NAME with $env:RF_VERSION; the previous files are in bin.fleet-previous and externals.fleet-previous"

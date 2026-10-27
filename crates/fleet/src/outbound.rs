@@ -137,6 +137,16 @@ pub fn check_url(text: &str) -> Result<url::Url, String> {
     }
 }
 
+/// An ntfy server, which is saved in the settings file: no credentials, query
+/// or fragment, which would end up there in plain text.
+pub fn check_ntfy_server(text: &str) -> Result<url::Url, String> {
+    let url = check_url(text)?;
+    if !url.username().is_empty() || url.password().is_some() || url.query().is_some() || url.fragment().is_some() {
+        return Err("Enter only the ntfy server, such as https://ntfy.sh, and put an access token in the token field.".into());
+    }
+    Ok(url)
+}
+
 /// ntfy topics: letters, digits, `-` and `_`.
 pub fn check_topic(topic: &str) -> Result<(), String> {
     if !topic.is_empty()

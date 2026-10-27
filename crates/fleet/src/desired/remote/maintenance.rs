@@ -291,7 +291,7 @@ pub(crate) fn stop_script(host: &Host, runner: &Runner, sudo_password: &Transien
     if host.is_windows() {
         let worker = format!(
             "$bin = (Join-Path $path 'bin') + [IO.Path]::DirectorySeparatorChar\n\
-if (Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -and $_.Path.StartsWith($bin, [StringComparison]::OrdinalIgnoreCase) }}) {{ throw \"{busy} in $path; refusing to stop {name}\" }}\n"
+if (Get-Process -Name Runner.Worker -ErrorAction SilentlyContinue | Where-Object {{ -not $_.Path -or $_.Path.StartsWith($bin, [StringComparison]::OrdinalIgnoreCase) }}) {{ throw \"{busy} in $path (or a runner job whose path can't be read); refusing to stop {name}\" }}\n"
         );
         if host.is_windows_logon() {
             return format!(

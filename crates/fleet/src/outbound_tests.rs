@@ -136,6 +136,62 @@ fn only_https_or_this_machine_is_accepted() {
 }
 
 #[test]
+fn ntfy_servers_carry_no_credentials_or_queries() {
+    assert!(check_ntfy_server("https://ntfy.sh").is_ok());
+    for bad in ["https://user:pass@ntfy.example.com", "https://ntfy.sh/?auth=x", "https://ntfy.sh/#x"] {
+        assert!(check_ntfy_server(bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn a_full_queue_drops_its_oldest_alerts_visibly_per_destination() {
+    let dir = tempfile::tempdir().unwrap();
+    let now = Utc.with_ymd_and_hms(2026, 10, 8, 12, 0, 0).unwrap();
+    let mut store = MonitorStore::load(dir.path().join("monitoring.json"));
+    let max = crate::monitoring::MAX_OUTBOUND_PER_DESTINATION;
+    for n in 0..max + 5 {
+        store
+            .record_external(
+                "inv:studio",
+                "studio",
+                FleetEventKind::OfflineAlert,
+                format!("Alert {n}."),
+                true,
+                false,
+                &ids(&["slack"]),
+                now,
+            )
+            .unwrap();
+    }
+    // Another destination's queue is unaffected.
+    store
+        .record_external("inv:studio", "studio", FleetEventKind::OfflineAlert, "Last.".into(), true, false, &ids(&["ntfy"]), now)
+        .unwrap();
+    let d = |id: &str| AlertDestination {
+        id: id.into(),
+        name: id.into(),
+        kind: AlertDestinationKind::Slack,
+        enabled: true,
+        ntfy_server: None,
+        ntfy_topic: None,
+        summary: String::new(),
+    };
+    let slack = store.destination_view(&d("slack"));
+    assert_eq!(slack.pending as usize, max);
+    assert!(slack.error.unwrap().starts_with("Dropped 1 undelivered alert(s)"));
+    assert_eq!(store.destination_view(&d("ntfy")).pending, 1);
+    let dropped = store
+        .events(Some("inv:studio"), None, now)
+        .into_iter()
+        .filter(|e| e.kind == FleetEventKind::AlertsDropped)
+        .count();
+    assert_eq!(dropped, 5, "every drop is recorded in history");
+    // The oldest went first: the earliest alert still queued is the sixth.
+    let first = store.claim_outbound(now, 1).unwrap();
+    assert_eq!(first[0].event.detail, "Alert 5.");
+}
+
+#[test]
 fn retries_back_off_up_to_an_hour() {
     let minutes: Vec<i64> = (1..=8).map(|n| retry_after(n).num_minutes()).collect();
     assert_eq!(minutes, [1, 2, 5, 15, 30, 60, 60, 60]);

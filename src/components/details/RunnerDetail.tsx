@@ -35,6 +35,7 @@ export function RunnerDetail({ runner: r, view }: { runner: RunnerView; view: Fl
   const busy = operationRunning(view);
   const live = isLive(view);
   const drain = drainOf(view, r.name);
+  const hold = view.automation.holds.find((h) => h.runner === r.name && h.hostId === r.desired?.hostId);
   // Demo data still shows maintenance actions: their reviews are fictional and can't run.
   const actions = live ? runnerActions(r, drain) : isTauri ? runnerActions(r, drain).filter((a) => isMaintenance(a.request)) : [];
   const watchdog = view.automation.watchdog.runners.find((w) => w.runner === r.name && w.hostId === r.desired?.hostId);
@@ -76,6 +77,7 @@ export function RunnerDetail({ runner: r, view }: { runner: RunnerView; view: Fl
         This runner has {r.versionStatus.current}. GitHub can stop sending jobs to a runner that misses an update for 30 days.
       </Callout>}
       {drain && <DrainNotice drain={drain} live={live} />}
+      {hold && <Callout tone="warn" title="Held stopped">{hold.reason} The watchdog leaves it alone until a reviewed resume, restart or upgrade.</Callout>}
       {watchdog && <WatchdogNotice w={watchdog} enabled={view.automation.watchdog.enabled} />}
       {r.warnings.length > 0 && <div className="mt-4 space-y-2">{r.warnings.map((w) => <Callout key={w} tone="warn" className="">{w}</Callout>)}</div>}
 

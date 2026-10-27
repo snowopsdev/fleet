@@ -95,7 +95,8 @@ their last listing and age into stale. `versionStatus.missingSince` is when the 
 the runner lacks was published; `overdue` counts from it. The queue's
 `held` counts self-hosted jobs GitHub holds for an approval or concurrency group.
 
-`/v1/fleet`'s `automation` describes reviewed drains (`draining` or `stopped`), the watchdog
+`/v1/fleet`'s `automation` describes reviewed drains (`draining` or `stopped`), runners held
+stopped after a failed upgrade or cleanup (`holds`), the watchdog
 (whether it's on, and each runner's recent attempts, next attempt and give-up), alert
 destinations (kind, name, host summary, queue length and last outcome; never URLs or tokens)
 and the published availability variable. It is read-only: drains, the watchdog and

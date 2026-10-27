@@ -142,11 +142,11 @@ function ChangeNotes({ review: r }: { review: ReviewView }) {
   const note = (() => {
     switch (r.request.kind) {
       case "cleanup":
-        return "Removes only the exact paths below, each resolved on the machine and checked to be inside the runner directory (or your home folder) with no symlink on the way. A runner that is busy, or becomes busy, is left alone; .runner, credentials, configuration, bin and externals are never touched.";
+        return "Removes only the exact paths below, each resolved on the machine and checked to be inside the runner directory (or your home folder) with no symlink on the way. Each runner's service is stopped while its directories are cleaned and started again afterwards; shared caches wait until every runner here can be stopped. A runner that is busy, or becomes busy, is left alone, and a drained one is never started; .runner, credentials, configuration, bin and externals are never touched.";
       case "upgrade":
-        return `Upgrades to ${r.upgradeTo ?? "the latest release"}, one runner at a time: stops the idle service, downloads the release on the machine and verifies GitHub's SHA-256 digest, replaces bin/ and externals/ in place (the previous files are kept as bin.fleet-previous and externals.fleet-previous), then starts it and checks its version. A failure leaves that runner stopped.`;
+        return `Upgrades to ${r.upgradeTo ?? "the latest release"}, one runner at a time: stops the idle service, downloads the release on the machine and verifies GitHub's SHA-256 digest, replaces bin/ and externals/ in place (the previous files are kept as bin.fleet-previous and externals.fleet-previous), then starts it and checks its version. A failure leaves that runner stopped and held, so the watchdog leaves it alone until you resume it. Drained runners aren't upgraded.`;
       case "drain":
-        return "GitHub has no way to pause a runner, so draining stops the runner's service on the machine: now if it's idle, otherwise once its current job finishes (the app keeps the drain and checks every 20 seconds). It shows offline on GitHub until you resume it. You can cancel a drain until it stops the service.";
+        return "GitHub has no way to pause a runner, so draining stops the runner's service on the machine: now if it's idle, otherwise once its current job finishes (the app keeps the drain and checks every 20 seconds). It shows offline on GitHub until you resume it. You can cancel a drain until it stops the service; one that hasn't found the runner idle within 24 hours is cancelled.";
       case "resume":
         return "Starts the runner's service again so it can take jobs.";
       default:

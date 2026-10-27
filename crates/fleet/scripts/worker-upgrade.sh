@@ -44,13 +44,34 @@ if printf '%s\n' "$processes" | grep -F -- "$root/bin/Runner.Worker" >/dev/null;
   echo "a job is running in $root; refusing to upgrade $RF_NAME" >&2
   exit 5
 fi
-if printf '%s\n' "$processes" | grep -F -- "$root/bin/Runner.Listener" >/dev/null; then
-  echo "$RF_NAME is still running; its service must be stopped before upgrading" >&2
+# Anything else started from the runner directory (its listener, or a
+# self-update script) means it isn't stopped.
+if printf '%s\n' "$processes" | grep -F -- "$root/" >/dev/null; then
+  echo "$RF_NAME is still running (a process from $root); its service must be stopped before upgrading" >&2
+  exit 5
+fi
+if [ -e "$root/_work/_update" ] || [ -e "$root/_update.sh" ]; then
+  echo "a runner self-update is in progress in $root; refusing to upgrade $RF_NAME" >&2
   exit 5
 fi
 for d in bin externals; do
-  if [ -L "$root/$d" ] && [ ! -d "$root/$d" ]; then
-    echo "$root/$d is a dangling symlink; refusing" >&2
+  if [ -L "$root/$d" ] || [ -L "$root/$d.fleet-previous" ]; then
+    echo "$root/$d or $d.fleet-previous is a symlink, a layout this upgrade doesn't handle; upgrade $RF_NAME by hand" >&2
+    exit 3
+  fi
+done
+# An earlier upgrade interrupted mid-swap (the connection dropped) can leave
+# bin/ or externals/ missing beside the previous files. Only the first step
+# missing is unambiguous: put bin back. Otherwise stop before anything else is
+# removed, so the previous files are never lost.
+if [ ! -e "$root/bin" ] && [ -d "$root/bin.fleet-previous" ] && [ -d "$root/externals" ] \
+  && [ ! -e "$root/externals.fleet-previous" ]; then
+  mv "$root/bin.fleet-previous" "$root/bin"
+  echo "restored $root/bin from an interrupted upgrade"
+fi
+for d in bin externals; do
+  if [ ! -d "$root/$d" ]; then
+    echo "$root/$d is missing: an earlier upgrade of $RF_NAME was interrupted. With its service stopped, move bin.fleet-previous and externals.fleet-previous back to bin and externals (keeping a copy of whatever is there), then upgrade again." >&2
     exit 3
   fi
 done
@@ -72,7 +93,7 @@ finished=0
 restore() {
   local d
   for d in bin externals; do
-    if [ -d "$root/$d.fleet-previous" ] && [ ! -L "$root/$d.fleet-previous" ]; then
+    if [ -d "$root/$d.fleet-previous" ]; then
       if [ -e "$root/$d" ] || [ -L "$root/$d" ]; then mv "$root/$d" "$stage/failed-$d"; fi
       mv "$root/$d.fleet-previous" "$root/$d"
     fi
