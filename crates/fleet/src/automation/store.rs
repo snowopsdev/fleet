@@ -36,6 +36,9 @@ pub(crate) struct DrainMark {
     pub state: DrainState,
     pub stopped_at: Option<DateTime<Utc>>,
     pub last_error: Option<String>,
+    /// When GitHub was last read for this drain and the runner was still busy.
+    #[serde(default)]
+    pub checked_at: Option<DateTime<Utc>>,
 }
 
 impl DrainMark {

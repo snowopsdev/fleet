@@ -121,3 +121,6 @@ pub struct FleetPublishStatus {
     /// Why nothing is published right now (such as stale GitHub data).
     pub waiting: Option<String>,
 }
+
+#[cfg(test)]
+mod tests;

@@ -24,6 +24,8 @@ use super::process::{CommandRunner, NonZeroExit};
 use super::py::{py_str, repr, splitlines, truthy};
 use super::windows_logon::ServiceAction;
 pub use maintenance::{CleanupSurvey, format_kib, parse_clean, parse_survey};
+#[cfg(test)]
+pub(crate) use maintenance::{clean_script, stop_script, survey_script};
 pub use scripts::probe_script;
 use scripts::{INSTALL, RETIRE, WorkerScript, logs_script, service_script, worker_payload};
 pub(crate) use scripts::{posix_doctor, windows_doctor};

@@ -27,7 +27,10 @@ fn request_alerts(
     let title = if events.len() == 1 {
         let event = &events[0];
         let label = match event.kind {
-            FleetEventKind::Online | FleetEventKind::DiskRecovered => "Recovered",
+            FleetEventKind::Online
+            | FleetEventKind::DiskRecovered
+            | FleetEventKind::WatchdogRestarted
+            | FleetEventKind::WatchdogRecovered => "Recovered",
             _ => "Alert",
         };
         format!("{label}: {}", event.machine_name)

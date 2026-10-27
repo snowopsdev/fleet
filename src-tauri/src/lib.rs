@@ -189,6 +189,12 @@ pub fn run() {
             commands::desired_review,
             commands::desired_execute,
             commands::desired_dismiss_operation,
+            commands::desired_cancel_drain,
+            commands::set_watchdog,
+            commands::set_publish_settings,
+            commands::save_alert_destination,
+            commands::remove_alert_destination,
+            commands::test_alert_destination,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Runner Dashboard");

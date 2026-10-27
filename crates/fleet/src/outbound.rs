@@ -336,3 +336,7 @@ pub(crate) fn retry_after(attempts: u32) -> chrono::Duration {
 
 /// Undelivered alerts are dropped after a day.
 pub(crate) const GIVE_UP_AFTER_HOURS: i64 = 24;
+
+#[cfg(test)]
+#[path = "outbound_tests.rs"]
+mod tests;

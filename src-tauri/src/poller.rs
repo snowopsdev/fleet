@@ -78,6 +78,11 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
     spawn_loop(&app, &engine, &refresh, Duration::from_secs(45), |e| async move {
         e.poll_github_jobs().await
     });
+    // Reviewed drains waiting for a job to finish, the opt-in watchdog and the
+    // opt-in availability variable. The engine does nothing here in demo mode.
+    spawn_loop(&app, &engine, &refresh, Duration::from_secs(20), |e| async move {
+        e.run_automation().await
+    });
 
     // Re-derive periodically even without new data so history is recorded and
     // staleness thresholds advance on screen.
@@ -92,6 +97,8 @@ pub fn start(app: AppHandle, engine: Arc<Engine>) -> Poller {
                 match tauri::async_runtime::spawn_blocking(move || monitor.monitoring_round(chrono::Utc::now())).await {
                     Ok((events, view)) => {
                         deliver_notifications(&app, &engine, events).await;
+                        // Queued alerts for Slack, Discord, ntfy and webhooks, retried with backoff.
+                        engine.deliver_alerts().await;
                         push(&app, view, Push::IfChanged);
                     }
                     Err(error) => {

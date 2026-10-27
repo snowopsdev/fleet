@@ -21,10 +21,16 @@ case "$RF_DIAG_DAYS" in ''|*[!0-9]*) echo "invalid RF_DIAG_DAYS" >&2; exit 2 ;; 
 tab="$(printf '\t')"
 row() { local IFS="$tab"; printf '%s\n' "$*"; }
 
-processes() { ps -A -o command= 2>/dev/null; }
+# Command lines of every process, read in full before searching so the search
+# itself (whose arguments contain the pattern) isn't in the list.
+running() {
+  local list
+  list="$(ps -A -o command= 2>/dev/null)"
+  printf '%s\n' "$list" | grep -F -- "$1" >/dev/null
+}
 # A job runs while a Runner.Worker process from the runner's bin/ is alive.
-job_in() { processes | grep -F -- "$1/bin/Runner.Worker" >/dev/null; }
-any_job() { processes | grep -F -- "/bin/Runner.Worker" >/dev/null; }
+job_in() { running "$1/bin/Runner.Worker"; }
+any_job() { running "/bin/Runner.Worker"; }
 
 kib() { du -skx "$1" 2>/dev/null | awk 'END { print $1 + 0 }'; }
 

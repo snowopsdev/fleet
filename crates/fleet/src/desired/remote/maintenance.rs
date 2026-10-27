@@ -330,7 +330,8 @@ Write-Output \"stopped $($service.Name)\"\n",
 test -x \"$root/svc.sh\" || {{ echo \"missing svc.sh at $root\" >&2; exit 1; }}\n\
 cd \"$root\"\n\
 real=\"$(pwd -P)\"\n\
-if ps -A -o command= 2>/dev/null | grep -F -- \"$real/bin/Runner.Worker\" >/dev/null; then\n\
+processes=\"$(ps -A -o command= 2>/dev/null || true)\"\n\
+if printf '%s\\n' \"$processes\" | grep -F -- \"$real/bin/Runner.Worker\" >/dev/null; then\n\
   echo \"{busy} in $real; refusing to stop {shown}\" >&2\n\
   exit 5\n\
 fi\n\

@@ -37,12 +37,14 @@ if [ -f /etc/NIXOS ]; then
   export LD_LIBRARY_PATH="/run/current-system/sw/share/nix-ld/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 
-processes() { ps -A -o command= 2>/dev/null; }
-if processes | grep -F -- "$root/bin/Runner.Worker" >/dev/null; then
+# Read the list in full first, so the search (whose arguments contain the
+# pattern) isn't in it.
+processes="$(ps -A -o command= 2>/dev/null || true)"
+if printf '%s\n' "$processes" | grep -F -- "$root/bin/Runner.Worker" >/dev/null; then
   echo "a job is running in $root; refusing to upgrade $RF_NAME" >&2
   exit 5
 fi
-if processes | grep -F -- "$root/bin/Runner.Listener" >/dev/null; then
+if printf '%s\n' "$processes" | grep -F -- "$root/bin/Runner.Listener" >/dev/null; then
   echo "$RF_NAME is still running; its service must be stopped before upgrading" >&2
   exit 5
 fi

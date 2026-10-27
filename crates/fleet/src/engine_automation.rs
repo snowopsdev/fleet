@@ -200,6 +200,7 @@ impl Engine {
             state,
             stopped_at: (state == DrainState::Stopped).then_some(now),
             last_error: None,
+            checked_at: Some(now),
         };
         if let Err(e) = self.update_automation(|j| j.drains.insert(runner.to_string(), mark)) {
             tracing::warn!("saving the drain of {runner} failed: {e}");
@@ -331,8 +332,14 @@ impl Engine {
                     }
                 }
                 DrainState::Draining => {
-                    let idle = runner.github.as_ref().is_some_and(|g| !g.stale && !g.busy);
-                    if idle {
+                    // Fresh GitHub data showing it idle triggers the stop, which reads
+                    // GitHub again and refuses a busy runner. Otherwise GitHub is asked
+                    // directly at most once a minute.
+                    let busy = runner.github.as_ref().is_none_or(|g| g.stale || g.busy);
+                    let due = mark
+                        .checked_at
+                        .is_none_or(|at| Utc::now() - at >= chrono::Duration::minutes(1));
+                    if !busy || due {
                         self.finish_drain(machine, &mark).await;
                     }
                 }
@@ -343,7 +350,7 @@ impl Engine {
     /// Stops a draining runner that GitHub shows idle, if it still is the
     /// runner the drain was reviewed for.
     async fn finish_drain(self: &Arc<Self>, machine: &MachineView, mark: &DrainMark) {
-        let Some(_slot) = self.reserve() else { return };
+        let Some(slot) = self.reserve() else { return };
         let inventory = match self.read_inventory().await {
             Ok(inventory) => inventory,
             Err(e) => {
@@ -381,7 +388,15 @@ impl Engine {
         .await
         .and_then(|r| r);
         match result {
-            Ok(StopOutcome::Busy { .. }) => {}
+            Ok(StopOutcome::Busy { .. }) => {
+                let runner = mark.runner.clone();
+                // Only throttles the next direct check; losing it costs one extra GitHub read.
+                let _ = self.update_automation(|j| {
+                    if let Some(m) = j.drains.get_mut(&runner) {
+                        m.checked_at = Some(Utc::now());
+                    }
+                });
+            }
             Ok(StopOutcome::Stopped { .. }) => {
                 let runner = mark.runner.clone();
                 let saved = self.update_automation(|j| {
@@ -402,13 +417,14 @@ impl Engine {
                         false,
                     );
                 }
+                drop(slot);
+                // Show the stopped service promptly.
+                if let Err(e) = self.desired_refresh_wait(Some(mark.host.clone())).await {
+                    tracing::info!("check after a drain failed: {e}");
+                }
             }
             Err(e) if e.contains("registered again") => self.cancel_changed_drain(machine, mark, &e),
             Err(e) => self.drain_error(machine, mark, e),
-        }
-        // Show the stopped service promptly.
-        if let Err(e) = self.desired_refresh_wait(Some(mark.host.clone())).await {
-            tracing::info!("check after a drain failed: {e}");
         }
     }
 
